@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>To Do List</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #F5F5F0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px;
+    }
+
+    .top-bar {
+      width: 100%;
+      max-width: 1000px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      padding: 24px 28px;
+      border-top: 4px solid #FFCC00;
+      margin-bottom: 20px;
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    h1 { font-size: 1.6rem; color: #1A1A1A; font-weight: 700; }
+
+    .user-info { display: flex; align-items: center; gap: 10px; }
+
+    .user-name {
+      font-size: 0.82rem;
+      color: #666;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .logout-btn {
+      background: none;
+      border: 1px solid #E0E0E0;
+      color: #666;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+
+    .logout-btn:hover { background: #fff0f0; color: #c53030; border-color: #fc8181; }
+
+    .add-row { display: flex; gap: 8px; }
+
+    .add-row input {
+      flex: 1;
+      padding: 10px 14px;
+      border: 2px solid #E0E0E0;
+      border-radius: 8px;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+      color: #1A1A1A;
+    }
+
+    .add-row input:focus { border-color: #FFCC00; }
+
+    .add-row button {
+      padding: 10px 20px;
+      background: #FFCC00;
+      color: #1A1A1A;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .add-row button:hover { background: #E6B800; }
+
+    .import-bar { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+    .import-toggle-btn {
+      background: none;
+      border: 1px solid #E0E0E0;
+      color: #666;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .import-toggle-btn:hover, .import-toggle-btn.active {
+      background: #FFFBE6;
+      color: #1A1A1A;
+      border-color: #FFCC00;
+    }
+
+    .import-panel {
+      display: none;
+      background: #FFFBE6;
+      border: 1px solid #FFCC00;
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 12px;
+    }
+
+    .import-panel.open { display: block; }
+    .import-panel h3 { font-size: 0.9rem; color: #1A1A1A; margin-bottom: 6px; font-weight: 700; }
+    .import-panel p { font-size: 0.78rem; color: #555; margin-bottom: 10px; line-height: 1.5; }
+
+    .import-panel code {
+      display: block;
+      background: #FFF8CC;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.75rem;
+      color: #1A1A1A;
+      margin-bottom: 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .import-panel textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid #FFCC00;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: monospace;
+      color: #1A1A1A;
+      resize: vertical;
+      outline: none;
+      min-height: 70px;
+      background: #fff;
+    }
+
+    .import-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    .import-actions button {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+    }
+
+    .btn-import { background: #FFCC00; color: #1A1A1A; }
+    .btn-import:hover { background: #E6B800; }
+    .btn-clear-import { background: #E0E0E0; color: #444; }
+    .btn-clear-import:hover { background: #CCC; }
+
+    .import-error { font-size: 0.78rem; color: #c53030; margin-top: 6px; display: none; }
+    .import-success { font-size: 0.78rem; color: #276749; margin-top: 6px; display: none; }
+
+    /* ── Kanban board ── */
+    .board {
+      display: flex;
+      gap: 16px;
+      width: 100%;
+      max-width: 1000px;
+      align-items: flex-start;
+    }
+
+    .column {
+      flex: 1;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .column-header {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #F0F0F0;
+    }
+
+    .column[data-stage="backlog"] .column-header { border-top: 3px solid #AAAAAA; }
+    .column[data-stage="in_progress"] .column-header { border-top: 3px solid #FFCC00; }
+    .column[data-stage="done"] .column-header { border-top: 3px solid #48BB78; }
+
+    .column-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #1A1A1A;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .column-count {
+      background: #F0F0F0;
+      color: #666;
+      border-radius: 12px;
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .task-list {
+      list-style: none;
+      padding: 10px;
+      min-height: 80px;
+    }
+
+    .task-list.drag-over-col { background: #FFFBE6; }
+
+    /* ── Task card ── */
+    .task-card {
+      background: #FAFAFA;
+      border: 1px solid #E8E8E8;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      transition: box-shadow 0.15s, opacity 0.15s, transform 0.15s;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    .task-card:active { cursor: grabbing; }
+    .task-card.dragging { opacity: 0.4; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    .task-card.drag-over { border-color: #FFCC00; background: #FFFBE6; }
+    .task-card.completing { opacity: 0; transform: translateX(30px); transition: opacity 0.3s, transform 0.3s; }
+
+    .task-item {
+      padding: 10px 12px;
+      user-select: none;
+    }
+
+    .task-top { display: flex; align-items: flex-start; gap: 8px; }
+
+    .task-main { flex: 1; min-width: 0; }
+
+    .task-text { font-size: 0.92rem; color: #1A1A1A; word-break: break-word; line-height: 1.4; }
+
+    .task-age {
+      font-size: 0.7rem;
+      color: #AAA;
+      margin-top: 3px;
+    }
+
+    .task-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; }
+
+    .task-status-preview { font-size: 0.72rem; color: #888; }
+
+    .task-owner-preview { font-size: 0.72rem; color: #555; }
+
+    .card-actions {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
+    .icon-btn {
+      background: none;
+      border: 1px solid #E0E0E0;
+      border-radius: 5px;
+      width: 26px;
+      height: 26px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      color: #888;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      padding: 0;
+      flex-shrink: 0;
+    }
+
+    .icon-btn:hover { background: #FFFBE6; border-color: #FFCC00; color: #1A1A1A; }
+    .icon-btn.delete:hover { background: #fff0f0; border-color: #fc8181; color: #c53030; }
+    .icon-btn.details.active { background: #FFFBE6; border-color: #FFCC00; color: #1A1A1A; }
+
+    .stage-btns {
+      display: flex;
+      gap: 4px;
+      margin-top: 8px;
+      justify-content: flex-end;
+    }
+
+    .stage-btn {
+      background: none;
+      border: 1px solid #E0E0E0;
+      border-radius: 5px;
+      padding: 3px 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #666;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .stage-btn:hover { background: #FFCC00; border-color: #FFCC00; color: #1A1A1A; }
+    .stage-btn.forward:hover { background: #FFCC00; border-color: #FFCC00; color: #1A1A1A; }
+    .stage-btn.back:hover { background: #F0F0F0; border-color: #CCC; color: #444; }
+
+    /* ── Details panel ── */
+    .status-panel {
+      display: none;
+      padding: 0 12px 12px;
+      border-top: 1px solid #E8E8E8;
+      background: #fff;
+    }
+
+    .status-panel.open { display: block; }
+
+    .status-panel label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #444;
+      margin: 10px 0 4px;
+    }
+
+    .status-panel textarea,
+    .status-panel input[type="email"],
+    .status-panel input[type="datetime-local"] {
+      width: 100%;
+      padding: 6px 9px;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      font-size: 0.84rem;
+      font-family: inherit;
+      color: #1A1A1A;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #FAFAFA;
+    }
+
+    .status-panel textarea { resize: vertical; min-height: 50px; }
+    .status-panel textarea:focus,
+    .status-panel input:focus { border-color: #FFCC00; background: #fff; }
+
+    .owner-row { display: flex; gap: 6px; align-items: center; }
+    .owner-row input { flex: 1; }
+
+    .owner-add-btn {
+      padding: 5px 9px;
+      background: none;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      cursor: pointer;
+      color: #666;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+
+    .owner-add-btn:hover { background: #FFFBE6; color: #1A1A1A; border-color: #FFCC00; }
+
+    .owner-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+
+    .chip {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: #FFF8CC;
+      color: #1A1A1A;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 0.74rem;
+      border: 1px solid #FFCC00;
+    }
+
+    .chip button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #AAA;
+      font-size: 0.85rem;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .chip button:hover { color: #c53030; }
+
+    .cal-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin-top: 4px; }
+
+    .cal-row .field { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 130px; }
+
+    .cal-row input { width: 100%; }
+
+    .open-cal-btn {
+      padding: 6px 10px;
+      background: #1A1A1A;
+      color: #FFCC00;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      transition: background 0.2s;
+      align-self: flex-end;
+    }
+
+    .open-cal-btn:hover { background: #333; }
+
+    .empty-col { text-align: center; color: #CCC; font-size: 0.82rem; padding: 16px 0; }
+
+    @media (max-width: 640px) {
+      .board { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="app-header">
+    <h1>To Do List</h1>
+    <div class="user-info">
+      <span class="user-name" id="user-name"></span>
+      <a class="logout-btn" href="/auth/logout">Sign out</a>
+    </div>
+  </div>
+
+  <div class="add-row">
+    <input id="task-input" type="text" placeholder="Add a new task to Backlog…" />
+    <button onclick="addTask()">Add</button>
+  </div>
+
+  <div class="import-bar">
+    <button class="import-toggle-btn" id="import-toggle-btn" onclick="toggleImport()">✦ Import from Claude</button>
+  </div>
+
+  <div class="import-panel" id="import-panel">
+    <h3>Import tasks from Claude</h3>
+    <p>Ask Claude: <em>"Send these tasks to my to-do app in this format:"</em><br/>
+    Paste the JSON below. Each task can have <strong>text</strong>, <strong>status</strong>, and <strong>owner</strong>.</p>
+    <code>[
+  { "text": "Book flight", "status": "Check dates first", "owner": "alice@gmail.com" },
+  { "text": "Send report" }
+]</code>
+    <textarea id="import-json" placeholder='Paste JSON from Claude here…'></textarea>
+    <div class="import-actions">
+      <button class="btn-import" onclick="importTasks()">Import</button>
+      <button class="btn-clear-import" onclick="clearImport()">Clear</button>
+    </div>
+    <div class="import-error" id="import-error"></div>
+    <div class="import-success" id="import-success"></div>
+  </div>
+</div>
+
+<div class="board">
+  <div class="column" data-stage="backlog">
+    <div class="column-header">
+      <span class="column-title">Backlog</span>
+      <span class="column-count" id="count-backlog">0</span>
+    </div>
+    <ul class="task-list" id="list-backlog"></ul>
+  </div>
+
+  <div class="column" data-stage="in_progress">
+    <div class="column-header">
+      <span class="column-title">In Progress</span>
+      <span class="column-count" id="count-in_progress">0</span>
+    </div>
+    <ul class="task-list" id="list-in_progress"></ul>
+  </div>
+
+  <div class="column" data-stage="done">
+    <div class="column-header">
+      <span class="column-title">Done</span>
+      <span class="column-count" id="count-done">0</span>
+    </div>
+    <ul class="task-list" id="list-done"></ul>
+  </div>
+</div>
+
+<script>
+  const STAGES = ['backlog', 'in_progress', 'done'];
+  const STAGE_LABELS = { backlog: 'Backlog', in_progress: 'In Progress', done: 'Done' };
+  let dragSrc = null;
+  let dragSrcStage = null;
+
+  function debounce(fn, delay) {
+    let timer;
+    return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+  }
+
+  async function apiPost(url, body) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    return res.json();
+  }
+
+  async function apiPut(url, body) {
+    await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  }
+
+  async function apiDelete(url) {
+    await fetch(url, { method: 'DELETE' });
+  }
+
+  function getList(stage) { return document.getElementById('list-' + stage); }
+
+  function getCardPayload(card) {
+    return {
+      status: card.querySelector('textarea.status-area').value,
+      owners: [...card.querySelectorAll('.chip')].map(c => c.dataset.email),
+      cal_start: card.querySelector('.cal-start').value,
+      cal_end: card.querySelector('.cal-end').value,
+    };
+  }
+
+  function updateCounts() {
+    STAGES.forEach(stage => {
+      const count = getList(stage).querySelectorAll('.task-card').length;
+      document.getElementById('count-' + stage).textContent = count;
+    });
+  }
+
+  function saveOrder() {
+    STAGES.forEach(stage => {
+      const ids = [...getList(stage).querySelectorAll('.task-card')].map(c => Number(c.dataset.taskId));
+      if (ids.length) apiPost('/api/reorder', { order: ids });
+    });
+  }
+
+  function daysOpen(createdAt) {
+    const created = new Date(createdAt.replace(' ', 'T'));
+    const days = Math.floor((Date.now() - created) / 86400000);
+    if (days === 0) return 'opened today';
+    if (days === 1) return 'open 1 day';
+    return `open ${days} days`;
+  }
+
+  /* ── Init ── */
+  async function init() {
+    const res = await fetch('/api/user');
+    const user = await res.json();
+    if (!user) { location.href = '/login'; return; }
+    document.getElementById('user-name').textContent = user.name || user.email;
+
+    const tasks = await (await fetch('/api/tasks')).json();
+    tasks.forEach(t => createTaskCard(t));
+    updateCounts();
+    setupColumnDrop();
+  }
+
+  /* ── Import ── */
+  function toggleImport() {
+    const panel = document.getElementById('import-panel');
+    const btn = document.getElementById('import-toggle-btn');
+    panel.classList.toggle('open');
+    btn.classList.toggle('active', panel.classList.contains('open'));
+  }
+
+  function clearImport() {
+    document.getElementById('import-json').value = '';
+    document.getElementById('import-error').style.display = 'none';
+    document.getElementById('import-success').style.display = 'none';
+  }
+
+  async function importTasks() {
+    const errEl = document.getElementById('import-error');
+    const okEl = document.getElementById('import-success');
+    errEl.style.display = 'none'; okEl.style.display = 'none';
+    let data;
+    try { data = JSON.parse(document.getElementById('import-json').value.trim()); }
+    catch { errEl.textContent = 'Invalid JSON — check the format and try again.'; errEl.style.display = 'block'; return; }
+    if (!Array.isArray(data) || !data.length) { errEl.textContent = 'Expected a non-empty JSON array.'; errEl.style.display = 'block'; return; }
+
+    let count = 0;
+    for (const item of data) {
+      if (!item.text) continue;
+      const owners = item.owner ? [item.owner] : (Array.isArray(item.owners) ? item.owners : []);
+      const task = await apiPost('/api/tasks', { text: item.text, status: item.status || '', owners });
+      createTaskCard(task);
+      count++;
+    }
+    updateCounts();
+    okEl.textContent = `${count} task${count !== 1 ? 's' : ''} imported.`;
+    okEl.style.display = 'block';
+    document.getElementById('import-json').value = '';
+  }
+
+  /* ── Add task ── */
+  async function addTask() {
+    const input = document.getElementById('task-input');
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    const task = await apiPost('/api/tasks', { text, stage: 'backlog' });
+    createTaskCard(task);
+    updateCounts();
+    input.focus();
+  }
+
+  /* ── Task card ── */
+  function createTaskCard(task) {
+    const stage = task.stage || 'backlog';
+    const list = getList(stage);
+
+    const card = document.createElement('li');
+    card.className = 'task-card';
+    card.draggable = true;
+    card.dataset.taskId = task.id;
+    card.dataset.stage = stage;
+
+    const stageIdx = STAGES.indexOf(stage);
+    const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
+    const nextStage = stageIdx < STAGES.length - 1 ? STAGES[stageIdx + 1] : null;
+
+    card.innerHTML = `
+      <div class="task-item">
+        <div class="task-top">
+          <div class="task-main">
+            <div class="task-text">${escapeHtml(task.text)}</div>
+            <div class="task-age">${daysOpen(task.created_at)}</div>
+            <div class="task-meta">
+              <span class="task-status-preview"></span>
+              <span class="task-owner-preview"></span>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="icon-btn details" title="Details">📝</button>
+            <button class="icon-btn delete" title="Delete">🗑</button>
+          </div>
+        </div>
+        <div class="stage-btns">
+          ${prevStage ? `<button class="stage-btn back" data-target="${prevStage}">← ${STAGE_LABELS[prevStage]}</button>` : ''}
+          ${nextStage ? `<button class="stage-btn forward" data-target="${nextStage}">${STAGE_LABELS[nextStage]} →</button>` : ''}
+        </div>
+      </div>
+      <div class="status-panel">
+        <label>Status / notes</label>
+        <textarea class="status-area" placeholder="Add a status update or notes…" rows="2"></textarea>
+
+        <label style="margin-top:10px;">Assigned to (Gmail)</label>
+        <div class="owner-row">
+          <input type="email" class="owner-input" placeholder="name@gmail.com" />
+          <button class="owner-add-btn">+ Add</button>
+        </div>
+        <div class="owner-chips"></div>
+
+        <label style="margin-top:10px;">Add to Google Calendar</label>
+        <div class="cal-row">
+          <div class="field">
+            <label>Start</label>
+            <input type="datetime-local" class="cal-start" />
+          </div>
+          <div class="field">
+            <label>End</label>
+            <input type="datetime-local" class="cal-end" />
+          </div>
+          <button class="open-cal-btn">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#FFCC00"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+            Open Calendar
+          </button>
+        </div>
+      </div>
+    `;
+
+    const panel = card.querySelector('.status-panel');
+    const detailsBtn = card.querySelector('.icon-btn.details');
+    const deleteBtn = card.querySelector('.icon-btn.delete');
+    const textarea = card.querySelector('textarea.status-area');
+    const statusPreview = card.querySelector('.task-status-preview');
+    const ownerPreview = card.querySelector('.task-owner-preview');
+    const ownerInput = card.querySelector('.owner-input');
+    const ownerAddBtn = card.querySelector('.owner-add-btn');
+    const chipsEl = card.querySelector('.owner-chips');
+    const calStartEl = card.querySelector('.cal-start');
+    const calEndEl = card.querySelector('.cal-end');
+
+    textarea.value = task.status || '';
+    calStartEl.value = task.cal_start || '';
+    calEndEl.value = task.cal_end || '';
+    (task.owners || []).forEach(email => addOwnerChip(email, chipsEl, ownerPreview));
+    updateStatusPreview();
+
+    const debouncedSave = debounce(() => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)), 500);
+
+    detailsBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const open = panel.classList.toggle('open');
+      detailsBtn.classList.toggle('active', open);
+      if (open) textarea.focus();
+    });
+
+    deleteBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      card.classList.add('completing');
+      card.addEventListener('transitionend', () => {
+        card.remove();
+        updateCounts();
+        apiDelete(`/api/tasks/${task.id}`);
+      }, { once: true });
+    });
+
+    card.querySelectorAll('.stage-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        moveToStage(card, task.id, btn.dataset.target);
+      });
+    });
+
+    function updateStatusPreview() {
+      statusPreview.textContent = textarea.value.trim() ? '↳ ' + textarea.value.trim() : '';
+    }
+
+    textarea.addEventListener('input', () => { updateStatusPreview(); debouncedSave(); });
+    calStartEl.addEventListener('change', () => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)));
+    calEndEl.addEventListener('change', () => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)));
+
+    function doAddOwner() {
+      const email = ownerInput.value.trim().toLowerCase();
+      if (!email || !email.includes('@')) return;
+      const existing = [...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.email);
+      if (existing.includes(email)) { ownerInput.value = ''; return; }
+      addOwnerChip(email, chipsEl, ownerPreview, () => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)));
+      ownerInput.value = '';
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    }
+
+    ownerAddBtn.addEventListener('click', e => { e.stopPropagation(); doAddOwner(); });
+    ownerInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doAddOwner(); } });
+    panel.addEventListener('mousedown', e => e.stopPropagation());
+
+    card.querySelector('.open-cal-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const taskTitle = card.querySelector('.task-text').textContent;
+      const status = textarea.value.trim();
+      const guestEmails = [...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.email);
+      let url = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+      url += '&text=' + encodeURIComponent(taskTitle);
+      if (status) url += '&details=' + encodeURIComponent(status);
+      if (calStartEl.value) url += '&dates=' + toGCalDate(calStartEl.value) + '/' + (calEndEl.value ? toGCalDate(calEndEl.value) : toGCalDate(calStartEl.value, 60));
+      if (guestEmails.length) url += '&add=' + guestEmails.map(encodeURIComponent).join(',');
+      window.open(url, '_blank');
+    });
+
+    card.addEventListener('dragstart', e => {
+      dragSrc = card;
+      dragSrcStage = card.dataset.stage;
+      card.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (card !== dragSrc) card.classList.add('drag-over');
+    });
+    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+    card.addEventListener('drop', e => {
+      e.stopPropagation();
+      if (card === dragSrc) return;
+      card.classList.remove('drag-over');
+      const targetList = card.closest('.task-list');
+      const targetStage = targetList.closest('.column').dataset.stage;
+      const items = [...targetList.children];
+      if (items.indexOf(dragSrc) < items.indexOf(card)) targetList.insertBefore(dragSrc, card.nextSibling);
+      else targetList.insertBefore(dragSrc, card);
+      if (dragSrcStage !== targetStage) {
+        dragSrc.dataset.stage = targetStage;
+        apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
+        rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
+      }
+      updateCounts();
+      saveOrder();
+    });
+    card.addEventListener('dragend', () => {
+      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging', 'drag-over'));
+      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
+      dragSrc = null; dragSrcStage = null;
+    });
+
+    list.appendChild(card);
+  }
+
+  function moveToStage(card, taskId, newStage) {
+    const newList = getList(newStage);
+    card.dataset.stage = newStage;
+    newList.appendChild(card);
+    apiPut(`/api/tasks/${taskId}`, { ...getCardPayload(card), stage: newStage });
+    rebuildStageButtons(card, taskId, newStage);
+    updateCounts();
+    saveOrder();
+  }
+
+  function rebuildStageButtons(card, taskId, stage) {
+    const stageIdx = STAGES.indexOf(stage);
+    const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
+    const nextStage = stageIdx < STAGES.length - 1 ? STAGES[stageIdx + 1] : null;
+    const stageBtns = card.querySelector('.stage-btns');
+    stageBtns.innerHTML = `
+      ${prevStage ? `<button class="stage-btn back" data-target="${prevStage}">← ${STAGE_LABELS[prevStage]}</button>` : ''}
+      ${nextStage ? `<button class="stage-btn forward" data-target="${nextStage}">${STAGE_LABELS[nextStage]} →</button>` : ''}
+    `;
+    stageBtns.querySelectorAll('.stage-btn').forEach(btn => {
+      btn.addEventListener('click', e => { e.stopPropagation(); moveToStage(card, taskId, btn.dataset.target); });
+    });
+  }
+
+  function setupColumnDrop() {
+    document.querySelectorAll('.task-list').forEach(listEl => {
+      listEl.addEventListener('dragover', e => {
+        e.preventDefault();
+        listEl.classList.add('drag-over-col');
+      });
+      listEl.addEventListener('dragleave', () => listEl.classList.remove('drag-over-col'));
+      listEl.addEventListener('drop', e => {
+        e.stopPropagation();
+        listEl.classList.remove('drag-over-col');
+        if (!dragSrc) return;
+        const targetStage = listEl.closest('.column').dataset.stage;
+        listEl.appendChild(dragSrc);
+        if (dragSrcStage !== targetStage) {
+          dragSrc.dataset.stage = targetStage;
+          apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
+          rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
+        }
+        updateCounts();
+        saveOrder();
+      });
+    });
+  }
+
+  function addOwnerChip(email, chipsEl, ownerPreview, onRemove) {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.dataset.email = email;
+    chip.innerHTML = `<span>👤 ${escapeHtml(email)}</span><button title="Remove">×</button>`;
+    chip.querySelector('button').addEventListener('click', e => {
+      e.stopPropagation();
+      chip.remove();
+      updateOwnerPreview(chipsEl, ownerPreview);
+      if (onRemove) onRemove();
+    });
+    chipsEl.appendChild(chip);
+    updateOwnerPreview(chipsEl, ownerPreview);
+  }
+
+  function updateOwnerPreview(chipsEl, ownerPreview) {
+    const emails = [...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.email);
+    ownerPreview.textContent = emails.length ? '👤 ' + emails.join(', ') : '';
+  }
+
+  function toGCalDate(dtLocal, addMinutes = 0) {
+    const d = new Date(dtLocal);
+    d.setMinutes(d.getMinutes() + addMinutes);
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  init();
+</script>
+</body>
+</html>
