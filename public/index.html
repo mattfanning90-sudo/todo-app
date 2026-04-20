@@ -25,7 +25,7 @@
       box-shadow: 0 2px 16px rgba(0,0,0,0.08);
       padding: 24px 28px;
       border-top: 4px solid #FFCC00;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     .app-header {
@@ -168,6 +168,138 @@
     .import-error { font-size: 0.78rem; color: #c53030; margin-top: 6px; display: none; }
     .import-success { font-size: 0.78rem; color: #276749; margin-top: 6px; display: none; }
 
+    /* ── Category filter bar ── */
+    .filter-bar {
+      width: 100%;
+      max-width: 1000px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+      padding: 14px 20px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .filter-btn {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 2px solid #E0E0E0;
+      background: none;
+      color: #666;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .filter-btn:hover { border-color: #FFCC00; color: #1A1A1A; }
+    .filter-btn.active { background: #1A1A1A; color: #FFCC00; border-color: #1A1A1A; }
+
+    .filter-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .filter-btn .remove-cat {
+      background: none;
+      border: none;
+      color: inherit;
+      opacity: 0.5;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 0;
+      line-height: 1;
+      margin-left: 2px;
+    }
+
+    .filter-btn .remove-cat:hover { opacity: 1; }
+
+    .add-cat-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 2px dashed #E0E0E0;
+      background: none;
+      color: #999;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .add-cat-btn:hover { border-color: #FFCC00; color: #1A1A1A; }
+
+    .new-cat-form {
+      display: none;
+      width: 100%;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid #F0F0F0;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .new-cat-form.open { display: flex; }
+
+    .new-cat-form input {
+      padding: 6px 10px;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+      width: 180px;
+    }
+
+    .new-cat-form input:focus { border-color: #FFCC00; }
+
+    .color-palette {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .color-swatch {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: transform 0.1s, border-color 0.1s;
+    }
+
+    .color-swatch:hover { transform: scale(1.2); }
+    .color-swatch.selected { border-color: #1A1A1A; transform: scale(1.15); }
+
+    .new-cat-form .save-cat-btn {
+      padding: 6px 14px;
+      background: #FFCC00;
+      color: #1A1A1A;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .new-cat-form .cancel-cat-btn {
+      padding: 6px 12px;
+      background: none;
+      border: 1px solid #E0E0E0;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      color: #666;
+      cursor: pointer;
+    }
+
     /* ── Kanban board ── */
     .board {
       display: flex;
@@ -239,24 +371,42 @@
     .task-card.drag-over { border-color: #FFCC00; background: #FFFBE6; }
     .task-card.completing { opacity: 0; transform: translateX(30px); transition: opacity 0.3s, transform 0.3s; }
 
-    .task-item {
-      padding: 10px 12px;
-      user-select: none;
-    }
+    .task-item { padding: 10px 12px; user-select: none; }
 
     .task-top { display: flex; align-items: flex-start; gap: 8px; }
 
     .task-main { flex: 1; min-width: 0; }
 
-    .task-text { font-size: 0.92rem; color: #1A1A1A; word-break: break-word; line-height: 1.4; }
+    .task-text { font-size: 0.92rem; color: #1A1A1A; word-break: break-word; line-height: 1.4; cursor: text; }
+    .task-text:hover { text-decoration: underline dotted #AAA; }
 
-    .task-age {
-      font-size: 0.7rem;
-      color: #AAA;
-      margin-top: 3px;
+    .task-text-input {
+      font-size: 0.92rem;
+      color: #1A1A1A;
+      border: none;
+      border-bottom: 2px solid #FFCC00;
+      outline: none;
+      width: 100%;
+      background: transparent;
+      font-family: inherit;
+      line-height: 1.4;
+      padding: 0;
     }
 
-    .task-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 3px; }
+    .task-badges { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; align-items: center; }
+
+    .category-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .task-age { font-size: 0.7rem; color: #AAA; }
 
     .task-status-preview { font-size: 0.72rem; color: #888; }
 
@@ -290,12 +440,7 @@
     .icon-btn.delete:hover { background: #fff0f0; border-color: #fc8181; color: #c53030; }
     .icon-btn.details.active { background: #FFFBE6; border-color: #FFCC00; color: #1A1A1A; }
 
-    .stage-btns {
-      display: flex;
-      gap: 4px;
-      margin-top: 8px;
-      justify-content: flex-end;
-    }
+    .stage-btns { display: flex; gap: 4px; margin-top: 8px; justify-content: flex-end; }
 
     .stage-btn {
       background: none;
@@ -311,8 +456,6 @@
     }
 
     .stage-btn:hover { background: #FFCC00; border-color: #FFCC00; color: #1A1A1A; }
-    .stage-btn.forward:hover { background: #FFCC00; border-color: #FFCC00; color: #1A1A1A; }
-    .stage-btn.back:hover { background: #F0F0F0; border-color: #CCC; color: #444; }
 
     /* ── Details panel ── */
     .status-panel {
@@ -350,6 +493,25 @@
     .status-panel textarea { resize: vertical; min-height: 50px; }
     .status-panel textarea:focus,
     .status-panel input:focus { border-color: #FFCC00; background: #fff; }
+
+    .cat-selector { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+    .cat-option {
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 2px solid transparent;
+      color: #fff;
+      transition: opacity 0.15s, border-color 0.15s;
+      opacity: 0.5;
+    }
+
+    .cat-option:hover { opacity: 0.8; }
+    .cat-option.selected { opacity: 1; border-color: #1A1A1A; }
+    .cat-option.none { background: #E0E0E0; color: #666; }
+    .cat-option.none.selected { border-color: #666; }
 
     .owner-row { display: flex; gap: 6px; align-items: center; }
     .owner-row input { flex: 1; }
@@ -395,9 +557,7 @@
     .chip button:hover { color: #c53030; }
 
     .cal-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-end; margin-top: 4px; }
-
     .cal-row .field { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 130px; }
-
     .cal-row input { width: 100%; }
 
     .open-cal-btn {
@@ -418,8 +578,6 @@
     }
 
     .open-cal-btn:hover { background: #333; }
-
-    .empty-col { text-align: center; color: #CCC; font-size: 0.82rem; padding: 16px 0; }
 
     @media (max-width: 640px) {
       .board { flex-direction: column; }
@@ -464,6 +622,18 @@
   </div>
 </div>
 
+<!-- Category filter bar -->
+<div class="filter-bar" id="filter-bar">
+  <button class="filter-btn active" data-id="all" onclick="setFilter(null)">All</button>
+  <button class="add-cat-btn" onclick="toggleNewCatForm()">+ New Category</button>
+  <div class="new-cat-form" id="new-cat-form">
+    <input type="text" id="new-cat-name" placeholder="Category name…" maxlength="30" />
+    <div class="color-palette" id="color-palette"></div>
+    <button class="save-cat-btn" onclick="saveNewCategory()">Add</button>
+    <button class="cancel-cat-btn" onclick="toggleNewCatForm()">Cancel</button>
+  </div>
+</div>
+
 <div class="board">
   <div class="column" data-stage="backlog">
     <div class="column-header">
@@ -493,6 +663,11 @@
 <script>
   const STAGES = ['backlog', 'in_progress', 'done'];
   const STAGE_LABELS = { backlog: 'Backlog', in_progress: 'In Progress', done: 'Done' };
+  const COLOR_PALETTE = ['#4285F4','#34A853','#EA4335','#FBBC05','#8B5CF6','#F59E0B','#10B981','#EC4899'];
+
+  let categories = [];
+  let activeFilter = null;
+  let selectedColor = COLOR_PALETTE[0];
   let dragSrc = null;
   let dragSrcStage = null;
 
@@ -501,20 +676,22 @@
     return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
   }
 
-  async function apiPost(url, body) {
-    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    return res.json();
+  async function apiFetch(method, url, body) {
+    const res = await fetch(url, {
+      method,
+      ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
+    });
+    if (!res.ok && method === 'POST') throw new Error(`Request failed: ${res.status}`);
+    return (method === 'POST') ? res.json() : null;
   }
 
-  async function apiPut(url, body) {
-    await fetch(url, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  }
-
-  async function apiDelete(url) {
-    await fetch(url, { method: 'DELETE' });
-  }
+  const apiPost = (url, body) => apiFetch('POST', url, body);
+  const apiPut = (url, body) => apiFetch('PUT', url, body);
+  const apiDelete = (url) => apiFetch('DELETE', url);
 
   function getList(stage) { return document.getElementById('list-' + stage); }
+
+  function getCategoryById(id) { return categories.find(c => c.id === Number(id)); }
 
   function getCardPayload(card) {
     return {
@@ -522,18 +699,35 @@
       owners: [...card.querySelectorAll('.chip')].map(c => c.dataset.email),
       cal_start: card.querySelector('.cal-start').value,
       cal_end: card.querySelector('.cal-end').value,
+      category_id: card.dataset.categoryId ? Number(card.dataset.categoryId) : null,
     };
   }
 
   function updateCounts() {
     STAGES.forEach(stage => {
-      const count = getList(stage).querySelectorAll('.task-card').length;
-      document.getElementById('count-' + stage).textContent = count;
+      const visible = [...getList(stage).querySelectorAll('.task-card')].filter(c => c.style.display !== 'none').length;
+      document.getElementById('count-' + stage).textContent = visible;
     });
   }
 
-  function saveOrder() {
-    STAGES.forEach(stage => {
+  function applyFilter() {
+    document.querySelectorAll('.task-card').forEach(card => {
+      card.style.display = (!activeFilter || Number(card.dataset.categoryId) === activeFilter) ? '' : 'none';
+    });
+    updateCounts();
+  }
+
+  function setFilter(catId) {
+    activeFilter = catId;
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.id === (catId ? String(catId) : 'all'));
+    });
+    applyFilter();
+  }
+
+  function saveOrder(...stages) {
+    const toSave = stages.length ? stages : STAGES;
+    toSave.forEach(stage => {
       const ids = [...getList(stage).querySelectorAll('.task-card')].map(c => Number(c.dataset.taskId));
       if (ids.length) apiPost('/api/reorder', { order: ids });
     });
@@ -547,17 +741,130 @@
     return `open ${days} days`;
   }
 
+  /* ── Category filter bar ── */
+  function renderFilterBar() {
+    const bar = document.getElementById('filter-bar');
+    const existing = [...bar.querySelectorAll('.filter-btn[data-id]:not([data-id="all"])')];
+    existing.forEach(b => b.remove());
+
+    const allBtn = bar.querySelector('.filter-btn[data-id="all"]');
+    categories.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn' + (activeFilter === cat.id ? ' active' : '');
+      btn.dataset.id = cat.id;
+      btn.innerHTML = `<span class="filter-dot" style="background:${cat.color}"></span>${cat.name}<button class="remove-cat" title="Delete category" onclick="deleteCategory(event,${cat.id})">×</button>`;
+      btn.addEventListener('click', e => { if (!e.target.classList.contains('remove-cat')) setFilter(cat.id); });
+      bar.insertBefore(btn, bar.querySelector('.add-cat-btn'));
+    });
+  }
+
+  function toggleNewCatForm() {
+    const form = document.getElementById('new-cat-form');
+    form.classList.toggle('open');
+    if (form.classList.contains('open')) document.getElementById('new-cat-name').focus();
+  }
+
+  function renderColorPalette() {
+    const el = document.getElementById('color-palette');
+    el.innerHTML = '';
+    COLOR_PALETTE.forEach(color => {
+      const swatch = document.createElement('div');
+      swatch.className = 'color-swatch' + (color === selectedColor ? ' selected' : '');
+      swatch.style.background = color;
+      swatch.addEventListener('click', () => {
+        selectedColor = color;
+        el.querySelector('.color-swatch.selected')?.classList.remove('selected');
+        swatch.classList.add('selected');
+      });
+      el.appendChild(swatch);
+    });
+  }
+
+  async function saveNewCategory() {
+    const name = document.getElementById('new-cat-name').value.trim();
+    if (!name) return;
+    const cat = await apiPost('/api/categories', { name, color: selectedColor });
+    categories.push(cat);
+    renderFilterBar();
+    document.getElementById('new-cat-name').value = '';
+    toggleNewCatForm();
+    document.querySelectorAll('.cat-selector').forEach(sel => renderCatSelector(sel, sel.closest('.task-card')));
+  }
+
+  async function deleteCategory(e, catId) {
+    e.stopPropagation();
+    if (!confirm('Delete this category? Tasks will become uncategorised.')) return;
+    await apiDelete(`/api/categories/${catId}`);
+    categories = categories.filter(c => c.id !== catId);
+    if (activeFilter === catId) setFilter(null);
+    renderFilterBar();
+    document.querySelectorAll(`.task-card[data-category-id="${catId}"]`).forEach(card => {
+      card.dataset.categoryId = '';
+      updateCardBadge(card);
+    });
+    document.querySelectorAll('.cat-selector').forEach(sel => renderCatSelector(sel, sel.closest('.task-card')));
+  }
+
+  /* ── Category selector inside card ── */
+  function renderCatSelector(selectorEl, card) {
+    selectorEl.innerHTML = '';
+    const noneOpt = document.createElement('button');
+    noneOpt.className = 'cat-option none' + (!card.dataset.categoryId ? ' selected' : '');
+    noneOpt.textContent = 'None';
+    noneOpt.addEventListener('click', () => assignCategory(card, null, selectorEl));
+    selectorEl.appendChild(noneOpt);
+
+    categories.forEach(cat => {
+      const opt = document.createElement('button');
+      opt.className = 'cat-option' + (Number(card.dataset.categoryId) === cat.id ? ' selected' : '');
+      opt.style.background = cat.color;
+      opt.textContent = cat.name;
+      opt.addEventListener('click', () => assignCategory(card, cat.id, selectorEl));
+      selectorEl.appendChild(opt);
+    });
+  }
+
+  function assignCategory(card, catId, selectorEl) {
+    card.dataset.categoryId = catId || '';
+    updateCardBadge(card);
+    renderCatSelector(selectorEl, card);
+    apiPut(`/api/tasks/${card.dataset.taskId}`, getCardPayload(card));
+    applyFilter();
+  }
+
+  function updateCardBadge(card) {
+    const badgesEl = card.querySelector('.task-badges');
+    const cat = getCategoryById(card.dataset.categoryId);
+    const existing = badgesEl.querySelector('.category-pill');
+    if (existing) existing.remove();
+    if (cat) {
+      const pill = document.createElement('span');
+      pill.className = 'category-pill';
+      pill.style.background = cat.color;
+      pill.textContent = cat.name;
+      badgesEl.prepend(pill);
+    }
+  }
+
   /* ── Init ── */
   async function init() {
-    const res = await fetch('/api/user');
-    const user = await res.json();
-    if (!user) { location.href = '/login'; return; }
-    document.getElementById('user-name').textContent = user.name || user.email;
+    try {
+      const user = await (await fetch('/api/user')).json();
+      if (!user) { location.href = '/login'; return; }
+      document.getElementById('user-name').textContent = user.name || user.email;
 
-    const tasks = await (await fetch('/api/tasks')).json();
-    tasks.forEach(t => createTaskCard(t));
-    updateCounts();
-    setupColumnDrop();
+      categories = await (await fetch('/api/categories')).json();
+
+      renderColorPalette();
+      renderFilterBar();
+
+      const tasks = await (await fetch('/api/tasks')).json();
+      tasks.forEach(t => createTaskCard(t));
+      updateCounts();
+      setupColumnDrop();
+    } catch (err) {
+      console.error('Failed to load:', err);
+    }
   }
 
   /* ── Import ── */
@@ -619,6 +926,7 @@
     card.draggable = true;
     card.dataset.taskId = task.id;
     card.dataset.stage = stage;
+    card.dataset.categoryId = task.category_id || '';
 
     const stageIdx = STAGES.indexOf(stage);
     const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
@@ -629,8 +937,10 @@
         <div class="task-top">
           <div class="task-main">
             <div class="task-text">${escapeHtml(task.text)}</div>
-            <div class="task-age">${daysOpen(task.created_at)}</div>
-            <div class="task-meta">
+            <div class="task-badges">
+              <span class="task-age">${daysOpen(task.created_at)}</span>
+            </div>
+            <div class="task-meta" style="margin-top:2px;">
               <span class="task-status-preview"></span>
               <span class="task-owner-preview"></span>
             </div>
@@ -646,7 +956,10 @@
         </div>
       </div>
       <div class="status-panel">
-        <label>Status / notes</label>
+        <label>Category</label>
+        <div class="cat-selector"></div>
+
+        <label style="margin-top:10px;">Status / notes</label>
         <textarea class="status-area" placeholder="Add a status update or notes…" rows="2"></textarea>
 
         <label style="margin-top:10px;">Assigned to (Gmail)</label>
@@ -685,14 +998,45 @@
     const chipsEl = card.querySelector('.owner-chips');
     const calStartEl = card.querySelector('.cal-start');
     const calEndEl = card.querySelector('.cal-end');
+    const catSelector = card.querySelector('.cat-selector');
 
     textarea.value = task.status || '';
     calStartEl.value = task.cal_start || '';
     calEndEl.value = task.cal_end || '';
     (task.owners || []).forEach(email => addOwnerChip(email, chipsEl, ownerPreview));
+    renderCatSelector(catSelector, card);
+    updateCardBadge(card);
     updateStatusPreview();
 
+    if (activeFilter && Number(card.dataset.categoryId) !== activeFilter) card.style.display = 'none';
+
     const debouncedSave = debounce(() => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)), 500);
+
+    const taskTextEl = card.querySelector('.task-text');
+    taskTextEl.addEventListener('click', e => {
+      e.stopPropagation();
+      const input = document.createElement('input');
+      input.className = 'task-text-input';
+      input.value = taskTextEl.textContent;
+      taskTextEl.replaceWith(input);
+      input.focus();
+      input.select();
+
+      function saveText() {
+        const newText = input.value.trim();
+        if (newText && newText !== taskTextEl.textContent) {
+          taskTextEl.textContent = newText;
+          apiPut(`/api/tasks/${task.id}`, { ...getCardPayload(card), text: newText });
+        }
+        input.replaceWith(taskTextEl);
+      }
+
+      input.addEventListener('blur', saveText);
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); saveText(); }
+        if (e.key === 'Escape') { input.replaceWith(taskTextEl); }
+      });
+    });
 
     detailsBtn.addEventListener('click', e => {
       e.stopPropagation();
@@ -712,10 +1056,7 @@
     });
 
     card.querySelectorAll('.stage-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        moveToStage(card, task.id, btn.dataset.target);
-      });
+      btn.addEventListener('click', e => { e.stopPropagation(); moveToStage(card, task.id, btn.dataset.target); });
     });
 
     function updateStatusPreview() {
@@ -754,8 +1095,7 @@
     });
 
     card.addEventListener('dragstart', e => {
-      dragSrc = card;
-      dragSrcStage = card.dataset.stage;
+      dragSrc = card; dragSrcStage = card.dataset.stage;
       card.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     });
@@ -770,17 +1110,9 @@
       if (card === dragSrc) return;
       card.classList.remove('drag-over');
       const targetList = card.closest('.task-list');
-      const targetStage = targetList.closest('.column').dataset.stage;
       const items = [...targetList.children];
-      if (items.indexOf(dragSrc) < items.indexOf(card)) targetList.insertBefore(dragSrc, card.nextSibling);
-      else targetList.insertBefore(dragSrc, card);
-      if (dragSrcStage !== targetStage) {
-        dragSrc.dataset.stage = targetStage;
-        apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
-        rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
-      }
-      updateCounts();
-      saveOrder();
+      const insertBefore = items.indexOf(dragSrc) < items.indexOf(card) ? card.nextSibling : card;
+      applyDrop(targetList, insertBefore);
     });
     card.addEventListener('dragend', () => {
       document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging', 'drag-over'));
@@ -791,14 +1123,30 @@
     list.appendChild(card);
   }
 
+  function applyDrop(targetList, insertBeforeCard) {
+    if (!dragSrc) return;
+    const targetStage = targetList.closest('.column').dataset.stage;
+    if (insertBeforeCard) targetList.insertBefore(dragSrc, insertBeforeCard);
+    else targetList.appendChild(dragSrc);
+    if (dragSrcStage !== targetStage) {
+      dragSrc.dataset.stage = targetStage;
+      apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
+      rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
+      saveOrder(dragSrcStage, targetStage);
+    } else {
+      saveOrder(targetStage);
+    }
+    updateCounts();
+  }
+
   function moveToStage(card, taskId, newStage) {
-    const newList = getList(newStage);
+    const oldStage = card.dataset.stage;
     card.dataset.stage = newStage;
-    newList.appendChild(card);
+    getList(newStage).appendChild(card);
     apiPut(`/api/tasks/${taskId}`, { ...getCardPayload(card), stage: newStage });
     rebuildStageButtons(card, taskId, newStage);
     updateCounts();
-    saveOrder();
+    saveOrder(oldStage, newStage);
   }
 
   function rebuildStageButtons(card, taskId, stage) {
@@ -817,25 +1165,9 @@
 
   function setupColumnDrop() {
     document.querySelectorAll('.task-list').forEach(listEl => {
-      listEl.addEventListener('dragover', e => {
-        e.preventDefault();
-        listEl.classList.add('drag-over-col');
-      });
+      listEl.addEventListener('dragover', e => { e.preventDefault(); listEl.classList.add('drag-over-col'); });
       listEl.addEventListener('dragleave', () => listEl.classList.remove('drag-over-col'));
-      listEl.addEventListener('drop', e => {
-        e.stopPropagation();
-        listEl.classList.remove('drag-over-col');
-        if (!dragSrc) return;
-        const targetStage = listEl.closest('.column').dataset.stage;
-        listEl.appendChild(dragSrc);
-        if (dragSrcStage !== targetStage) {
-          dragSrc.dataset.stage = targetStage;
-          apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
-          rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
-        }
-        updateCounts();
-        saveOrder();
-      });
+      listEl.addEventListener('drop', e => { e.stopPropagation(); listEl.classList.remove('drag-over-col'); applyDrop(listEl, null); });
     });
   }
 
@@ -869,6 +1201,7 @@
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });
   document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
   init();
 </script>
