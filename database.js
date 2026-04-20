@@ -10,6 +10,15 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
 
+  CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL DEFAULT '#667eea',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
+
   CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -20,12 +29,15 @@ db.exec(`
     cal_end TEXT DEFAULT '',
     position INTEGER DEFAULT 0,
     stage TEXT DEFAULT 'backlog',
+    category_id INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
   );
 `);
 
-// Migrate existing databases that don't have the stage column
+// Migrations for existing databases
 try { db.exec("ALTER TABLE tasks ADD COLUMN stage TEXT DEFAULT 'backlog'"); } catch {}
+try { db.exec("ALTER TABLE tasks ADD COLUMN category_id INTEGER"); } catch {}
 
 module.exports = db;
