@@ -15,11 +15,11 @@ app.use(express.json());
 app.use(express.static('public'));
 
 app.use(session({
-  store: new pgSession({ pool, createTableIfMissing: true }),
+  store: new pgSession({ pool, createTableIfMissing: true, ttl: 30 * 24 * 60 * 60 }),
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 7 * 24 * 60 * 60 * 1000 }
+  cookie: {},
 }));
 
 app.use(passport.initialize());
@@ -117,8 +117,17 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
 }));
 
 /* ── Auth ── */
-app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+app.get('/auth/google', (req, res, next) => {
+  if (req.query.remember) req.session.rememberMe = true;
+  passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+});
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
+  if (req.session.rememberMe) {
+    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+    delete req.session.rememberMe;
+  }
+  res.redirect('/');
+});
 app.get('/auth/logout', (req, res) => req.logout(() => res.redirect('/login')));
 
 app.get('/', (req, res) => {
@@ -149,10 +158,17 @@ app.post('/auth/signup', wrap(async (req, res) => {
   });
 }));
 
-app.post('/auth/login', passport.authenticate('local', {
-  successRedirect: '/',
-  failureRedirect: '/login?error=invalid',
-}));
+app.post('/auth/login', (req, res, next) => {
+  passport.authenticate('local', (err, user) => {
+    if (err) return next(err);
+    if (!user) return res.redirect('/login?error=invalid');
+    req.login(user, err => {
+      if (err) return next(err);
+      if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+      res.redirect('/');
+    });
+  })(req, res, next);
+});
 
 /* ── User ── */
 app.get('/api/user', (req, res) => {
