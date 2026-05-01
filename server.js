@@ -6,6 +6,7 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
 const chrono = require('chrono-node');
+const pgSession = require('connect-pg-simple')(session);
 const { pool, init } = require('./database');
 const path = require('path');
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 app.use(session({
+  store: new pgSession({ pool, createTableIfMissing: true }),
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
   resave: false,
   saveUninitialized: false,
