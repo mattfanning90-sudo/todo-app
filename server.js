@@ -3,7 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
-const db = require('./database');
+const { pool, init } = require('./database');
 const path = require('path');
 
 const app = express();
@@ -29,51 +29,60 @@ const DEFAULT_CATEGORIES = [
   { name: 'Development', color: '#10B981' },
 ];
 
+const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
+
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
-}, (accessToken, refreshToken, profile, done) => {
-  const email = profile.emails?.[0]?.value || '';
-  const name = profile.displayName || '';
+}, async (accessToken, refreshToken, profile, done) => {
+  try {
+    const email = profile.emails?.[0]?.value || '';
+    const name = profile.displayName || '';
 
-  let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id);
-  if (!user) {
-    const { lastInsertRowid: userId } = db.prepare('INSERT INTO users (google_id, email, name) VALUES (?, ?, ?)').run(profile.id, email, name);
-    user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-  }
-  const catCount = db.prepare('SELECT COUNT(*) as c FROM categories WHERE user_id = ?').get(user.id);
-  if (Number(catCount.c) === 0) {
-    const insertCat = db.prepare('INSERT INTO categories (user_id, name, color) VALUES (?, ?, ?)');
-    db.exec('BEGIN');
-    try {
-      DEFAULT_CATEGORIES.forEach(c => insertCat.run(user.id, c.name, c.color));
-      db.exec('COMMIT');
-    } catch (e) {
-      db.exec('ROLLBACK');
-      throw e;
+    let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
+    let user = rows[0];
+    if (!user) {
+      const result = await pool.query(
+        'INSERT INTO users (google_id, email, name) VALUES ($1, $2, $3) RETURNING *',
+        [profile.id, email, name]
+      );
+      user = result.rows[0];
     }
+
+    const countResult = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [user.id]);
+    if (Number(countResult.rows[0].c) === 0) {
+      await pool.query('BEGIN');
+      try {
+        for (const c of DEFAULT_CATEGORIES) {
+          await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [user.id, c.name, c.color]);
+        }
+        await pool.query('COMMIT');
+      } catch (e) {
+        await pool.query('ROLLBACK');
+        throw e;
+      }
+    }
+
+    return done(null, user);
+  } catch (e) {
+    return done(e);
   }
-  return done(null, user);
 }));
 
 passport.serializeUser((user, done) => done(null, user.id));
-passport.deserializeUser((id, done) => {
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  done(null, user || false);
+passport.deserializeUser(async (id, done) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    done(null, rows[0] || false);
+  } catch (e) {
+    done(e);
+  }
 });
 
 function requireAuth(req, res, next) {
   if (req.isAuthenticated()) return next();
   res.status(401).json({ error: 'Not authenticated' });
-}
-
-function getOwnedTask(taskId, userId) {
-  return db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(taskId, userId);
-}
-
-function getOwnedCategory(catId, userId) {
-  return db.prepare('SELECT * FROM categories WHERE id = ? AND user_id = ?').get(catId, userId);
 }
 
 /* ── Auth routes ── */
@@ -106,83 +115,97 @@ app.get('/api/user', (req, res) => {
 });
 
 /* ── API: categories ── */
-app.get('/api/categories', requireAuth, (req, res) => {
-  res.json(db.prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY id ASC').all(req.user.id));
-});
+app.get('/api/categories', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM categories WHERE user_id = $1 ORDER BY id ASC', [req.user.id]);
+  res.json(rows);
+}));
 
-app.post('/api/categories', requireAuth, (req, res) => {
+app.post('/api/categories', requireAuth, wrap(async (req, res) => {
   const { name, color = '#667eea' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
-  const { lastInsertRowid: id } = db.prepare('INSERT INTO categories (user_id, name, color) VALUES (?, ?, ?)').run(req.user.id, name, color);
-  res.json({ id, user_id: req.user.id, name, color });
-});
+  const { rows } = await pool.query(
+    'INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3) RETURNING *',
+    [req.user.id, name, color]
+  );
+  res.json(rows[0]);
+}));
 
-app.delete('/api/categories/:id', requireAuth, (req, res) => {
-  const cat = getOwnedCategory(req.params.id, req.user.id);
-  if (!cat) return res.status(404).json({ error: 'Not found' });
-  db.prepare('UPDATE tasks SET category_id = NULL WHERE category_id = ?').run(cat.id);
-  db.prepare('DELETE FROM categories WHERE id = ?').run(cat.id);
+app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('UPDATE tasks SET category_id = NULL WHERE category_id = $1', [rows[0].id]);
+  await pool.query('DELETE FROM categories WHERE id = $1', [rows[0].id]);
   res.json({ ok: true });
-});
+}));
 
 /* ── API: tasks ── */
-app.get('/api/tasks', requireAuth, (req, res) => {
-  const tasks = db.prepare(
-    'SELECT * FROM tasks WHERE user_id = ? ORDER BY position ASC, created_at ASC'
-  ).all(req.user.id);
-  tasks.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); });
-  res.json(tasks);
-});
+app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM tasks WHERE user_id = $1 ORDER BY position ASC, created_at ASC',
+    [req.user.id]
+  );
+  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); });
+  res.json(rows);
+}));
 
-app.post('/api/tasks', requireAuth, (req, res) => {
+app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
   const { text, status = '', owners = [], cal_start = '', cal_end = '', stage = 'backlog', category_id = null } = req.body;
   if (!text) return res.status(400).json({ error: 'Text required' });
 
-  const maxPos = db.prepare('SELECT MAX(position) as m FROM tasks WHERE user_id = ?').get(req.user.id);
-  const position = (maxPos.m ?? -1) + 1;
+  const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [req.user.id]);
+  const position = (maxResult.rows[0].m ?? -1) + 1;
 
-  const { lastInsertRowid: id } = db.prepare(
-    'INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(req.user.id, text, status, JSON.stringify(owners), cal_start, cal_end, position, stage, category_id);
+  const { rows } = await pool.query(
+    'INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, category_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+    [req.user.id, text, status, JSON.stringify(owners), cal_start, cal_end, position, stage, category_id]
+  );
+  const task = rows[0];
+  task.owners = JSON.parse(task.owners || '[]');
+  res.json(task);
+}));
 
-  res.json({ id, text, status, owners, cal_start, cal_end, position, stage, category_id, created_at: new Date().toISOString().replace('T', ' ').slice(0, 19) });
-});
-
-app.put('/api/tasks/:id', requireAuth, (req, res) => {
-  const task = getOwnedTask(req.params.id, req.user.id);
-  if (!task) return res.status(404).json({ error: 'Not found' });
+app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
 
   const { text, status = '', owners = [], cal_start = '', cal_end = '', stage, category_id = null } = req.body;
-  db.prepare(
-    'UPDATE tasks SET text = COALESCE(?, text), status = ?, owners = ?, cal_start = ?, cal_end = ?, stage = COALESCE(?, stage), category_id = ? WHERE id = ?'
-  ).run(text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null, category_id, task.id);
-
+  await pool.query(
+    'UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5, stage = COALESCE($6, stage), category_id = $7 WHERE id = $8',
+    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null, category_id, rows[0].id]
+  );
   res.json({ ok: true });
-});
+}));
 
-app.delete('/api/tasks/:id', requireAuth, (req, res) => {
-  const task = getOwnedTask(req.params.id, req.user.id);
-  if (!task) return res.status(404).json({ error: 'Not found' });
-  db.prepare('DELETE FROM tasks WHERE id = ?').run(task.id);
+app.delete('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  await pool.query('DELETE FROM tasks WHERE id = $1', [rows[0].id]);
   res.json({ ok: true });
-});
+}));
 
-app.post('/api/reorder', requireAuth, (req, res) => {
+app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
 
-  const update = db.prepare('UPDATE tasks SET position = ? WHERE id = ? AND user_id = ?');
-  db.exec('BEGIN');
+  await pool.query('BEGIN');
   try {
-    order.forEach((id, idx) => update.run(idx, id, req.user.id));
-    db.exec('COMMIT');
+    for (const [idx, id] of order.entries()) {
+      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND user_id = $3', [idx, id, req.user.id]);
+    }
+    await pool.query('COMMIT');
   } catch (e) {
-    db.exec('ROLLBACK');
+    await pool.query('ROLLBACK');
     throw e;
   }
-
   res.json({ ok: true });
+}));
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
+init()
+  .then(() => app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`)))
+  .catch(err => { console.error('DB init failed:', err); process.exit(1); });
