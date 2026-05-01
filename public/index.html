@@ -582,6 +582,43 @@
     @media (max-width: 640px) {
       .board { flex-direction: column; }
     }
+
+    .priority-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .priority-dot.high { background: #EA4335; }
+    .priority-dot.medium { background: #FBBC05; }
+    .priority-dot.low { background: #4285F4; }
+
+    .due-badge { font-size: 0.7rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #F0F0F0; color: #666; }
+    .due-badge.overdue { background: #FEE2E2; color: #991B1B; }
+    .due-badge.today { background: #FEF3C7; color: #92400E; }
+    .due-badge.soon { background: #DCFCE7; color: #166534; }
+
+    .subtask-count { font-size: 0.7rem; color: #666; font-weight: 600; background: #F0F0F0; padding: 1px 6px; border-radius: 4px; }
+
+    .priority-selector { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+    .priority-opt { padding: 3px 10px; border-radius: 20px; font-size: 0.76rem; font-weight: 600; cursor: pointer; border: 2px solid #E0E0E0; background: none; color: #666; transition: all 0.15s; }
+    .priority-opt:hover { border-color: #FFCC00; }
+    .priority-opt.selected.none { background: #E0E0E0; color: #666; border-color: #E0E0E0; }
+    .priority-opt.selected.low { background: #4285F4; color: #fff; border-color: #4285F4; }
+    .priority-opt.selected.medium { background: #FBBC05; color: #1A1A1A; border-color: #FBBC05; }
+    .priority-opt.selected.high { background: #EA4335; color: #fff; border-color: #EA4335; }
+
+    .recurrence-sel { width: 100%; padding: 6px 9px; border: 1px solid #E0E0E0; border-radius: 6px; font-size: 0.84rem; color: #1A1A1A; outline: none; background: #FAFAFA; cursor: pointer; }
+    .recurrence-sel:focus { border-color: #FFCC00; background: #fff; }
+
+    .subtask-list { margin-top: 4px; }
+    .subtask-item { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid #F5F5F5; }
+    .subtask-item:last-child { border-bottom: none; }
+    .subtask-check { cursor: pointer; flex-shrink: 0; accent-color: #FFCC00; width: 14px; height: 14px; }
+    .subtask-item span { flex: 1; font-size: 0.84rem; color: #1A1A1A; }
+    .subtask-item span.done { text-decoration: line-through; color: #AAA; }
+    .subtask-remove { background: none; border: none; color: #CCC; cursor: pointer; font-size: 0.9rem; padding: 0; line-height: 1; }
+    .subtask-remove:hover { color: #c53030; }
+    .add-subtask-row { display: flex; gap: 6px; margin-top: 8px; }
+    .add-subtask-row input { flex: 1; padding: 5px 8px; border: 1px solid #E0E0E0; border-radius: 6px; font-size: 0.84rem; outline: none; }
+    .add-subtask-row input:focus { border-color: #FFCC00; }
+    .add-subtask-btn { padding: 5px 10px; background: none; border: 1px solid #E0E0E0; border-radius: 6px; font-size: 0.84rem; cursor: pointer; color: #666; font-weight: 700; }
+    .add-subtask-btn:hover { background: #FFFBE6; border-color: #FFCC00; color: #1A1A1A; }
   </style>
 </head>
 <body>
@@ -700,6 +737,10 @@
       cal_start: card.querySelector('.cal-start').value,
       cal_end: card.querySelector('.cal-end').value,
       category_id: card.dataset.categoryId ? Number(card.dataset.categoryId) : null,
+      due_date: card.querySelector('.due-date-input').value,
+      priority: card.dataset.priority || 'none',
+      recurrence: card.querySelector('.recurrence-sel').value,
+      subtasks: JSON.parse(card.dataset.subtasks || '[]'),
     };
   }
 
@@ -927,6 +968,10 @@
     card.dataset.taskId = task.id;
     card.dataset.stage = stage;
     card.dataset.categoryId = task.category_id || '';
+    card.dataset.priority = task.priority || 'none';
+    card.dataset.recurrence = task.recurrence || '';
+    card.dataset.dueDate = task.due_date || '';
+    card.dataset.subtasks = JSON.stringify(task.subtasks || []);
 
     const stageIdx = STAGES.indexOf(stage);
     const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
@@ -938,6 +983,9 @@
           <div class="task-main">
             <div class="task-text">${escapeHtml(task.text)}</div>
             <div class="task-badges">
+              ${task.priority && task.priority !== 'none' ? `<span class="priority-dot ${task.priority}"></span>` : ''}
+              ${task.due_date ? `<span class="due-badge ${getDueBadgeClass(task.due_date)}">${formatDueDate(task.due_date)}</span>` : ''}
+              ${(task.subtasks && task.subtasks.length) ? `<span class="subtask-count">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : ''}
               <span class="task-age">${daysOpen(task.created_at)}</span>
             </div>
             <div class="task-meta" style="margin-top:2px;">
@@ -956,8 +1004,38 @@
         </div>
       </div>
       <div class="status-panel">
-        <label>Category</label>
+        <label>Due date</label>
+        <input type="date" class="due-date-input" value="${task.due_date || ''}" />
+
+        <label style="margin-top:10px;">Priority</label>
+        <div class="priority-selector">
+          <button class="priority-opt none ${(!task.priority || task.priority === 'none') ? 'selected' : ''}" data-value="none">None</button>
+          <button class="priority-opt low ${task.priority === 'low' ? 'selected' : ''}" data-value="low">Low</button>
+          <button class="priority-opt medium ${task.priority === 'medium' ? 'selected' : ''}" data-value="medium">Medium</button>
+          <button class="priority-opt high ${task.priority === 'high' ? 'selected' : ''}" data-value="high">High</button>
+        </div>
+
+        <label style="margin-top:10px;">Repeat</label>
+        <select class="recurrence-sel">
+          <option value="" ${!task.recurrence ? 'selected' : ''}>No repeat</option>
+          <option value="daily" ${task.recurrence === 'daily' ? 'selected' : ''}>Daily</option>
+          <option value="weekly" ${task.recurrence === 'weekly' ? 'selected' : ''}>Weekly</option>
+          <option value="monthly" ${task.recurrence === 'monthly' ? 'selected' : ''}>Monthly</option>
+          <option value="after:3" ${task.recurrence === 'after:3' ? 'selected' : ''}>3 days after done</option>
+          <option value="after:7" ${task.recurrence === 'after:7' ? 'selected' : ''}>7 days after done</option>
+          <option value="after:14" ${task.recurrence === 'after:14' ? 'selected' : ''}>14 days after done</option>
+          <option value="after:30" ${task.recurrence === 'after:30' ? 'selected' : ''}>30 days after done</option>
+        </select>
+
+        <label style="margin-top:10px;">Category</label>
         <div class="cat-selector"></div>
+
+        <label style="margin-top:10px;">Subtasks</label>
+        <div class="subtask-list"></div>
+        <div class="add-subtask-row">
+          <input type="text" class="subtask-input" placeholder="Add subtask…" />
+          <button class="add-subtask-btn">+</button>
+        </div>
 
         <label style="margin-top:10px;">Status / notes</label>
         <textarea class="status-area" placeholder="Add a status update or notes…" rows="2"></textarea>
@@ -1006,7 +1084,47 @@
     (task.owners || []).forEach(email => addOwnerChip(email, chipsEl, ownerPreview));
     renderCatSelector(catSelector, card);
     updateCardBadge(card);
+    renderSubtasks(card);
+    updateSubtaskCount(card);
     updateStatusPreview();
+
+    const dueDateInput = card.querySelector('.due-date-input');
+    dueDateInput.addEventListener('change', () => {
+      card.dataset.dueDate = dueDateInput.value;
+      updateDueBadge(card);
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    });
+
+    card.querySelector('.priority-selector').querySelectorAll('.priority-opt').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.stopPropagation();
+        card.querySelector('.priority-selector').querySelectorAll('.priority-opt').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        card.dataset.priority = btn.dataset.value;
+        updatePriorityDot(card);
+        apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+      });
+    });
+
+    card.querySelector('.recurrence-sel').addEventListener('change', () => {
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    });
+
+    const subtaskInput = card.querySelector('.subtask-input');
+    card.querySelector('.add-subtask-btn').addEventListener('click', e => { e.stopPropagation(); doAddSubtask(); });
+    subtaskInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doAddSubtask(); } });
+    function doAddSubtask() {
+      const text = subtaskInput.value.trim();
+      if (!text) return;
+      const subtasks = JSON.parse(card.dataset.subtasks || '[]');
+      const maxId = subtasks.length ? Math.max(...subtasks.map(s => s.id)) : 0;
+      subtasks.push({ id: maxId + 1, text, done: false });
+      card.dataset.subtasks = JSON.stringify(subtasks);
+      subtaskInput.value = '';
+      renderSubtasks(card);
+      updateSubtaskCount(card);
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    }
 
     if (activeFilter && Number(card.dataset.categoryId) !== activeFilter) card.style.display = 'none';
 
@@ -1132,6 +1250,7 @@
       dragSrc.dataset.stage = targetStage;
       apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
       rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
+      if (targetStage === 'done' && dragSrc.dataset.recurrence) spawnRecurringTask(dragSrc);
       saveOrder(dragSrcStage, targetStage);
     } else {
       saveOrder(targetStage);
@@ -1145,6 +1264,7 @@
     getList(newStage).appendChild(card);
     apiPut(`/api/tasks/${taskId}`, { ...getCardPayload(card), stage: newStage });
     rebuildStageButtons(card, taskId, newStage);
+    if (newStage === 'done' && card.dataset.recurrence) spawnRecurringTask(card);
     updateCounts();
     saveOrder(oldStage, newStage);
   }
@@ -1199,6 +1319,125 @@
 
   function escapeHtml(str) {
     return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function getDueBadgeClass(dueDate) {
+    if (!dueDate) return '';
+    const today = new Date().toISOString().split('T')[0];
+    if (dueDate < today) return 'overdue';
+    if (dueDate === today) return 'today';
+    return 'soon';
+  }
+
+  function formatDueDate(dueDate) {
+    if (!dueDate) return '';
+    const [y, m, d] = dueDate.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const diff = Math.round((date - today) / 86400000);
+    if (diff < 0) return `${Math.abs(diff)}d overdue`;
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    if (diff < 7) return date.toLocaleDateString('en', { weekday: 'short' });
+    return date.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+  }
+
+  function updateDueBadge(card) {
+    const badgesEl = card.querySelector('.task-badges');
+    const existing = badgesEl.querySelector('.due-badge');
+    if (existing) existing.remove();
+    const dueDate = card.dataset.dueDate;
+    if (dueDate) {
+      const badge = document.createElement('span');
+      badge.className = `due-badge ${getDueBadgeClass(dueDate)}`;
+      badge.textContent = formatDueDate(dueDate);
+      const ageEl = badgesEl.querySelector('.task-age');
+      badgesEl.insertBefore(badge, ageEl);
+    }
+  }
+
+  function updatePriorityDot(card) {
+    const badgesEl = card.querySelector('.task-badges');
+    const existing = badgesEl.querySelector('.priority-dot');
+    if (existing) existing.remove();
+    const priority = card.dataset.priority;
+    if (priority && priority !== 'none') {
+      const dot = document.createElement('span');
+      dot.className = `priority-dot ${priority}`;
+      badgesEl.prepend(dot);
+    }
+  }
+
+  function renderSubtasks(card) {
+    const list = card.querySelector('.subtask-list');
+    const taskId = card.dataset.taskId;
+    list.innerHTML = '';
+    const subtasks = JSON.parse(card.dataset.subtasks || '[]');
+    subtasks.forEach(subtask => {
+      const item = document.createElement('div');
+      item.className = 'subtask-item';
+      item.innerHTML = `<input type="checkbox" class="subtask-check" ${subtask.done ? 'checked' : ''} /><span class="${subtask.done ? 'done' : ''}">${escapeHtml(subtask.text)}</span><button class="subtask-remove">×</button>`;
+      item.querySelector('.subtask-check').addEventListener('change', e => {
+        subtask.done = e.target.checked;
+        item.querySelector('span').className = subtask.done ? 'done' : '';
+        const all = JSON.parse(card.dataset.subtasks || '[]');
+        const idx = all.findIndex(s => s.id === subtask.id);
+        if (idx >= 0) all[idx].done = subtask.done;
+        card.dataset.subtasks = JSON.stringify(all);
+        updateSubtaskCount(card);
+        apiPut(`/api/tasks/${taskId}`, getCardPayload(card));
+      });
+      item.querySelector('.subtask-remove').addEventListener('click', e => {
+        e.stopPropagation();
+        const all = JSON.parse(card.dataset.subtasks || '[]').filter(s => s.id !== subtask.id);
+        card.dataset.subtasks = JSON.stringify(all);
+        renderSubtasks(card);
+        updateSubtaskCount(card);
+        apiPut(`/api/tasks/${taskId}`, getCardPayload(card));
+      });
+      list.appendChild(item);
+    });
+  }
+
+  function updateSubtaskCount(card) {
+    const badgesEl = card.querySelector('.task-badges');
+    const existing = badgesEl.querySelector('.subtask-count');
+    if (existing) existing.remove();
+    const subtasks = JSON.parse(card.dataset.subtasks || '[]');
+    if (subtasks.length > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'subtask-count';
+      badge.textContent = `${subtasks.filter(s => s.done).length}/${subtasks.length}`;
+      const ageEl = badgesEl.querySelector('.task-age');
+      badgesEl.insertBefore(badge, ageEl);
+    }
+  }
+
+  function getNextDueDate(currentDueDate, recurrence) {
+    const base = currentDueDate ? new Date(currentDueDate + 'T00:00:00') : new Date();
+    if (recurrence === 'daily') base.setDate(base.getDate() + 1);
+    else if (recurrence === 'weekly') base.setDate(base.getDate() + 7);
+    else if (recurrence === 'monthly') base.setMonth(base.getMonth() + 1);
+    else if (recurrence.startsWith('after:')) {
+      const days = parseInt(recurrence.split(':')[1], 10);
+      const now = new Date();
+      now.setDate(now.getDate() + days);
+      return now.toISOString().split('T')[0];
+    }
+    return base.toISOString().split('T')[0];
+  }
+
+  function spawnRecurringTask(card) {
+    const nextDue = getNextDueDate(card.dataset.dueDate, card.dataset.recurrence);
+    const text = card.querySelector('.task-text').textContent;
+    apiPost('/api/tasks', {
+      text,
+      stage: 'backlog',
+      due_date: nextDue,
+      priority: card.dataset.priority || 'none',
+      recurrence: card.dataset.recurrence,
+      category_id: card.dataset.categoryId ? Number(card.dataset.categoryId) : null,
+    }).then(newTask => { createTaskCard(newTask); updateCounts(); });
   }
 
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });

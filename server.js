@@ -5,6 +5,7 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
+const chrono = require('chrono-node');
 const { pool, init } = require('./database');
 const path = require('path');
 
@@ -201,23 +202,35 @@ app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
     'SELECT * FROM tasks WHERE user_id = $1 ORDER BY position ASC, created_at ASC',
     [req.user.id]
   );
-  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); });
+  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
   res.json(rows);
 }));
 
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
-  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage = 'backlog', category_id = null } = req.body;
-  if (!text) return res.status(400).json({ error: 'Text required' });
+  const { text: rawText, status = '', owners = [], cal_start = '', cal_end = '', stage = 'backlog', category_id = null, due_date: explicitDue = '', priority = 'none', recurrence = '', subtasks = [] } = req.body;
+  if (!rawText) return res.status(400).json({ error: 'Text required' });
+
+  let due_date = explicitDue;
+  let text = rawText;
+  if (!explicitDue) {
+    const parsed = chrono.parse(rawText);
+    if (parsed.length > 0) {
+      due_date = parsed[0].date().toISOString().split('T')[0];
+      const stripped = rawText.replace(parsed[0].text, '').trim().replace(/\s+/g, ' ');
+      if (stripped.length > 0) text = stripped;
+    }
+  }
 
   const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [req.user.id]);
   const position = (maxResult.rows[0].m ?? -1) + 1;
 
   const { rows } = await pool.query(
-    'INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, category_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
-    [req.user.id, text, status, JSON.stringify(owners), cal_start, cal_end, position, stage, category_id]
+    'INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, category_id, due_date, priority, recurrence, subtasks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *',
+    [req.user.id, text, status, JSON.stringify(owners), cal_start, cal_end, position, stage, category_id, due_date, priority, recurrence, JSON.stringify(subtasks)]
   );
   const task = rows[0];
   task.owners = JSON.parse(task.owners || '[]');
+  task.subtasks = JSON.parse(task.subtasks || '[]');
   res.json(task);
 }));
 
@@ -225,10 +238,10 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
 
-  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage, category_id = null } = req.body;
+  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage, category_id = null, due_date = '', priority = 'none', recurrence = '', subtasks = [] } = req.body;
   await pool.query(
-    'UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5, stage = COALESCE($6, stage), category_id = $7 WHERE id = $8',
-    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null, category_id, rows[0].id]
+    'UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5, stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9, recurrence = $10, subtasks = $11 WHERE id = $12',
+    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null, category_id, due_date, priority, recurrence, JSON.stringify(subtasks), rows[0].id]
   );
   res.json({ ok: true });
 }));
