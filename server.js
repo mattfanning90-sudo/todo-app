@@ -36,6 +36,34 @@ const DEFAULT_CATEGORIES = [
 
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
+async function seedCategories(userId) {
+  const { rows } = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [userId]);
+  if (Number(rows[0].c) === 0) {
+    await pool.query('BEGIN');
+    try {
+      for (const c of DEFAULT_CATEGORIES) {
+        await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [userId, c.name, c.color]);
+      }
+      await pool.query('COMMIT');
+    } catch (e) {
+      await pool.query('ROLLBACK');
+      throw e;
+    }
+  }
+}
+
+async function getBoardOwner(req) {
+  const boardId = req.query.board || req.body?.boardOwner;
+  if (!boardId || Number(boardId) === req.user.id) return req.user.id;
+  const ownerId = Number(boardId);
+  const { rows } = await pool.query(
+    'SELECT id FROM board_members WHERE board_owner_id = $1 AND member_user_id = $2',
+    [ownerId, req.user.id]
+  );
+  if (!rows.length) throw Object.assign(new Error('Access denied'), { status: 403 });
+  return ownerId;
+}
+
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -44,7 +72,6 @@ passport.use(new GoogleStrategy({
   try {
     const email = profile.emails?.[0]?.value || '';
     const name = profile.displayName || '';
-
     let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
     let user = rows[0];
     if (!user) {
@@ -54,21 +81,7 @@ passport.use(new GoogleStrategy({
       );
       user = result.rows[0];
     }
-
-    const countResult = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [user.id]);
-    if (Number(countResult.rows[0].c) === 0) {
-      await pool.query('BEGIN');
-      try {
-        for (const c of DEFAULT_CATEGORIES) {
-          await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [user.id, c.name, c.color]);
-        }
-        await pool.query('COMMIT');
-      } catch (e) {
-        await pool.query('ROLLBACK');
-        throw e;
-      }
-    }
-
+    await seedCategories(user.id);
     return done(null, user);
   } catch (e) {
     return done(e);
@@ -92,9 +105,7 @@ function requireAuth(req, res, next) {
 
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
   try {
-    const { rows } = await pool.query(
-      'SELECT * FROM users WHERE email = $1 AND password_hash IS NOT NULL', [email]
-    );
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1 AND password_hash IS NOT NULL', [email]);
     const user = rows[0];
     if (!user) return done(null, false);
     const match = await bcrypt.compare(password, user.password_hash);
@@ -105,19 +116,11 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
   }
 }));
 
-/* ── Auth routes ── */
+/* ── Auth ── */
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => res.redirect('/'));
+app.get('/auth/logout', (req, res) => req.logout(() => res.redirect('/login')));
 
-app.get('/auth/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
-  (req, res) => res.redirect('/')
-);
-
-app.get('/auth/logout', (req, res) => {
-  req.logout(() => res.redirect('/login'));
-});
-
-/* ── Protected app ── */
 app.get('/', (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -132,32 +135,15 @@ app.post('/auth/signup', wrap(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.redirect('/login?error=missing&mode=signup');
   if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
-
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
-
   const password_hash = await bcrypt.hash(password, 12);
   const { rows } = await pool.query(
     'INSERT INTO users (google_id, email, name, password_hash) VALUES ($1, $2, $3, $4) RETURNING *',
     [`local:${email}`, email, email.split('@')[0], password_hash]
   );
-  const user = rows[0];
-
-  const catCount = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [user.id]);
-  if (Number(catCount.rows[0].c) === 0) {
-    await pool.query('BEGIN');
-    try {
-      for (const c of DEFAULT_CATEGORIES) {
-        await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [user.id, c.name, c.color]);
-      }
-      await pool.query('COMMIT');
-    } catch (e) {
-      await pool.query('ROLLBACK');
-      throw e;
-    }
-  }
-
-  req.login(user, err => {
+  await seedCategories(rows[0].id);
+  req.login(rows[0], err => {
     if (err) return res.redirect('/login?error=server&mode=signup');
     res.redirect('/');
   });
@@ -168,48 +154,125 @@ app.post('/auth/login', passport.authenticate('local', {
   failureRedirect: '/login?error=invalid',
 }));
 
-/* ── API: user ── */
+/* ── User ── */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated()) return res.json(null);
-  res.json({ name: req.user.name, email: req.user.email });
+  res.json({ id: req.user.id, name: req.user.name, email: req.user.email });
 });
 
-/* ── API: categories ── */
+/* ── Boards ── */
+app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.email FROM board_members bm
+     JOIN users u ON u.id = bm.member_user_id
+     WHERE bm.board_owner_id = $1 ORDER BY bm.created_at ASC`,
+    [req.user.id]
+  );
+  res.json(rows);
+}));
+
+app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required' });
+  const { rows } = await pool.query('SELECT id, name, email FROM users WHERE email = $1', [email]);
+  const invitee = rows[0];
+  if (!invitee) return res.status(404).json({ error: "User not found — they need to sign up first." });
+  if (invitee.id === req.user.id) return res.status(400).json({ error: 'Cannot invite yourself' });
+  await pool.query(
+    'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.user.id, invitee.id]
+  );
+  await pool.query(
+    'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
+    [invitee.id, 'board_invite', `${req.user.name || req.user.email} added you to their board`, req.user.id]
+  );
+  res.json(invitee);
+}));
+
+app.delete('/api/boards/members/:userId', requireAuth, wrap(async (req, res) => {
+  await pool.query(
+    'DELETE FROM board_members WHERE board_owner_id = $1 AND member_user_id = $2',
+    [req.user.id, req.params.userId]
+  );
+  res.json({ ok: true });
+}));
+
+app.get('/api/boards/memberships', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.email FROM board_members bm
+     JOIN users u ON u.id = bm.board_owner_id
+     WHERE bm.member_user_id = $1 ORDER BY bm.created_at ASC`,
+    [req.user.id]
+  );
+  res.json(rows);
+}));
+
+/* ── Notifications ── */
+app.get('/api/notifications', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT n.*, u.name as from_name, u.email as from_email
+     FROM notifications n LEFT JOIN users u ON u.id = n.from_user_id
+     WHERE n.user_id = $1 ORDER BY n.created_at DESC LIMIT 20`,
+    [req.user.id]
+  );
+  res.json(rows);
+}));
+
+app.post('/api/notifications/read', requireAuth, wrap(async (req, res) => {
+  await pool.query('UPDATE notifications SET read = true WHERE user_id = $1', [req.user.id]);
+  res.json({ ok: true });
+}));
+
+/* ── Categories ── */
 app.get('/api/categories', requireAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM categories WHERE user_id = $1 ORDER BY id ASC', [req.user.id]);
+  const ownerId = await getBoardOwner(req);
+  const { rows } = await pool.query('SELECT * FROM categories WHERE user_id = $1 ORDER BY id ASC', [ownerId]);
   res.json(rows);
 }));
 
 app.post('/api/categories', requireAuth, wrap(async (req, res) => {
+  const ownerId = await getBoardOwner(req);
   const { name, color = '#667eea' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const { rows } = await pool.query(
     'INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3) RETURNING *',
-    [req.user.id, name, color]
+    [ownerId, name, color]
   );
   res.json(rows[0]);
 }));
 
 app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  const ownerId = await getBoardOwner(req);
+  const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   await pool.query('UPDATE tasks SET category_id = NULL WHERE category_id = $1', [rows[0].id]);
   await pool.query('DELETE FROM categories WHERE id = $1', [rows[0].id]);
   res.json({ ok: true });
 }));
 
-/* ── API: tasks ── */
+/* ── Tasks ── */
 app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
+  const ownerId = await getBoardOwner(req);
   const { rows } = await pool.query(
-    'SELECT * FROM tasks WHERE user_id = $1 ORDER BY position ASC, created_at ASC',
-    [req.user.id]
+    `SELECT t.*, u.name as assigned_to_name, u.email as assigned_to_email
+     FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to_user_id
+     WHERE t.user_id = $1 ORDER BY t.position ASC, t.created_at ASC`,
+    [ownerId]
   );
-  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
+  rows.forEach(t => {
+    t.owners = JSON.parse(t.owners || '[]');
+    t.subtasks = JSON.parse(t.subtasks || '[]');
+  });
   res.json(rows);
 }));
 
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
-  const { text: rawText, status = '', owners = [], cal_start = '', cal_end = '', stage = 'backlog', category_id = null, due_date: explicitDue = '', priority = 'none', recurrence = '', subtasks = [] } = req.body;
+  const ownerId = await getBoardOwner(req);
+  const {
+    text: rawText, status = '', owners = [], cal_start = '', cal_end = '',
+    stage = 'backlog', category_id = null, due_date: explicitDue = '',
+    priority = 'none', recurrence = '', subtasks = [], assigned_to_user_id = null
+  } = req.body;
   if (!rawText) return res.status(400).json({ error: 'Text required' });
 
   let due_date = explicitDue;
@@ -223,46 +286,81 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
     }
   }
 
-  const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [req.user.id]);
+  const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [ownerId]);
   const position = (maxResult.rows[0].m ?? -1) + 1;
 
   const { rows } = await pool.query(
-    'INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, category_id, due_date, priority, recurrence, subtasks) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING *',
-    [req.user.id, text, status, JSON.stringify(owners), cal_start, cal_end, position, stage, category_id, due_date, priority, recurrence, JSON.stringify(subtasks)]
+    `INSERT INTO tasks
+       (user_id, text, status, owners, cal_start, cal_end, position, stage,
+        category_id, due_date, priority, recurrence, subtasks, assigned_to_user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+    [ownerId, text, status, JSON.stringify(owners), cal_start, cal_end, position,
+     stage, category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id]
   );
   const task = rows[0];
   task.owners = JSON.parse(task.owners || '[]');
   task.subtasks = JSON.parse(task.subtasks || '[]');
+
+  if (assigned_to_user_id && assigned_to_user_id !== req.user.id) {
+    await pool.query(
+      'INSERT INTO notifications (user_id, type, message, task_id, from_user_id) VALUES ($1,$2,$3,$4,$5)',
+      [assigned_to_user_id, 'task_assigned',
+       `${req.user.name || req.user.email} assigned you: "${text.slice(0, 60)}"`,
+       task.id, req.user.id]
+    );
+  }
   res.json(task);
 }));
 
 app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  const ownerId = await getBoardOwner(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const task = rows[0];
 
-  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage, category_id = null, due_date = '', priority = 'none', recurrence = '', subtasks = [] } = req.body;
+  const {
+    text, status = '', owners = [], cal_start = '', cal_end = '', stage,
+    category_id = null, due_date = '', priority = 'none', recurrence = '',
+    subtasks = [], assigned_to_user_id = null
+  } = req.body;
+
+  if (assigned_to_user_id && assigned_to_user_id !== task.assigned_to_user_id && assigned_to_user_id !== req.user.id) {
+    await pool.query(
+      'INSERT INTO notifications (user_id, type, message, task_id, from_user_id) VALUES ($1,$2,$3,$4,$5)',
+      [assigned_to_user_id, 'task_assigned',
+       `${req.user.name || req.user.email} assigned you: "${(text || task.text).slice(0, 60)}"`,
+       task.id, req.user.id]
+    );
+  }
+
   await pool.query(
-    'UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5, stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9, recurrence = $10, subtasks = $11 WHERE id = $12',
-    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null, category_id, due_date, priority, recurrence, JSON.stringify(subtasks), rows[0].id]
+    `UPDATE tasks SET
+       text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
+       stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
+       recurrence = $10, subtasks = $11, assigned_to_user_id = $12
+     WHERE id = $13`,
+    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null,
+     category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id, task.id]
   );
   res.json({ ok: true });
 }));
 
 app.delete('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+  const ownerId = await getBoardOwner(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   await pool.query('DELETE FROM tasks WHERE id = $1', [rows[0].id]);
   res.json({ ok: true });
 }));
 
 app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
+  const ownerId = await getBoardOwner(req);
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
-
   await pool.query('BEGIN');
   try {
     for (const [idx, id] of order.entries()) {
-      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND user_id = $3', [idx, id, req.user.id]);
+      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND user_id = $3', [idx, id, ownerId]);
     }
     await pool.query('COMMIT');
   } catch (e) {
@@ -274,7 +372,7 @@ app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
+  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
 });
 
 const PORT = process.env.PORT || 3000;

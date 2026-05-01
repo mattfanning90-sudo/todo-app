@@ -619,14 +619,95 @@
     .add-subtask-row input:focus { border-color: #FFCC00; }
     .add-subtask-btn { padding: 5px 10px; background: none; border: 1px solid #E0E0E0; border-radius: 6px; font-size: 0.84rem; cursor: pointer; color: #666; font-weight: 700; }
     .add-subtask-btn:hover { background: #FFFBE6; border-color: #FFCC00; color: #1A1A1A; }
+
+    /* Board switcher */
+    .board-switcher { position: relative; }
+    .board-switch-btn { background: none; border: 1.5px solid #E0E0E0; border-radius: 8px; padding: 5px 12px; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: #1A1A1A; transition: all 0.15s; display: flex; align-items: center; gap: 6px; }
+    .board-switch-btn:hover { border-color: #FFCC00; background: #FFFBE6; }
+    .board-menu { position: absolute; top: calc(100% + 6px); left: 0; background: #fff; border: 1px solid #E8E8E8; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); min-width: 200px; z-index: 100; overflow: hidden; }
+    .board-menu-item { padding: 10px 16px; font-size: 0.85rem; cursor: pointer; color: #1A1A1A; transition: background 0.1s; }
+    .board-menu-item:hover { background: #FFFBE6; }
+    .board-menu-item.active { font-weight: 700; color: #1A1A1A; }
+    .board-menu-sep { height: 1px; background: #F0F0F0; margin: 4px 0; }
+    .board-menu-item.manage { color: #666; font-size: 0.82rem; }
+    .viewing-banner { background: #FFF8CC; border: 1px solid #FFCC00; border-radius: 6px; padding: 4px 12px; font-size: 0.8rem; color: #1A1A1A; font-weight: 600; display: none; margin-left: 8px; }
+
+    /* Notification bell */
+    .notif-btn { position: relative; background: none; border: 1.5px solid #E0E0E0; border-radius: 8px; padding: 5px 10px; font-size: 1rem; cursor: pointer; transition: all 0.15s; }
+    .notif-btn:hover { border-color: #FFCC00; background: #FFFBE6; }
+    .notif-badge { position: absolute; top: -6px; right: -6px; background: #EA4335; color: #fff; border-radius: 10px; font-size: 0.65rem; font-weight: 700; padding: 1px 5px; min-width: 16px; text-align: center; }
+    .notif-dropdown { position: absolute; top: calc(100% + 8px); right: 0; background: #fff; border: 1px solid #E8E8E8; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.12); width: 300px; z-index: 100; overflow: hidden; }
+    .notif-header { padding: 12px 16px; font-size: 0.82rem; font-weight: 700; color: #666; border-bottom: 1px solid #F0F0F0; text-transform: uppercase; letter-spacing: 0.05em; }
+    .notif-item { padding: 10px 16px; border-bottom: 1px solid #F5F5F5; font-size: 0.83rem; color: #1A1A1A; line-height: 1.4; }
+    .notif-item.unread { background: #FFFBE6; }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-time { font-size: 0.72rem; color: #AAA; margin-top: 2px; }
+    .notif-empty { padding: 20px 16px; text-align: center; color: #AAA; font-size: 0.85rem; }
+    .notif-wrap { position: relative; }
+
+    /* Members modal */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal { background: #fff; border-radius: 14px; width: 100%; max-width: 460px; box-shadow: 0 8px 40px rgba(0,0,0,0.18); overflow: hidden; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #F0F0F0; }
+    .modal-header h2 { font-size: 1.1rem; font-weight: 700; color: #1A1A1A; }
+    .modal-close { background: none; border: none; font-size: 1.4rem; cursor: pointer; color: #AAA; line-height: 1; }
+    .modal-close:hover { color: #1A1A1A; }
+    .modal-body { padding: 20px 24px; }
+    .member-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #F5F5F5; }
+    .member-item:last-child { border-bottom: none; }
+    .member-avatar { width: 32px; height: 32px; border-radius: 50%; background: #FFCC00; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; color: #1A1A1A; flex-shrink: 0; }
+    .member-info { flex: 1; min-width: 0; }
+    .member-name { font-size: 0.88rem; font-weight: 600; color: #1A1A1A; }
+    .member-email { font-size: 0.76rem; color: #888; }
+    .member-remove { background: none; border: 1px solid #E0E0E0; border-radius: 5px; padding: 3px 8px; font-size: 0.76rem; color: #888; cursor: pointer; }
+    .member-remove:hover { background: #fff0f0; color: #c53030; border-color: #fc8181; }
+    .no-members { color: #AAA; font-size: 0.85rem; padding: 8px 0; }
+    .invite-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid #F0F0F0; }
+    .invite-section h3 { font-size: 0.85rem; font-weight: 700; color: #444; margin-bottom: 10px; }
+    .invite-row { display: flex; gap: 8px; }
+    .invite-row input { flex: 1; padding: 8px 12px; border: 1.5px solid #E0E0E0; border-radius: 8px; font-size: 0.88rem; outline: none; }
+    .invite-row input:focus { border-color: #FFCC00; }
+    .invite-row button { padding: 8px 16px; background: #FFCC00; border: none; border-radius: 8px; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
+    .invite-row button:hover { background: #E6B800; }
+    .invite-msg { font-size: 0.8rem; margin-top: 6px; }
+    .invite-msg.error { color: #c53030; }
+    .invite-msg.success { color: #276749; }
+
+    /* Assignee badge */
+    .assignee-badge { font-size: 0.7rem; font-weight: 600; padding: 1px 6px; border-radius: 4px; background: #EDE9FE; color: #5B21B6; }
+
+    /* Assign select */
+    .assign-sel { width: 100%; padding: 6px 9px; border: 1px solid #E0E0E0; border-radius: 6px; font-size: 0.84rem; color: #1A1A1A; outline: none; background: #FAFAFA; cursor: pointer; }
+    .assign-sel:focus { border-color: #FFCC00; background: #fff; }
   </style>
 </head>
 <body>
 
 <div class="top-bar">
   <div class="app-header">
-    <h1>To Do List</h1>
-    <div class="user-info">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+      <h1>To Do List</h1>
+      <div class="board-switcher" id="board-switcher">
+        <button class="board-switch-btn" id="board-switch-btn" onclick="toggleBoardMenu()">
+          <span id="board-label">My Board</span> ▾
+        </button>
+        <div class="board-menu" id="board-menu" style="display:none">
+          <div class="board-menu-item active" id="my-board-item" onclick="switchBoard(null)">✓ My Board</div>
+          <div id="board-menu-memberships"></div>
+          <div class="board-menu-sep"></div>
+          <div class="board-menu-item manage" onclick="closeBoardMenu();openMembersModal()">Manage Members…</div>
+        </div>
+      </div>
+      <span class="viewing-banner" id="viewing-banner"></span>
+    </div>
+    <div class="user-info" style="display:flex;align-items:center;gap:8px;">
+      <div class="notif-wrap">
+        <button class="notif-btn" id="notif-btn" onclick="toggleNotifications()">🔔<span class="notif-badge" id="notif-badge" style="display:none">0</span></button>
+        <div class="notif-dropdown" id="notif-dropdown" style="display:none">
+          <div class="notif-header">Notifications</div>
+          <div id="notif-list"></div>
+        </div>
+      </div>
       <span class="user-name" id="user-name"></span>
       <a class="logout-btn" href="/auth/logout">Sign out</a>
     </div>
@@ -697,6 +778,26 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="members-modal" style="display:none" onclick="closeMembersModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Board Members</h2>
+      <button class="modal-close" onclick="closeMembersModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="members-list"></div>
+      <div class="invite-section">
+        <h3>Invite someone by email</h3>
+        <div class="invite-row">
+          <input type="email" id="invite-email" placeholder="name@example.com" />
+          <button onclick="inviteMember()">Invite</button>
+        </div>
+        <div class="invite-msg" id="invite-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   const STAGES = ['backlog', 'in_progress', 'done'];
   const STAGE_LABELS = { backlog: 'Backlog', in_progress: 'In Progress', done: 'Done' };
@@ -707,6 +808,14 @@
   let selectedColor = COLOR_PALETTE[0];
   let dragSrc = null;
   let dragSrcStage = null;
+  let myId = null;
+  let myName = '';
+  let boardMembers = [];
+  let memberships = [];
+  let currentBoardOwner = null;
+
+  function boardParam() { return currentBoardOwner ? `?board=${currentBoardOwner.id}` : ''; }
+  function boardBody()  { return currentBoardOwner ? { boardOwner: currentBoardOwner.id } : {}; }
 
   function debounce(fn, delay) {
     let timer;
@@ -741,6 +850,8 @@
       priority: card.dataset.priority || 'none',
       recurrence: card.querySelector('.recurrence-sel').value,
       subtasks: JSON.parse(card.dataset.subtasks || '[]'),
+      assigned_to_user_id: card.dataset.assignedToUserId ? Number(card.dataset.assignedToUserId) : null,
+      ...boardBody(),
     };
   }
 
@@ -770,7 +881,7 @@
     const toSave = stages.length ? stages : STAGES;
     toSave.forEach(stage => {
       const ids = [...getList(stage).querySelectorAll('.task-card')].map(c => Number(c.dataset.taskId));
-      if (ids.length) apiPost('/api/reorder', { order: ids });
+      if (ids.length) apiPost('/api/reorder', { order: ids, ...boardBody() });
     });
   }
 
@@ -824,7 +935,7 @@
   async function saveNewCategory() {
     const name = document.getElementById('new-cat-name').value.trim();
     if (!name) return;
-    const cat = await apiPost('/api/categories', { name, color: selectedColor });
+    const cat = await apiPost('/api/categories', { name, color: selectedColor, ...boardBody() });
     categories.push(cat);
     renderFilterBar();
     document.getElementById('new-cat-name').value = '';
@@ -835,7 +946,7 @@
   async function deleteCategory(e, catId) {
     e.stopPropagation();
     if (!confirm('Delete this category? Tasks will become uncategorised.')) return;
-    await apiDelete(`/api/categories/${catId}`);
+    await apiDelete(`/api/categories/${catId}` + boardParam());
     categories = categories.filter(c => c.id !== catId);
     if (activeFilter === catId) setFilter(null);
     renderFilterBar();
@@ -892,19 +1003,177 @@
     try {
       const user = await (await fetch('/api/user')).json();
       if (!user) { location.href = '/login'; return; }
-      document.getElementById('user-name').textContent = user.name || user.email;
+      myId = user.id;
+      myName = user.name || user.email;
+      document.getElementById('user-name').textContent = myName;
 
-      categories = await (await fetch('/api/categories')).json();
+      [memberships, boardMembers] = await Promise.all([
+        fetch('/api/boards/memberships').then(r => r.json()),
+        fetch('/api/boards/members').then(r => r.json()),
+      ]);
+      renderBoardMenu();
+      await loadNotifications();
 
+      categories = await (await fetch('/api/categories' + boardParam())).json();
       renderColorPalette();
       renderFilterBar();
 
-      const tasks = await (await fetch('/api/tasks')).json();
+      const tasks = await (await fetch('/api/tasks' + boardParam())).json();
       tasks.forEach(t => createTaskCard(t));
       updateCounts();
       setupColumnDrop();
     } catch (err) {
       console.error('Failed to load:', err);
+    }
+  }
+
+  /* ── Board switching ── */
+  function renderBoardMenu() {
+    const el = document.getElementById('board-menu-memberships');
+    el.innerHTML = memberships.map(b =>
+      `<div class="board-menu-item" onclick="switchBoard(${JSON.stringify(b).replace(/"/g,'&quot;')})">${b.name || b.email}'s Board</div>`
+    ).join('');
+  }
+
+  function toggleBoardMenu() {
+    const menu = document.getElementById('board-menu');
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function closeBoardMenu() {
+    document.getElementById('board-menu').style.display = 'none';
+  }
+
+  async function switchBoard(board) {
+    closeBoardMenu();
+    currentBoardOwner = board;
+    document.getElementById('board-label').textContent = board ? `${board.name || board.email}'s Board` : 'My Board';
+    document.getElementById('my-board-item').classList.toggle('active', !board);
+    const banner = document.getElementById('viewing-banner');
+    if (board) { banner.textContent = `Viewing ${board.name || board.email}'s board`; banner.style.display = 'inline'; }
+    else { banner.style.display = 'none'; }
+
+    STAGES.forEach(s => getList(s).innerHTML = '');
+    activeFilter = null;
+
+    [boardMembers, categories] = await Promise.all([
+      board ? fetch(`/api/boards/members`).then(r => r.json()) : fetch('/api/boards/members').then(r => r.json()),
+      fetch('/api/categories' + boardParam()).then(r => r.json()),
+    ]);
+    renderFilterBar();
+
+    const tasks = await (await fetch('/api/tasks' + boardParam())).json();
+    tasks.forEach(t => createTaskCard(t));
+    updateCounts();
+  }
+
+  /* ── Members modal ── */
+  function openMembersModal() {
+    renderMembersList();
+    document.getElementById('members-modal').style.display = 'flex';
+    document.getElementById('invite-msg').textContent = '';
+    document.getElementById('invite-email').value = '';
+  }
+
+  function closeMembersModal() {
+    document.getElementById('members-modal').style.display = 'none';
+  }
+
+  function renderMembersList() {
+    const el = document.getElementById('members-list');
+    if (!boardMembers.length) {
+      el.innerHTML = '<p class="no-members">No members yet. Invite someone below.</p>';
+      return;
+    }
+    el.innerHTML = boardMembers.map(m => `
+      <div class="member-item">
+        <div class="member-avatar">${(m.name || m.email)[0].toUpperCase()}</div>
+        <div class="member-info">
+          <div class="member-name">${escapeHtml(m.name || m.email)}</div>
+          <div class="member-email">${escapeHtml(m.email)}</div>
+        </div>
+        <button class="member-remove" onclick="removeMember(${m.id})">Remove</button>
+      </div>
+    `).join('');
+  }
+
+  async function inviteMember() {
+    const email = document.getElementById('invite-email').value.trim();
+    const msgEl = document.getElementById('invite-msg');
+    msgEl.textContent = '';
+    msgEl.className = 'invite-msg';
+    if (!email) return;
+    try {
+      const res = await fetch('/api/boards/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const data = await res.json();
+      if (!res.ok) { msgEl.textContent = data.error; msgEl.classList.add('error'); return; }
+      boardMembers.push(data);
+      renderMembersList();
+      document.getElementById('invite-email').value = '';
+      msgEl.textContent = `${data.name || data.email} added!`;
+      msgEl.classList.add('success');
+    } catch (e) {
+      msgEl.textContent = 'Something went wrong.';
+      msgEl.classList.add('error');
+    }
+  }
+
+  async function removeMember(userId) {
+    await fetch(`/api/boards/members/${userId}`, { method: 'DELETE' });
+    boardMembers = boardMembers.filter(m => m.id !== userId);
+    renderMembersList();
+  }
+
+  /* ── Notifications ── */
+  async function loadNotifications() {
+    const notifs = await fetch('/api/notifications').then(r => r.json());
+    const unread = notifs.filter(n => !n.read).length;
+    const badge = document.getElementById('notif-badge');
+    badge.textContent = unread;
+    badge.style.display = unread > 0 ? 'block' : 'none';
+    const list = document.getElementById('notif-list');
+    if (!notifs.length) { list.innerHTML = '<div class="notif-empty">No notifications</div>'; return; }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.read ? '' : 'unread'}">
+        <div>${escapeHtml(n.message)}</div>
+        <div class="notif-time">${new Date(n.created_at).toLocaleDateString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+      </div>
+    `).join('');
+  }
+
+  async function toggleNotifications() {
+    const dropdown = document.getElementById('notif-dropdown');
+    const open = dropdown.style.display === 'none';
+    dropdown.style.display = open ? 'block' : 'none';
+    if (open) {
+      await fetch('/api/notifications/read', { method: 'POST' });
+      document.getElementById('notif-badge').style.display = 'none';
+    }
+  }
+
+  /* ── Assign to ── */
+  function populateAssignSelect(selectEl, currentAssigneeId) {
+    const people = currentBoardOwner
+      ? [{ id: currentBoardOwner.id, name: currentBoardOwner.name, email: currentBoardOwner.email }, ...boardMembers]
+      : [{ id: myId, name: myName, email: '' }, ...boardMembers];
+    selectEl.innerHTML = '<option value="">Unassigned</option>' +
+      people.map(u => `<option value="${u.id}" ${currentAssigneeId == u.id ? 'selected' : ''}>${escapeHtml(u.name || u.email)}</option>`).join('');
+  }
+
+  function updateAssigneeBadge(card, userId) {
+    const badgesEl = card.querySelector('.task-badges');
+    const existing = badgesEl.querySelector('.assignee-badge');
+    if (existing) existing.remove();
+    if (!userId) return;
+    const people = currentBoardOwner
+      ? [{ id: currentBoardOwner.id, name: currentBoardOwner.name, email: currentBoardOwner.email }, ...boardMembers]
+      : [{ id: myId, name: myName, email: '' }, ...boardMembers];
+    const person = people.find(u => u.id == userId);
+    if (person) {
+      const badge = document.createElement('span');
+      badge.className = 'assignee-badge';
+      badge.textContent = `👤 ${person.name || person.email}`;
+      badgesEl.insertBefore(badge, badgesEl.querySelector('.task-age'));
     }
   }
 
@@ -935,7 +1204,7 @@
     for (const item of data) {
       if (!item.text) continue;
       const owners = item.owner ? [item.owner] : (Array.isArray(item.owners) ? item.owners : []);
-      const task = await apiPost('/api/tasks', { text: item.text, status: item.status || '', owners });
+      const task = await apiPost('/api/tasks', { text: item.text, status: item.status || '', owners, ...boardBody() });
       createTaskCard(task);
       count++;
     }
@@ -951,7 +1220,7 @@
     const text = input.value.trim();
     if (!text) return;
     input.value = '';
-    const task = await apiPost('/api/tasks', { text, stage: 'backlog' });
+    const task = await apiPost('/api/tasks', { text, stage: 'backlog', ...boardBody() });
     createTaskCard(task);
     updateCounts();
     input.focus();
@@ -972,6 +1241,7 @@
     card.dataset.recurrence = task.recurrence || '';
     card.dataset.dueDate = task.due_date || '';
     card.dataset.subtasks = JSON.stringify(task.subtasks || []);
+    card.dataset.assignedToUserId = task.assigned_to_user_id || '';
 
     const stageIdx = STAGES.indexOf(stage);
     const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
@@ -986,6 +1256,7 @@
               ${task.priority && task.priority !== 'none' ? `<span class="priority-dot ${task.priority}"></span>` : ''}
               ${task.due_date ? `<span class="due-badge ${getDueBadgeClass(task.due_date)}">${formatDueDate(task.due_date)}</span>` : ''}
               ${(task.subtasks && task.subtasks.length) ? `<span class="subtask-count">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : ''}
+              ${task.assigned_to_user_id ? `<span class="assignee-badge">👤 ${escapeHtml(task.assigned_to_name || task.assigned_to_email || '?')}</span>` : ''}
               <span class="task-age">${daysOpen(task.created_at)}</span>
             </div>
             <div class="task-meta" style="margin-top:2px;">
@@ -1036,6 +1307,9 @@
           <button class="add-subtask-btn">+</button>
         </div>
 
+        <label style="margin-top:10px;">Assigned to</label>
+        <select class="assign-sel"></select>
+
         <label style="margin-top:10px;">Status / notes</label>
         <textarea class="status-area" placeholder="Add a status update or notes…" rows="2"></textarea>
 
@@ -1085,6 +1359,14 @@
     renderSubtasks(card);
     updateSubtaskCount(card);
     updateStatusPreview();
+
+    const assignSel = card.querySelector('.assign-sel');
+    populateAssignSelect(assignSel, task.assigned_to_user_id);
+    assignSel.addEventListener('change', () => {
+      card.dataset.assignedToUserId = assignSel.value;
+      updateAssigneeBadge(card, assignSel.value);
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    });
 
     const dueDateInput = card.querySelector('.due-date-input');
     dueDateInput.addEventListener('change', () => {
@@ -1165,7 +1447,7 @@
       card.addEventListener('transitionend', () => {
         card.remove();
         updateCounts();
-        apiDelete(`/api/tasks/${task.id}`);
+        apiDelete(`/api/tasks/${task.id}` + boardParam());
       }, { once: true });
     });
 
@@ -1433,11 +1715,19 @@
       priority: card.dataset.priority || 'none',
       recurrence: card.dataset.recurrence,
       category_id: card.dataset.categoryId ? Number(card.dataset.categoryId) : null,
+      ...boardBody(),
     }).then(newTask => { createTaskCard(newTask); updateCounts(); });
   }
 
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });
   document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
+  document.getElementById('invite-email').addEventListener('keydown', e => { if (e.key === 'Enter') inviteMember(); });
+  document.addEventListener('click', e => {
+    if (!document.getElementById('board-switcher').contains(e.target)) closeBoardMenu();
+    if (!document.getElementById('notif-btn').closest('.notif-wrap').contains(e.target)) {
+      document.getElementById('notif-dropdown').style.display = 'none';
+    }
+  });
   init();
 </script>
 </body>
