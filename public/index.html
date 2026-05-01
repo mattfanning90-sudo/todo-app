@@ -794,7 +794,7 @@
       btn.className = 'filter-btn' + (activeFilter === cat.id ? ' active' : '');
       btn.dataset.id = cat.id;
       btn.innerHTML = `<span class="filter-dot" style="background:${cat.color}"></span>${cat.name}<button class="remove-cat" title="Delete category" onclick="deleteCategory(event,${cat.id})">×</button>`;
-      btn.addEventListener('click', e => { if (!e.target.classList.contains('remove-cat')) setFilter(cat.id); });
+      btn.addEventListener('click', e => { if (!e.target.classList.contains('remove-cat')) setFilter(activeFilter === cat.id ? null : cat.id); });
       bar.insertBefore(btn, bar.querySelector('.add-cat-btn'));
     });
   }
