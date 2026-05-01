@@ -1,4 +1,7 @@
 require('dotenv').config();
+console.log('ENV CHECK — GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'SET' : 'MISSING');
+console.log('ENV CHECK — GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'MISSING');
+console.log('ENV CHECK — SESSION_SECRET:', process.env.SESSION_SECRET ? 'SET' : 'MISSING');
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
