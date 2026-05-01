@@ -1,7 +1,4 @@
 require('dotenv').config();
-console.log('ENV CHECK — GOOGLE_CLIENT_ID:', process.env.GOOGLE_CLIENT_ID ? 'SET' : 'MISSING');
-console.log('ENV CHECK — GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'SET' : 'MISSING');
-console.log('ENV CHECK — SESSION_SECRET:', process.env.SESSION_SECRET ? 'SET' : 'MISSING');
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
@@ -48,7 +45,14 @@ passport.use(new GoogleStrategy({
   const catCount = db.prepare('SELECT COUNT(*) as c FROM categories WHERE user_id = ?').get(user.id);
   if (Number(catCount.c) === 0) {
     const insertCat = db.prepare('INSERT INTO categories (user_id, name, color) VALUES (?, ?, ?)');
-    db.transaction(() => DEFAULT_CATEGORIES.forEach(c => insertCat.run(user.id, c.name, c.color)))();
+    db.exec('BEGIN');
+    try {
+      DEFAULT_CATEGORIES.forEach(c => insertCat.run(user.id, c.name, c.color));
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
   }
   return done(null, user);
 }));
@@ -168,9 +172,14 @@ app.post('/api/reorder', requireAuth, (req, res) => {
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
 
   const update = db.prepare('UPDATE tasks SET position = ? WHERE id = ? AND user_id = ?');
-  db.transaction((ids) => {
-    ids.forEach((id, idx) => update.run(idx, id, req.user.id));
-  })(order);
+  db.exec('BEGIN');
+  try {
+    order.forEach((id, idx) => update.run(idx, id, req.user.id));
+    db.exec('COMMIT');
+  } catch (e) {
+    db.exec('ROLLBACK');
+    throw e;
+  }
 
   res.json({ ok: true });
 });
