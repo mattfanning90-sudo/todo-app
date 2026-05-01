@@ -3,6 +3,8 @@ const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const LocalStrategy = require('passport-local').Strategy;
+const bcrypt = require('bcrypt');
 const { pool, init } = require('./database');
 const path = require('path');
 
@@ -85,6 +87,21 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
+passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE email = $1 AND password_hash IS NOT NULL', [email]
+    );
+    const user = rows[0];
+    if (!user) return done(null, false);
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return done(null, false);
+    return done(null, user);
+  } catch (e) {
+    return done(e);
+  }
+}));
+
 /* ── Auth routes ── */
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
@@ -107,6 +124,46 @@ app.get('/login', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
+
+app.post('/auth/signup', wrap(async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.redirect('/login?error=missing&mode=signup');
+  if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
+
+  const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+  if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
+
+  const password_hash = await bcrypt.hash(password, 12);
+  const { rows } = await pool.query(
+    'INSERT INTO users (google_id, email, name, password_hash) VALUES ($1, $2, $3, $4) RETURNING *',
+    [`local:${email}`, email, email.split('@')[0], password_hash]
+  );
+  const user = rows[0];
+
+  const catCount = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [user.id]);
+  if (Number(catCount.rows[0].c) === 0) {
+    await pool.query('BEGIN');
+    try {
+      for (const c of DEFAULT_CATEGORIES) {
+        await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [user.id, c.name, c.color]);
+      }
+      await pool.query('COMMIT');
+    } catch (e) {
+      await pool.query('ROLLBACK');
+      throw e;
+    }
+  }
+
+  req.login(user, err => {
+    if (err) return res.redirect('/login?error=server&mode=signup');
+    res.redirect('/');
+  });
+}));
+
+app.post('/auth/login', passport.authenticate('local', {
+  successRedirect: '/',
+  failureRedirect: '/login?error=invalid',
+}));
 
 /* ── API: user ── */
 app.get('/api/user', (req, res) => {

@@ -40,19 +40,65 @@
       font-size: 1.6rem;
     }
 
-    h1 {
-      font-size: 1.5rem;
-      color: #1A1A1A;
-      font-weight: 700;
-      margin-bottom: 8px;
+    h1 { font-size: 1.5rem; color: #1A1A1A; font-weight: 700; margin-bottom: 8px; }
+
+    .subtitle { font-size: 0.88rem; color: #666; margin-bottom: 28px; line-height: 1.5; }
+
+    .error-msg {
+      background: #FEE2E2;
+      color: #991B1B;
+      font-size: 0.83rem;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      text-align: left;
     }
 
-    p {
-      font-size: 0.88rem;
-      color: #666;
-      margin-bottom: 32px;
-      line-height: 1.5;
+    .input-group { margin-bottom: 12px; text-align: left; }
+
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: #444; margin-bottom: 5px; }
+
+    input[type="email"],
+    input[type="password"] {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid #E0E0E0;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      color: #1A1A1A;
+      outline: none;
+      transition: border-color 0.15s;
     }
+
+    input:focus { border-color: #FFCC00; }
+
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #1A1A1A;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: background 0.2s;
+    }
+
+    .submit-btn:hover { background: #333; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 20px 0;
+      color: #bbb;
+      font-size: 0.8rem;
+    }
+
+    .divider::before,
+    .divider::after { content: ''; flex: 1; height: 1px; background: #E8E8E8; }
 
     .google-btn {
       display: flex;
@@ -73,15 +119,46 @@
     }
 
     .google-btn:hover { background: #E6B800; }
-
     .google-logo { width: 20px; height: 20px; flex-shrink: 0; }
+
+    .toggle {
+      margin-top: 20px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    .toggle a {
+      color: #1A1A1A;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .toggle a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 <div class="card">
   <div class="logo">✓</div>
   <h1>To Do List</h1>
-  <p>Sign in to access your tasks from any device.</p>
+  <p class="subtitle" id="subtitle">Sign in to access your tasks.</p>
+
+  <div id="error-box" class="error-msg" style="display:none"></div>
+
+  <form id="auth-form" method="POST" action="/auth/login">
+    <div class="input-group">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" required />
+    </div>
+    <div class="input-group">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="••••••••" required />
+    </div>
+    <button type="submit" class="submit-btn" id="submit-btn">Sign In</button>
+  </form>
+
+  <div class="divider">or</div>
+
   <a class="google-btn" href="/auth/google">
     <svg class="google-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
       <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -91,6 +168,54 @@
     </svg>
     Sign in with Google
   </a>
+
+  <div class="toggle">
+    <span id="toggle-text">Don't have an account?</span>
+    <a id="toggle-link" onclick="toggleMode()">Create one</a>
+  </div>
 </div>
+
+<script>
+  const errors = {
+    invalid: 'Invalid email or password.',
+    taken: 'An account with that email already exists.',
+    short: 'Password must be at least 8 characters.',
+    missing: 'Email and password are required.',
+    server: 'Something went wrong. Please try again.',
+  };
+
+  const params = new URLSearchParams(location.search);
+  const mode = params.get('mode');
+  const error = params.get('error');
+
+  let isSignup = mode === 'signup';
+
+  function applyMode() {
+    const form = document.getElementById('auth-form');
+    form.action = isSignup ? '/auth/signup' : '/auth/login';
+    document.getElementById('submit-btn').textContent = isSignup ? 'Create Account' : 'Sign In';
+    document.getElementById('subtitle').textContent = isSignup
+      ? 'Create an account to get started.'
+      : 'Sign in to access your tasks.';
+    document.getElementById('toggle-text').textContent = isSignup
+      ? 'Already have an account?'
+      : "Don't have an account?";
+    document.getElementById('toggle-link').textContent = isSignup ? 'Sign in' : 'Create one';
+  }
+
+  function toggleMode() {
+    isSignup = !isSignup;
+    document.getElementById('error-box').style.display = 'none';
+    applyMode();
+  }
+
+  if (error && errors[error]) {
+    const box = document.getElementById('error-box');
+    box.textContent = errors[error];
+    box.style.display = 'block';
+  }
+
+  applyMode();
+</script>
 </body>
 </html>
