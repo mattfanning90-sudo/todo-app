@@ -994,7 +994,6 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="icon-btn details" title="Details">📝</button>
             <button class="icon-btn delete" title="Delete">🗑</button>
           </div>
         </div>
@@ -1066,7 +1065,6 @@
     `;
 
     const panel = card.querySelector('.status-panel');
-    const detailsBtn = card.querySelector('.icon-btn.details');
     const deleteBtn = card.querySelector('.icon-btn.delete');
     const textarea = card.querySelector('textarea.status-area');
     const statusPreview = card.querySelector('.task-status-preview');
@@ -1156,10 +1154,8 @@
       });
     });
 
-    detailsBtn.addEventListener('click', e => {
-      e.stopPropagation();
+    card.querySelector('.task-item').addEventListener('click', () => {
       const open = panel.classList.toggle('open');
-      detailsBtn.classList.toggle('active', open);
       if (open) textarea.focus();
     });
 
