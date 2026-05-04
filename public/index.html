@@ -648,10 +648,43 @@
     .invite-msg.error { color: #EF4444; }
     .invite-msg.success { color: #22C55E; }
 
-    @media (max-width: 640px) {
-      .board { flex-direction: column; min-width: unset; }
-      .sidebar { display: none; }
-      .sidebar.mobile-open { display: flex; position: fixed; top: var(--header-h); left: 0; bottom: 0; z-index: 100; width: var(--sidebar-w); box-shadow: var(--shadow-lg); }
+    @media (max-width: 768px) {
+      html, body { height: auto; overflow: auto; }
+
+      .app-header { position: sticky; top: 0; z-index: 50; }
+      .app-body { overflow: visible; height: auto; }
+      .main-content { overflow: visible; }
+
+      .sidebar {
+        position: fixed;
+        top: var(--header-h); left: 0; bottom: 0;
+        z-index: 100; width: var(--sidebar-w);
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        height: auto;
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar.collapsed { width: var(--sidebar-w); transform: translateX(-100%); }
+      .sidebar.mobile-visible { transform: translateX(0); }
+
+      .sidebar-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.45); z-index: 99;
+      }
+      .sidebar-overlay.visible { display: block; }
+
+      .board-scroll { overflow: visible; flex: none; padding: 12px; }
+      .board { flex-direction: column; min-width: unset; height: auto; gap: 12px; }
+      .column { max-width: 100%; min-width: unset; flex: none; }
+      .task-list { overflow: visible; max-height: none; }
+
+      .hdr-btn, .icon-btn { width: 36px; height: 36px; }
+      .stage-btn { padding: 6px 12px; font-size: 0.78rem; }
+      .task-item { padding: 12px 14px; }
+
+      .notif-dropdown { width: calc(100vw - 32px); right: -80px; }
+      .user-name { display: none; }
+      .add-task-row { flex-wrap: wrap; }
     }
   </style>
 </head>
@@ -817,6 +850,8 @@
   </main>
 </div>
 
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebarMobile()"></div>
+
 <!-- Hidden filter-bar for backward compat -->
 <div id="filter-bar" style="display:none"></div>
 
@@ -852,6 +887,7 @@
   let selectedColor = COLOR_PALETTE[0];
   let dragSrc = null;
   let dragSrcStage = null;
+  let touchDragInProgress = false;
   let myId = null;
   let myName = '';
   let boardMembers = [];
@@ -888,8 +924,19 @@
 
   /* ── Sidebar toggle ── */
   function toggleSidebar() {
-    sidebarOpen = !sidebarOpen;
-    document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth <= 768) {
+      const visible = sidebar.classList.toggle('mobile-visible');
+      document.getElementById('sidebar-overlay').classList.toggle('visible', visible);
+    } else {
+      sidebarOpen = !sidebarOpen;
+      sidebar.classList.toggle('collapsed', !sidebarOpen);
+    }
+  }
+
+  function closeSidebarMobile() {
+    document.getElementById('sidebar').classList.remove('mobile-visible');
+    document.getElementById('sidebar-overlay').classList.remove('visible');
   }
 
   function debounce(fn, delay) {
@@ -970,6 +1017,7 @@
   }
 
   function filterToday() {
+    closeSidebarMobile();
     todayFilter = true;
     activeFilter = null;
     applyFilter();
@@ -1550,6 +1598,7 @@
     });
 
     card.querySelector('.task-item').addEventListener('click', () => {
+      if (touchDragInProgress) return;
       const open = panel.classList.toggle('open');
       if (open) textarea.focus();
     });
@@ -1628,6 +1677,7 @@
       dragSrc = null; dragSrcStage = null;
     });
 
+    setupTouchDrag(card);
     list.appendChild(card);
   }
 
@@ -1808,6 +1858,86 @@
       return now.toISOString().split('T')[0];
     }
     return base.toISOString().split('T')[0];
+  }
+
+  function setupTouchDrag(card) {
+    let startX, startY, dragging = false, ghost = null;
+
+    card.addEventListener('touchstart', e => {
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      dragging = false;
+    }, { passive: true });
+
+    card.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - startX);
+      const dy = Math.abs(t.clientY - startY);
+
+      if (!dragging && (dx > 8 || dy > 8)) {
+        dragging = true;
+        touchDragInProgress = true;
+        dragSrc = card; dragSrcStage = card.dataset.stage;
+        card.style.opacity = '0.4';
+
+        ghost = document.createElement('div');
+        ghost.className = 'task-card';
+        ghost.style.cssText = `position:fixed;width:${card.offsetWidth}px;pointer-events:none;z-index:999;opacity:0.9;transform:rotate(2deg) scale(1.02);box-shadow:var(--shadow-lg);background:var(--bg-card);border:1.5px solid var(--primary);padding:10px 12px;font-size:0.88rem;font-weight:500;color:var(--text);`;
+        ghost.textContent = card.querySelector('.task-text').textContent;
+        document.body.appendChild(ghost);
+      }
+
+      if (dragging) {
+        e.preventDefault();
+        ghost.style.left = (t.clientX - ghost.offsetWidth / 2) + 'px';
+        ghost.style.top = (t.clientY - 36) + 'px';
+
+        ghost.style.display = 'none';
+        const el = document.elementFromPoint(t.clientX, t.clientY);
+        ghost.style.display = '';
+
+        document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
+        document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
+        const overCard = el?.closest('.task-card');
+        const overList = el?.closest('.task-list');
+        if (overCard && overCard !== card) overCard.classList.add('drag-over');
+        else if (overList) overList.classList.add('drag-over-col');
+      }
+    }, { passive: false });
+
+    card.addEventListener('touchend', e => {
+      if (!dragging) return;
+      card.style.opacity = ''; ghost?.remove(); ghost = null;
+
+      const t = e.changedTouches[0];
+      const el = document.elementFromPoint(t.clientX, t.clientY);
+
+      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
+      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
+
+      const overCard = el?.closest('.task-card');
+      const overList = el?.closest('.task-list');
+
+      if (overCard && overCard !== card) {
+        const list = overCard.closest('.task-list');
+        const items = [...list.querySelectorAll('.task-card')];
+        const insertBefore = items.indexOf(dragSrc) < items.indexOf(overCard) ? overCard.nextSibling : overCard;
+        applyDrop(list, insertBefore);
+      } else if (overList) {
+        applyDrop(overList, null);
+      }
+
+      dragging = false; dragSrc = null; dragSrcStage = null;
+      setTimeout(() => { touchDragInProgress = false; }, 50);
+    });
+
+    card.addEventListener('touchcancel', () => {
+      card.style.opacity = ''; ghost?.remove(); ghost = null;
+      dragging = false; dragSrc = null; dragSrcStage = null;
+      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
+      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
+      setTimeout(() => { touchDragInProgress = false; }, 50);
+    });
   }
 
   function spawnRecurringTask(card) {
