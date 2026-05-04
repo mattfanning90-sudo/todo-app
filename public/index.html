@@ -1644,7 +1644,11 @@
       apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
       saveBtn.textContent = '✓ Saved';
       saveBtn.classList.add('saved');
-      setTimeout(() => { saveBtn.textContent = 'Save'; saveBtn.classList.remove('saved'); }, 2000);
+      setTimeout(() => {
+        saveBtn.textContent = 'Save';
+        saveBtn.classList.remove('saved');
+        panel.classList.remove('open');
+      }, 800);
     });
 
     // Inline new category
