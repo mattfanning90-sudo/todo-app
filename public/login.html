@@ -18,136 +18,144 @@
       --border: #E2E8F0;
       --border-input: #CBD5E1;
       --shadow-lg: 0 8px 40px rgba(0,0,0,0.1);
-      --r-sm: 6px;
-      --r-md: 10px;
-      --r-lg: 14px;
+      --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+      --green: #22C55E; --red: #EF4444;
     }
-
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #0F172A;
-        --bg-card: #1E293B;
-        --text: #F1F5F9;
-        --text-muted: #94A3B8;
-        --text-light: #475569;
-        --border: #334155;
-        --border-input: #475569;
+        --bg: #0F172A; --bg-card: #1E293B;
+        --text: #F1F5F9; --text-muted: #94A3B8; --text-light: #475569;
+        --border: #334155; --border-input: #475569;
         --shadow-lg: 0 8px 40px rgba(0,0,0,0.4);
       }
     }
-
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: 'Inter', -apple-system, sans-serif;
-      background: var(--bg);
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 16px;
-      color: var(--text);
-    }
-
-    .card {
-      background: var(--bg-card);
-      border-radius: var(--r-lg);
-      box-shadow: var(--shadow-lg);
-      padding: 40px 36px;
-      width: 100%;
-      max-width: 380px;
-      border: 1px solid var(--border);
-    }
-
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 28px;
-    }
-
-    .logo-icon {
-      width: 36px; height: 36px;
-      background: var(--primary);
-      border-radius: var(--r-md);
+      background: var(--bg); min-height: 100vh;
       display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0;
+      padding: 16px; color: var(--text);
     }
-
-    .logo-name { font-size: 1.2rem; font-weight: 700; color: var(--text); }
-
-    h1 { font-size: 1.3rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
-
-    .subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px; line-height: 1.5; }
-
+    .card {
+      background: var(--bg-card); border-radius: var(--r-lg);
+      box-shadow: var(--shadow-lg); padding: 36px 32px;
+      width: 100%; max-width: 400px; border: 1px solid var(--border);
+    }
+    .logo { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; }
+    .logo-icon {
+      width: 34px; height: 34px; background: var(--primary);
+      border-radius: var(--r-md); display: flex; align-items: center; justify-content: center;
+    }
+    .logo-name { font-size: 1.15rem; font-weight: 700; color: var(--text); }
+    h1 { font-size: 1.25rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .subtitle { font-size: 0.84rem; color: var(--text-muted); margin-bottom: 22px; line-height: 1.5; }
     .error-msg {
-      background: #FEE2E2; color: #991B1B;
-      font-size: 0.82rem; padding: 10px 12px;
-      border-radius: var(--r-sm); margin-bottom: 16px;
+      background: #FEE2E2; color: #991B1B; font-size: 0.82rem;
+      padding: 10px 12px; border-radius: var(--r-sm); margin-bottom: 14px;
       border: 1px solid #FECACA;
     }
-
     .input-group { margin-bottom: 12px; }
-    label { display: block; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+    .input-group label {
+      display: block; font-size: 0.77rem; font-weight: 600;
+      color: var(--text-muted); margin-bottom: 5px;
+    }
+    .field-hint { font-size: 0.74rem; color: var(--text-light); margin-top: 3px; display: block; }
 
-    input[type="email"], input[type="password"] {
+    input[type="text"], input[type="email"], input[type="password"] {
       width: 100%; padding: 10px 12px;
-      border: 1.5px solid var(--border-input);
-      border-radius: var(--r-md); font-size: 0.9rem;
-      color: var(--text); background: var(--bg);
-      outline: none; font-family: inherit;
+      border: 1.5px solid var(--border-input); border-radius: var(--r-md);
+      font-size: 0.88rem; color: var(--text); background: var(--bg);
+      outline: none; font-family: inherit; transition: border-color 0.15s;
+    }
+    input:focus { border-color: var(--primary); background: var(--bg-card); }
+    input::placeholder { color: var(--text-light); }
+    input.valid { border-color: var(--green); }
+    input.invalid { border-color: var(--red); }
+
+    /* Username row */
+    .username-row {
+      display: flex; align-items: stretch;
+      border: 1.5px solid var(--border-input); border-radius: var(--r-md);
+      overflow: hidden; background: var(--bg);
       transition: border-color 0.15s;
     }
-    input[type="email"]:focus, input[type="password"]:focus {
-      border-color: var(--primary);
-      background: var(--bg-card);
+    .username-row:focus-within { border-color: var(--primary); background: var(--bg-card); }
+    .username-row.valid { border-color: var(--green); }
+    .username-row.invalid { border-color: var(--red); }
+    .at-prefix {
+      padding: 0 10px; font-size: 0.9rem; font-weight: 600;
+      color: var(--text-muted); background: var(--bg);
+      display: flex; align-items: center; border-right: 1px solid var(--border);
+      flex-shrink: 0;
     }
-    input::placeholder { color: var(--text-light); }
+    .username-row input {
+      flex: 1; border: none; border-radius: 0; background: transparent;
+      padding: 10px 10px; font-size: 0.88rem;
+    }
+    .username-row input:focus { background: transparent; }
+    .gen-btn {
+      padding: 0 12px; background: none; border: none;
+      border-left: 1px solid var(--border); cursor: pointer;
+      color: var(--text-muted); display: flex; align-items: center;
+      transition: background 0.15s, color 0.15s; flex-shrink: 0;
+    }
+    .gen-btn:hover { background: var(--primary); color: #fff; }
+    .gen-btn:active { transform: rotate(180deg); }
+    .gen-btn svg { transition: transform 0.3s; }
+
+    .username-status {
+      display: flex; align-items: center; gap: 5px;
+      font-size: 0.74rem; margin-top: 4px; min-height: 18px;
+    }
+    .username-status.available { color: var(--green); }
+    .username-status.taken { color: var(--red); }
+    .username-status.checking { color: var(--text-light); }
+    .username-status.hint { color: var(--text-light); }
+
+    /* Username choice tabs */
+    .username-tabs {
+      display: flex; gap: 4px; margin-bottom: 8px;
+      background: var(--bg); border-radius: var(--r-sm);
+      padding: 3px; border: 1px solid var(--border);
+    }
+    .username-tab {
+      flex: 1; padding: 5px 8px; border: none; border-radius: 5px;
+      font-size: 0.75rem; font-weight: 600; cursor: pointer;
+      background: none; color: var(--text-muted); font-family: inherit;
+      transition: all 0.15s; text-align: center;
+    }
+    .username-tab.active { background: var(--bg-card); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
     .remember-row {
-      display: flex; align-items: center; gap: 8px;
-      margin: 8px 0 4px;
+      display: flex; align-items: center; gap: 8px; margin: 8px 0 4px;
     }
     .remember-row input[type="checkbox"] {
-      width: 15px; height: 15px;
-      accent-color: var(--primary); cursor: pointer;
-      border: none; padding: 0;
+      width: 15px; height: 15px; accent-color: var(--primary); cursor: pointer; border: none; padding: 0;
     }
-    .remember-row label {
-      font-size: 0.82rem; color: var(--text-muted);
-      cursor: pointer; font-weight: 400; margin: 0;
-    }
+    .remember-row label { font-size: 0.82rem; color: var(--text-muted); cursor: pointer; font-weight: 400; margin: 0; }
 
     .btn-primary {
-      width: 100%; padding: 11px;
-      background: var(--primary); color: #fff;
-      border: none; border-radius: var(--r-md);
-      font-size: 0.9rem; font-weight: 600;
-      cursor: pointer; margin-top: 8px;
-      transition: background 0.15s; font-family: inherit;
+      width: 100%; padding: 11px; background: var(--primary); color: #fff;
+      border: none; border-radius: var(--r-md); font-size: 0.9rem; font-weight: 600;
+      cursor: pointer; margin-top: 8px; transition: background 0.15s; font-family: inherit;
     }
     .btn-primary:hover { background: var(--primary-hover); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
-    .divider {
-      display: flex; align-items: center; gap: 12px;
-      margin: 18px 0; color: var(--text-light); font-size: 0.78rem;
-    }
-    .divider::before, .divider::after {
-      content: ''; flex: 1; height: 1px; background: var(--border);
-    }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; color: var(--text-light); font-size: 0.78rem; }
+    .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
     .google-btn {
       display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 11px 20px;
-      background: var(--bg-card); color: var(--text);
+      width: 100%; padding: 11px 20px; background: var(--bg-card); color: var(--text);
       border: 1.5px solid var(--border-input); border-radius: var(--r-md);
-      font-size: 0.9rem; font-weight: 600; cursor: pointer;
+      font-size: 0.88rem; font-weight: 600; cursor: pointer;
       text-decoration: none; transition: all 0.15s; font-family: inherit;
     }
     .google-btn:hover { border-color: var(--primary); background: var(--bg); }
     .google-logo { width: 18px; height: 18px; flex-shrink: 0; }
 
-    .toggle { margin-top: 20px; font-size: 0.83rem; color: var(--text-muted); text-align: center; }
+    .toggle { margin-top: 18px; font-size: 0.82rem; color: var(--text-muted); text-align: center; }
     .toggle a { color: var(--primary); font-weight: 600; text-decoration: none; cursor: pointer; }
     .toggle a:hover { text-decoration: underline; }
   </style>
@@ -156,7 +164,7 @@
 <div class="card">
   <div class="logo">
     <div class="logo-icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
     </div>
     <span class="logo-name">Tasks</span>
   </div>
@@ -167,30 +175,53 @@
   <div id="error-box" class="error-msg" style="display:none"></div>
 
   <form id="auth-form" method="POST" action="/auth/login">
+
+    <!-- Signup-only: display name -->
+    <div class="input-group" id="name-group" style="display:none">
+      <label for="display-name">Your name <span style="font-weight:400;color:var(--text-light)">(optional)</span></label>
+      <input type="text" id="display-name" name="name" placeholder="e.g. Jane or Jane Smith" autocomplete="name" />
+      <span class="field-hint">This is what others will see</span>
+    </div>
+
     <div class="input-group">
       <label for="email">Email</label>
-      <input type="email" id="email" name="email" placeholder="you@example.com" required />
+      <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email" />
     </div>
+
     <div class="input-group">
       <label for="password">Password</label>
-      <input type="password" id="password" name="password" placeholder="••••••••" required />
+      <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password" />
     </div>
+
+    <!-- Signup-only: username -->
+    <div class="input-group" id="username-group" style="display:none">
+      <label>Username</label>
+      <div class="username-tabs">
+        <button type="button" class="username-tab active" id="tab-random" onclick="setUsernameMode('random')">🎲 Random</button>
+        <button type="button" class="username-tab" id="tab-custom" onclick="setUsernameMode('custom')">✏️ Custom</button>
+      </div>
+      <div class="username-row" id="username-row">
+        <span class="at-prefix">@</span>
+        <input type="text" id="username-input" name="username" placeholder="FluffyNarwhal" autocomplete="off" readonly />
+        <button type="button" class="gen-btn" id="gen-btn" onclick="refreshUsername()" title="Generate new username">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+      </div>
+      <div class="username-status hint" id="username-status">✨ Your unique @handle</div>
+    </div>
+
     <div class="remember-row" id="remember-row">
       <input type="checkbox" id="remember" name="remember" value="1" />
       <label for="remember">Keep me logged in for 30 days</label>
     </div>
+
     <button type="submit" class="btn-primary" id="submit-btn">Sign In</button>
   </form>
 
   <div class="divider">or</div>
 
   <a class="google-btn" href="/auth/google" id="google-btn">
-    <svg class="google-logo" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-    </svg>
+    <svg class="google-logo" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
     Continue with Google
   </a>
 
@@ -201,9 +232,20 @@
 </div>
 
 <script>
+  const ADJECTIVES = ['Fluffy','Bouncy','Sleepy','Sparkly','Dizzy','Fuzzy','Wiggly','Wobbly','Zippy','Bubbly','Giggly','Squishy','Crunchy','Goofy','Wacky','Zany','Loopy','Nutty','Snappy','Perky','Peppy','Clumsy','Grumpy','Jumpy','Funky','Chunky','Spunky','Quirky','Ditzy','Kooky','Daffy','Blobby','Noodly','Bonkers','Swirly','Twirly','Pudgy','Floppy','Droopy','Squirmy'];
+  const NOUNS = ['Penguin','Waffle','Noodle','Biscuit','Pickle','Muffin','Panda','Narwhal','Platypus','Hedgehog','Capybara','Quokka','Axolotl','Sloth','Lemur','Meerkat','Puffin','Wombat','Dumpling','Crumpet','Bagel','Pretzel','Donut','Brownie','Pudding','Sprinkle','Marshmallow','Jellybean','Cookie','Cupcake','Taco','Burrito','Blobfish','Salamander','Armadillo','Croissant','Scone','Churro','Macaron','Turnip'];
+
+  function randomUsername() {
+    const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+    const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+    return `${a}${n}`;
+  }
+
   const errors = {
     invalid: 'Invalid email or password.',
     taken: 'An account with that email already exists.',
+    username_taken: 'That username is already taken — try another or generate a random one.',
+    username_invalid: 'Username must be 3–30 characters: letters, numbers and underscores only.',
     short: 'Password must be at least 8 characters.',
     missing: 'Email and password are required.',
     server: 'Something went wrong. Please try again.',
@@ -211,6 +253,83 @@
 
   const params = new URLSearchParams(location.search);
   let isSignup = params.get('mode') === 'signup';
+  let usernameMode = 'random';
+  let checkTimer = null;
+  let currentStatus = 'available';
+
+  function setUsernameMode(mode) {
+    usernameMode = mode;
+    const input = document.getElementById('username-input');
+    const genBtn = document.getElementById('gen-btn');
+    const row = document.getElementById('username-row');
+
+    document.getElementById('tab-random').classList.toggle('active', mode === 'random');
+    document.getElementById('tab-custom').classList.toggle('active', mode === 'custom');
+
+    if (mode === 'random') {
+      input.readOnly = true;
+      genBtn.style.display = '';
+      input.style.color = '';
+      refreshUsername();
+    } else {
+      input.readOnly = false;
+      genBtn.style.display = 'none';
+      input.value = '';
+      input.placeholder = 'cooluser42';
+      input.focus();
+      setStatus('hint', '✨ Choose your @handle');
+      row.className = 'username-row';
+      currentStatus = null;
+    }
+  }
+
+  function refreshUsername() {
+    const input = document.getElementById('username-input');
+    const btn = document.getElementById('gen-btn');
+    const candidate = randomUsername();
+    input.value = candidate;
+    btn.querySelector('svg').style.transform = 'rotate(360deg)';
+    setTimeout(() => btn.querySelector('svg').style.transform = '', 300);
+    checkAvailability(candidate, true);
+  }
+
+  function setStatus(type, msg) {
+    const el = document.getElementById('username-status');
+    el.className = 'username-status ' + type;
+    el.textContent = msg;
+    const row = document.getElementById('username-row');
+    row.classList.remove('valid', 'invalid');
+    if (type === 'available') { row.classList.add('valid'); currentStatus = 'available'; }
+    else if (type === 'taken') { row.classList.add('invalid'); currentStatus = 'taken'; }
+    else { currentStatus = null; }
+    updateSubmitState();
+  }
+
+  function updateSubmitState() {
+    const btn = document.getElementById('submit-btn');
+    if (isSignup) {
+      btn.disabled = currentStatus !== 'available';
+    } else {
+      btn.disabled = false;
+    }
+  }
+
+  async function checkAvailability(username, silent = false) {
+    if (!username) { setStatus('hint', '✨ Your unique @handle'); return; }
+    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+      setStatus('taken', '✗ 3–30 chars, letters/numbers/underscores only');
+      return;
+    }
+    if (!silent) setStatus('checking', 'Checking…');
+    try {
+      const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
+      const data = await res.json();
+      if (data.available) setStatus('available', '✓ Available');
+      else setStatus('taken', '✗ Already taken');
+    } catch {
+      setStatus('hint', '✨ Your unique @handle');
+    }
+  }
 
   function updateGoogleBtn() {
     const remember = document.getElementById('remember');
@@ -226,6 +345,13 @@
     document.getElementById('toggle-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
     document.getElementById('toggle-link').textContent = isSignup ? 'Sign in' : 'Create one';
     document.getElementById('remember-row').style.display = isSignup ? 'none' : 'flex';
+    document.getElementById('name-group').style.display = isSignup ? 'block' : 'none';
+    document.getElementById('username-group').style.display = isSignup ? 'block' : 'none';
+    if (isSignup) {
+      setUsernameMode('random');
+    } else {
+      updateSubmitState();
+    }
   }
 
   function toggleMode() {
@@ -233,6 +359,16 @@
     document.getElementById('error-box').style.display = 'none';
     applyMode();
   }
+
+  // Live validation for custom username
+  document.getElementById('username-input').addEventListener('input', e => {
+    if (usernameMode !== 'custom') return;
+    const val = e.target.value.trim();
+    clearTimeout(checkTimer);
+    if (!val) { setStatus('hint', '✨ Your unique @handle'); return; }
+    setStatus('checking', 'Checking…');
+    checkTimer = setTimeout(() => checkAvailability(val), 450);
+  });
 
   const error = params.get('error');
   if (error && errors[error]) {

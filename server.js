@@ -175,11 +175,22 @@ app.post('/auth/signup', wrap(async (req, res) => {
   if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
+  const displayName = (req.body.name || '').trim() || email.split('@')[0];
+  const requestedUsername = (req.body.username || '').trim();
+
+  let username;
+  if (requestedUsername && /^[a-zA-Z0-9_]{3,30}$/.test(requestedUsername)) {
+    const taken = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [requestedUsername]);
+    if (taken.rows[0]) return res.redirect('/login?error=username_taken&mode=signup');
+    username = requestedUsername;
+  } else {
+    username = await generateUsername();
+  }
+
   const password_hash = await bcrypt.hash(password, 12);
-  const username = await generateUsername();
   const { rows } = await pool.query(
     'INSERT INTO users (google_id, email, name, password_hash, username) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-    [`local:${email}`, email, email.split('@')[0], password_hash, username]
+    [`local:${email}`, email, displayName, password_hash, username]
   );
   await seedCategories(rows[0].id);
   req.login(rows[0], err => {
@@ -198,6 +209,16 @@ app.post('/auth/login', (req, res, next) => {
       res.redirect('/');
     });
   })(req, res, next);
+});
+
+/* ── Username availability ── */
+app.get('/api/check-username', async (req, res) => {
+  const { username } = req.query;
+  if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
+    return res.json({ available: false });
+  }
+  const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+  res.json({ available: !rows.length });
 });
 
 /* ── User ── */
