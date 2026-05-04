@@ -41,6 +41,17 @@ async function init() {
   `);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS invites (
+      id SERIAL PRIMARY KEY,
+      token TEXT UNIQUE NOT NULL,
+      inviter_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invitee_email TEXT NOT NULL,
+      board_owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      used_at TIMESTAMP DEFAULT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT ''`);
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'none'`);
   await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT DEFAULT ''`);

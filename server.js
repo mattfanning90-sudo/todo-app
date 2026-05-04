@@ -7,8 +7,25 @@ const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
 const chrono = require('chrono-node');
 const pgSession = require('connect-pg-simple')(session);
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 const { pool, init } = require('./database');
 const path = require('path');
+
+const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
+  ? nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } })
+  : null;
+
+async function sendEmail({ to, subject, html }) {
+  if (!mailer) return false;
+  try {
+    await mailer.sendMail({ from: `"Tasks" <${process.env.SMTP_USER}>`, to, subject, html });
+    return true;
+  } catch (e) {
+    console.error('Email error:', e.message);
+    return false;
+  }
+}
 
 const app = express();
 app.use(express.json());
@@ -192,8 +209,30 @@ app.post('/auth/signup', wrap(async (req, res) => {
     'INSERT INTO users (google_id, email, name, password_hash, username) VALUES ($1, $2, $3, $4, $5) RETURNING *',
     [`local:${email}`, email, displayName, password_hash, username]
   );
-  await seedCategories(rows[0].id);
-  req.login(rows[0], err => {
+  const newUser = rows[0];
+  await seedCategories(newUser.id);
+
+  const inviteToken = (req.body.invite_token || '').trim();
+  if (inviteToken) {
+    const { rows: inv } = await pool.query(
+      'SELECT * FROM invites WHERE token = $1 AND LOWER(invitee_email) = LOWER($2) AND used_at IS NULL',
+      [inviteToken, email]
+    );
+    if (inv[0]) {
+      await pool.query(
+        'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+        [inv[0].board_owner_id, newUser.id]
+      );
+      await pool.query('UPDATE invites SET used_at = NOW() WHERE id = $1', [inv[0].id]);
+      await pool.query(
+        'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
+        [inv[0].inviter_user_id, 'invite_accepted',
+         `@${username} accepted your board invitation`, newUser.id]
+      );
+    }
+  }
+
+  req.login(newUser, err => {
     if (err) return res.redirect('/login?error=server&mode=signup');
     res.redirect('/');
   });
@@ -241,20 +280,79 @@ app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
 app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
-  const { rows } = await pool.query('SELECT id, name, email FROM users WHERE email = $1', [email]);
+
+  const { rows } = await pool.query('SELECT id, name, email, username FROM users WHERE email = $1', [email]);
   const invitee = rows[0];
-  if (!invitee) return res.status(404).json({ error: "User not found — they need to sign up first." });
-  if (invitee.id === req.user.id) return res.status(400).json({ error: 'Cannot invite yourself' });
+
+  if (invitee) {
+    if (invitee.id === req.user.id) return res.status(400).json({ error: 'Cannot invite yourself' });
+    await pool.query(
+      'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.id, invitee.id]
+    );
+    await pool.query(
+      'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
+      [invitee.id, 'board_invite', `${req.user.name || req.user.username || req.user.email} added you to their board`, req.user.id]
+    );
+    return res.json({ joined: true, id: invitee.id, name: invitee.name, email: invitee.email, username: invitee.username });
+  }
+
+  // User doesn't exist — create an invite link
+  const token = crypto.randomBytes(24).toString('hex');
   await pool.query(
-    'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-    [req.user.id, invitee.id]
+    'DELETE FROM invites WHERE invitee_email = $1 AND board_owner_id = $2 AND used_at IS NULL',
+    [email, req.user.id]
   );
   await pool.query(
-    'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
-    [invitee.id, 'board_invite', `${req.user.name || req.user.email} added you to their board`, req.user.id]
+    'INSERT INTO invites (token, inviter_user_id, invitee_email, board_owner_id) VALUES ($1, $2, $3, $4)',
+    [token, req.user.id, email, req.user.id]
   );
-  res.json(invitee);
+
+  const appUrl = process.env.APP_URL || `https://${req.get('host')}`;
+  const inviteLink = `${appUrl}/login?invite=${token}&email=${encodeURIComponent(email)}`;
+  const inviterName = req.user.name || req.user.username || req.user.email;
+
+  const emailSent = await sendEmail({
+    to: email,
+    subject: `${inviterName} invited you to their Tasks board`,
+    html: `<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#F8FAFC;border-radius:12px;border:1px solid #E2E8F0;">
+      <div style="background:#3B82F6;width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
+        <span style="color:#fff;font-size:20px;line-height:1;">✓</span>
+      </div>
+      <h2 style="color:#0F172A;margin:0 0 8px;font-size:1.2rem;">You've been invited to Tasks</h2>
+      <p style="color:#64748B;margin:0 0 24px;line-height:1.6;"><strong>${inviterName}</strong> has invited you to collaborate on their board.</p>
+      <a href="${inviteLink}" style="background:#3B82F6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;margin-bottom:24px;font-size:0.95rem;">Accept &amp; Create Account →</a>
+      <p style="color:#94A3B8;font-size:0.75rem;margin:0;">Or copy this link:<br/><a href="${inviteLink}" style="color:#3B82F6;word-break:break-all;">${inviteLink}</a></p>
+    </div>`
+  });
+
+  res.json({ pending: true, email, inviteLink, emailSent });
 }));
+
+app.get('/api/boards/invites', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    'SELECT * FROM invites WHERE board_owner_id = $1 AND used_at IS NULL ORDER BY created_at DESC',
+    [req.user.id]
+  );
+  res.json(rows);
+}));
+
+app.delete('/api/boards/invites/:id', requireAuth, wrap(async (req, res) => {
+  await pool.query('DELETE FROM invites WHERE id = $1 AND board_owner_id = $2', [req.params.id, req.user.id]);
+  res.json({ ok: true });
+}));
+
+app.get('/api/invite/:token', async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT i.invitee_email, u.name as inviter_name, u.username as inviter_username, u.email as inviter_email
+     FROM invites i JOIN users u ON u.id = i.inviter_user_id
+     WHERE i.token = $1 AND i.used_at IS NULL`,
+    [req.params.token]
+  );
+  if (!rows[0]) return res.status(404).json({ error: 'Invalid or expired invite link' });
+  const r = rows[0];
+  res.json({ email: r.invitee_email, inviterName: r.inviter_name || r.inviter_username || r.inviter_email });
+});
 
 app.delete('/api/boards/members/:userId', requireAuth, wrap(async (req, res) => {
   await pool.query(

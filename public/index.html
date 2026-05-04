@@ -864,6 +864,7 @@
     </div>
     <div class="modal-body">
       <div id="members-list"></div>
+      <div id="pending-invites"></div>
       <div class="invite-section">
         <h3>Invite by email</h3>
         <div class="invite-row">
@@ -1246,11 +1247,12 @@
   }
 
   /* ── Members modal ── */
-  function openMembersModal() {
-    renderMembersList();
+  async function openMembersModal() {
     document.getElementById('members-modal').style.display = 'flex';
     document.getElementById('invite-msg').textContent = '';
     document.getElementById('invite-email').value = '';
+    renderMembersList();
+    await loadPendingInvites();
   }
 
   function closeMembersModal() {
@@ -1280,12 +1282,54 @@
       const res = await fetch('/api/boards/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
       const data = await res.json();
       if (!res.ok) { msgEl.textContent = data.error; msgEl.classList.add('error'); return; }
-      boardMembers.push(data);
-      renderMembersList();
       document.getElementById('invite-email').value = '';
-      msgEl.textContent = `${data.name || data.email} added!`;
-      msgEl.classList.add('success');
+      if (data.joined) {
+        boardMembers.push(data);
+        renderMembersList();
+        msgEl.textContent = `${data.name || data.email} added!`;
+        msgEl.classList.add('success');
+      } else {
+        await loadPendingInvites();
+        msgEl.innerHTML = data.emailSent
+          ? `Invite sent to <strong>${email}</strong>!`
+          : `No account found — <a href="#" onclick="copyInviteLink('${escapeHtml(data.inviteLink)}');return false;" style="color:var(--primary);font-weight:600;">copy invite link</a> to share manually.`;
+        msgEl.classList.add('success');
+      }
     } catch { msgEl.textContent = 'Something went wrong.'; msgEl.classList.add('error'); }
+  }
+
+  async function loadPendingInvites() {
+    const invites = await fetch('/api/boards/invites').then(r => r.json());
+    const container = document.getElementById('pending-invites');
+    if (!invites.length) { container.innerHTML = ''; return; }
+    container.innerHTML = `<div style="font-size:0.75rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.06em;margin:14px 0 6px;">Pending Invites</div>` +
+      invites.map(inv => `
+        <div class="member-item">
+          <div class="member-avatar" style="background:var(--border);color:var(--text-muted);">?</div>
+          <div class="member-info">
+            <div class="member-name">${escapeHtml(inv.invitee_email)}</div>
+            <div class="member-email">Invite pending</div>
+          </div>
+          <button onclick="copyInviteLink('${escapeHtml(buildInviteLink(inv.token, inv.invitee_email))}')" style="background:none;border:1px solid var(--border);border-radius:var(--r-sm);padding:3px 8px;font-size:0.72rem;color:var(--text-muted);cursor:pointer;margin-right:4px;">Copy link</button>
+          <button class="member-remove" onclick="revokeInvite(${inv.id})">Revoke</button>
+        </div>`).join('');
+  }
+
+  function buildInviteLink(token, email) {
+    return `${location.origin}/login?invite=${token}&email=${encodeURIComponent(email)}`;
+  }
+
+  async function copyInviteLink(link) {
+    await navigator.clipboard.writeText(link).catch(() => prompt('Copy this invite link:', link));
+    const msgEl = document.getElementById('invite-msg');
+    msgEl.className = 'invite-msg success';
+    msgEl.textContent = '✓ Link copied to clipboard!';
+    setTimeout(() => { msgEl.textContent = ''; }, 3000);
+  }
+
+  async function revokeInvite(id) {
+    await fetch(`/api/boards/invites/${id}`, { method: 'DELETE' });
+    await loadPendingInvites();
   }
 
   async function removeMember(userId) {
