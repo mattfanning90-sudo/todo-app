@@ -1,4 +1,6 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -7,101 +9,35 @@ const pool = new Pool({
 
 async function init() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS _migrations (
       id SERIAL PRIMARY KEY,
-      google_id TEXT UNIQUE NOT NULL,
-      email TEXT,
-      name TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
-
-  // Named boards
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS boards (
-      id SERIAL PRIMARY KEY,
-      owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(owner_user_id, slug)
+      filename TEXT UNIQUE NOT NULL,
+      run_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS categories (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      color TEXT NOT NULL DEFAULT '#667eea',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
+  const { rows } = await pool.query('SELECT filename FROM _migrations ORDER BY filename ASC');
+  const ran = new Set(rows.map(r => r.filename));
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS tasks (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
-      text TEXT NOT NULL,
-      status TEXT DEFAULT '',
-      owners TEXT DEFAULT '[]',
-      cal_start TEXT DEFAULT '',
-      cal_end TEXT DEFAULT '',
-      position INTEGER DEFAULT 0,
-      stage TEXT DEFAULT 'backlog',
-      category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT ''`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'none'`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT DEFAULT ''`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks TEXT DEFAULT '[]'`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+  const migrationsDir = path.join(__dirname, 'migrations');
+  const files = fs.readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort();
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS board_members (
-      id SERIAL PRIMARY KEY,
-      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
-      board_owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      member_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await pool.query(`ALTER TABLE board_members ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS invites (
-      id SERIAL PRIMARY KEY,
-      token TEXT UNIQUE NOT NULL,
-      inviter_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      invitee_email TEXT NOT NULL,
-      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
-      board_owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      used_at TIMESTAMP DEFAULT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id SERIAL PRIMARY KEY,
-      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      type TEXT NOT NULL,
-      message TEXT NOT NULL,
-      task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
-      from_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-      read BOOLEAN DEFAULT false,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  for (const file of files) {
+    if (ran.has(file)) continue;
+    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
+    await pool.query('BEGIN');
+    try {
+      await pool.query(sql);
+      await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+      await pool.query('COMMIT');
+      console.log(`Migration: ran ${file}`);
+    } catch (e) {
+      await pool.query('ROLLBACK');
+      throw new Error(`Migration ${file} failed: ${e.message}`);
+    }
+  }
 }
 
 module.exports = { pool, init };
