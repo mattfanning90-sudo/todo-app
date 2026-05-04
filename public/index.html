@@ -779,6 +779,7 @@
       <div class="user-avatar" id="user-avatar">?</div>
       <span class="user-name" id="user-name"></span>
     </div>
+    <a class="logout-link" href="/api/export" style="margin-right:8px;" title="Download a backup of all your tasks">Export</a>
     <a class="logout-link" href="/auth/logout">Sign out</a>
   </div>
 </header>
@@ -2090,7 +2091,7 @@
 
   function escapeHtml(str) {
     if (!str) return '';
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function getDueBadgeClass(dueDate) {

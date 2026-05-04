@@ -9,12 +9,32 @@ const chrono = require('chrono-node');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 const pgSession = require('connect-pg-simple')(session);
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { pool, init } = require('./database');
+const { initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup } = require('./backup');
 const path = require('path');
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const app = express();
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.set('trust proxy', 1);
+
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+    },
+  },
+}));
+
+app.use(express.json({ limit: '100kb' }));
+app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(express.static('public'));
 
 app.use(session({
@@ -22,8 +42,18 @@ app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
   resave: false,
   saveUninitialized: false,
-  cookie: {},
+  cookie: {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+  },
 }));
+
+/* ── Rate limiters ── */
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const searchLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+const usernameLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -183,7 +213,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    const { rows } = await pool.query('SELECT id, name, email, username FROM users WHERE id = $1', [id]);
     const user = rows[0];
     if (user && !user.username) {
       const username = await generateUsername();
@@ -204,9 +234,14 @@ app.get('/auth/google', (req, res, next) => {
   if (req.query.remember) req.session.rememberMe = true;
   passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
-app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
-  if (req.session.rememberMe) { req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; delete req.session.rememberMe; }
-  res.redirect('/');
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res, next) => {
+  const remember = req.session.rememberMe;
+  req.session.regenerate(err => {
+    if (err) return next(err);
+    req.session.passport = { user: req.user.id };
+    if (remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+    req.session.save(err2 => { if (err2) return next(err2); res.redirect('/'); });
+  });
 });
 app.get('/auth/logout', (req, res) => req.logout(() => res.redirect('/login')));
 
@@ -219,9 +254,10 @@ app.get('/login', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
 });
 
-app.post('/auth/signup', wrap(async (req, res) => {
+app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.redirect('/login?error=missing&mode=signup');
+  if (typeof email !== 'string' || email.length > 254) return res.redirect('/login?error=missing&mode=signup');
   if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
@@ -268,20 +304,26 @@ app.post('/auth/signup', wrap(async (req, res) => {
     }
   }
 
-  req.login(newUser, err => {
-    if (err) return res.redirect('/login?error=server&mode=signup');
-    res.redirect('/');
+  req.session.regenerate(sesErr => {
+    if (sesErr) return res.redirect('/login?error=server&mode=signup');
+    req.login(newUser, err => {
+      if (err) return res.redirect('/login?error=server&mode=signup');
+      res.redirect('/');
+    });
   });
 }));
 
-app.post('/auth/login', (req, res, next) => {
+app.post('/auth/login', authLimiter, (req, res, next) => {
   passport.authenticate('local', (err, user) => {
     if (err) return next(err);
     if (!user) return res.redirect('/login?error=invalid');
-    req.login(user, err => {
-      if (err) return next(err);
-      if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-      res.redirect('/');
+    req.session.regenerate(sesErr => {
+      if (sesErr) return next(sesErr);
+      req.login(user, loginErr => {
+        if (loginErr) return next(loginErr);
+        if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+        res.redirect('/');
+      });
     });
   })(req, res, next);
 });
@@ -292,7 +334,7 @@ app.get('/api/user', (req, res) => {
   res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username });
 });
 
-app.get('/api/check-username', async (req, res) => {
+app.get('/api/check-username', usernameLimiter, async (req, res) => {
   const { username } = req.query;
   if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return res.json({ available: false });
   const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
@@ -300,6 +342,8 @@ app.get('/api/check-username', async (req, res) => {
 });
 
 /* ── Boards CRUD ── */
+app.use('/api/', apiLimiter);
+
 app.get('/api/boards', requireAuth, wrap(async (req, res) => {
   await ensureDefaultBoard(req.user.id);
   const { rows } = await pool.query(
@@ -311,6 +355,7 @@ app.get('/api/boards', requireAuth, wrap(async (req, res) => {
 app.post('/api/boards', requireAuth, wrap(async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long' });
   const slug = await uniqueSlug(req.user.id, name.trim());
   const { rows } = await pool.query(
     'INSERT INTO boards (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING *',
@@ -322,6 +367,7 @@ app.post('/api/boards', requireAuth, wrap(async (req, res) => {
 app.put('/api/boards/:id', requireAuth, wrap(async (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long' });
   const { rows } = await pool.query('SELECT * FROM boards WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   const slug = await uniqueSlug(req.user.id, name.trim());
@@ -418,7 +464,8 @@ app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
 }));
 
 app.delete('/api/boards/members/:userId', requireAuth, wrap(async (req, res) => {
-  const { boardId } = await getBoardContext(req);
+  const { boardId, ownerId } = await getBoardContext(req);
+  if (ownerId !== req.user.id) return res.status(403).json({ error: 'Only the board owner can remove members' });
   await pool.query('DELETE FROM board_members WHERE board_id = $1 AND member_user_id = $2', [boardId, req.params.userId]);
   res.json({ ok: true });
 }));
@@ -476,6 +523,8 @@ app.post('/api/categories', requireAuth, wrap(async (req, res) => {
   const { boardId, ownerId } = await getBoardContext(req);
   const { name, color = '#667eea' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
+  if (name.trim().length > 100) return res.status(400).json({ error: 'Name too long' });
+  if (!/^#[0-9a-fA-F]{3,6}$/.test(color)) return res.status(400).json({ error: 'Invalid color' });
   const { rows } = await pool.query(
     'INSERT INTO categories (user_id, board_id, name, color) VALUES ($1, $2, $3, $4) RETURNING *',
     [ownerId, boardId, name, color]
@@ -511,6 +560,7 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
     stage = 'backlog', category_id = null, due_date: explicitDue = '',
     priority = 'none', recurrence = '', subtasks = [], assigned_to_user_id = null } = req.body;
   if (!rawText) return res.status(400).json({ error: 'Text required' });
+  if (rawText.length > 2000) return res.status(400).json({ error: 'Text too long' });
 
   let due_date = explicitDue, text = rawText;
   if (!explicitDue) {
@@ -599,6 +649,8 @@ app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
 app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
   const { recipient_user_id } = req.body;
   if (!recipient_user_id) return res.status(400).json({ error: 'Recipient required' });
+  const { rows: recipientCheck } = await pool.query('SELECT id FROM users WHERE id = $1', [recipient_user_id]);
+  if (!recipientCheck[0]) return res.status(404).json({ error: 'Recipient user not found' });
   const { boardId } = await getBoardContext(req);
   const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
@@ -619,8 +671,84 @@ app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+/* ── Backup admin (protected by RESTORE_SECRET env var) ── */
+function requireSecret(req, res, next) {
+  const secret = process.env.RESTORE_SECRET;
+  if (!secret) return res.status(503).json({ error: 'RESTORE_SECRET not configured' });
+  const provided = req.headers['x-restore-secret'] || req.query.secret;
+  if (provided !== secret) return res.status(401).json({ error: 'Invalid secret' });
+  next();
+}
+
+app.get('/api/admin/backups', requireSecret, wrap(async (req, res) => {
+  const snapshots = await listSnapshots();
+  res.json(snapshots);
+}));
+
+app.post('/api/admin/backup', requireSecret, wrap(async (req, res) => {
+  await runBackup(pool);
+  const snapshots = await listSnapshots();
+  res.json({ ok: true, latest: snapshots[0] });
+}));
+
+app.post('/api/admin/restore/:snapshotId', requireSecret, wrap(async (req, res) => {
+  const result = await restoreFromSnapshot(pool, req.params.snapshotId);
+  res.json({ ok: true, restored: result });
+}));
+
+/* ── Data export (backup) ── */
+app.get('/api/export', requireAuth, wrap(async (req, res) => {
+  const { rows: boards } = await pool.query('SELECT * FROM boards WHERE owner_user_id = $1', [req.user.id]);
+  const { rows: tasks } = await pool.query(
+    `SELECT t.* FROM tasks t JOIN boards b ON b.id = t.board_id WHERE b.owner_user_id = $1`, [req.user.id]
+  );
+  const { rows: categories } = await pool.query(
+    `SELECT c.* FROM categories c JOIN boards b ON b.id = c.board_id WHERE b.owner_user_id = $1`, [req.user.id]
+  );
+  tasks.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
+  const filename = `tasks-backup-${new Date().toISOString().split('T')[0]}.json`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.json({ exportedAt: new Date().toISOString(), boards, tasks, categories });
+}));
+
+/* ── Data import (restore) ── */
+app.post('/api/import', requireAuth, wrap(async (req, res) => {
+  const { tasks: importTasks = [], categories: importCategories = [] } = req.body;
+  if (!Array.isArray(importTasks)) return res.status(400).json({ error: 'Invalid data' });
+  const board = await ensureDefaultBoard(req.user.id);
+  await pool.query('BEGIN');
+  try {
+    const catMap = {};
+    for (const c of importCategories) {
+      if (!c.name) continue;
+      const color = /^#[0-9a-fA-F]{3,6}$/.test(c.color) ? c.color : '#667eea';
+      const { rows } = await pool.query(
+        'INSERT INTO categories (user_id, board_id, name, color) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
+        [req.user.id, board.id, String(c.name).slice(0, 100), color]
+      );
+      if (rows[0]) catMap[c.id] = rows[0].id;
+    }
+    const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [board.id]);
+    let pos = (maxPos.rows[0].m ?? -1) + 1;
+    for (const t of importTasks) {
+      if (!t.text) continue;
+      const text = String(t.text).slice(0, 2000);
+      const catId = t.category_id && catMap[t.category_id] ? catMap[t.category_id] : null;
+      await pool.query(
+        `INSERT INTO tasks (user_id, board_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks, category_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [req.user.id, board.id, text, t.status || '', JSON.stringify(t.owners || []),
+         t.cal_start || '', t.cal_end || '', pos++, t.stage || 'backlog',
+         t.due_date || '', t.priority || 'none', t.recurrence || '', JSON.stringify(t.subtasks || []), catId]
+      );
+    }
+    await pool.query('COMMIT');
+  } catch (e) { await pool.query('ROLLBACK'); throw e; }
+  res.json({ ok: true });
+}));
+
 /* ── User search (for assign/share) ── */
-app.get('/api/users/search', requireAuth, wrap(async (req, res) => {
+app.get('/api/users/search', requireAuth, searchLimiter, wrap(async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json([]);
   const { rows } = await pool.query(
@@ -634,10 +762,17 @@ app.get('/api/users/search', requireAuth, wrap(async (req, res) => {
 
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
+  const status = err.status || 500;
+  const message = status < 500 ? (err.message || 'Bad request') : 'Internal server error';
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 3000;
 init()
-  .then(() => app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`)))
+  .then(async () => {
+    await initBackup();
+    await runBackup(pool);       // snapshot on every startup
+    scheduleDailyBackup(pool);   // then daily at 2am
+    app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
+  })
   .catch(err => { console.error('DB init failed:', err); process.exit(1); });
