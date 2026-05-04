@@ -26,6 +26,23 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+const ADJECTIVES = ['Fluffy','Bouncy','Sleepy','Sparkly','Dizzy','Fuzzy','Wiggly','Wobbly','Zippy','Bubbly','Giggly','Squishy','Crunchy','Goofy','Wacky','Zany','Loopy','Nutty','Snappy','Perky','Peppy','Clumsy','Grumpy','Jumpy','Funky','Chunky','Spunky','Quirky','Ditzy','Kooky','Daffy','Slimy','Wobbly','Sproingy','Blobby','Noodly','Bonkers','Doozy','Wriggly','Zonked','Plonky','Snazzy','Swirly','Twirly','Zonky','Pudgy','Chubby','Floppy','Droopy','Squirmy'];
+const NOUNS = ['Penguin','Waffle','Noodle','Biscuit','Pickle','Muffin','Panda','Narwhal','Platypus','Hedgehog','Capybara','Quokka','Axolotl','Sloth','Lemur','Meerkat','Puffin','Wombat','Dumpling','Crumpet','Bagel','Pretzel','Donut','Brownie','Pudding','Sprinkle','Marshmallow','Jellybean','Cookie','Cupcake','Taco','Burrito','Blobfish','Salamander','Armadillo','Tapir','Manatee','Croissant','Scone','Streusel','Baguette','Churro','Macaron','Eclair','Strudel','Turnip','Parsnip','Radish','Courgette','Aubergine'];
+
+async function generateUsername() {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const base = `${adj}${noun}`;
+  const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [base]);
+  if (!rows.length) return base;
+  for (let i = 2; i <= 9999; i++) {
+    const candidate = `${base}${i}`;
+    const { rows: r } = await pool.query('SELECT id FROM users WHERE username = $1', [candidate]);
+    if (!r.length) return candidate;
+  }
+  return `${base}${Date.now()}`;
+}
+
 const DEFAULT_CATEGORIES = [
   { name: 'Household',   color: '#34A853' },
   { name: 'Financial',   color: '#FBBC05' },
@@ -76,11 +93,16 @@ passport.use(new GoogleStrategy({
     let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
     let user = rows[0];
     if (!user) {
+      const username = await generateUsername();
       const result = await pool.query(
-        'INSERT INTO users (google_id, email, name) VALUES ($1, $2, $3) RETURNING *',
-        [profile.id, email, name]
+        'INSERT INTO users (google_id, email, name, username) VALUES ($1, $2, $3, $4) RETURNING *',
+        [profile.id, email, name, username]
       );
       user = result.rows[0];
+    } else if (!user.username) {
+      const username = await generateUsername();
+      await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
+      user.username = username;
     }
     await seedCategories(user.id);
     return done(null, user);
@@ -93,7 +115,13 @@ passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
     const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    done(null, rows[0] || false);
+    const user = rows[0];
+    if (user && !user.username) {
+      const username = await generateUsername();
+      await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
+      user.username = username;
+    }
+    done(null, user || false);
   } catch (e) {
     done(e);
   }
@@ -148,9 +176,10 @@ app.post('/auth/signup', wrap(async (req, res) => {
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
   const password_hash = await bcrypt.hash(password, 12);
+  const username = await generateUsername();
   const { rows } = await pool.query(
-    'INSERT INTO users (google_id, email, name, password_hash) VALUES ($1, $2, $3, $4) RETURNING *',
-    [`local:${email}`, email, email.split('@')[0], password_hash]
+    'INSERT INTO users (google_id, email, name, password_hash, username) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+    [`local:${email}`, email, email.split('@')[0], password_hash, username]
   );
   await seedCategories(rows[0].id);
   req.login(rows[0], err => {
@@ -174,7 +203,7 @@ app.post('/auth/login', (req, res, next) => {
 /* ── User ── */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated()) return res.json(null);
-  res.json({ id: req.user.id, name: req.user.name, email: req.user.email });
+  res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username });
 });
 
 /* ── Boards ── */

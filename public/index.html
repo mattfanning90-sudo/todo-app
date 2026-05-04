@@ -1179,8 +1179,9 @@
       if (!user) { location.href = '/login'; return; }
       myId = user.id;
       myName = user.name || user.email;
-      document.getElementById('user-name').textContent = myName;
-      document.getElementById('user-avatar').textContent = myName[0].toUpperCase();
+      const displayName = user.username ? `@${user.username}` : myName;
+      document.getElementById('user-name').textContent = displayName;
+      document.getElementById('user-avatar').textContent = (user.username || myName)[0].toUpperCase();
 
       [memberships, boardMembers] = await Promise.all([
         fetch('/api/boards/memberships').then(r => r.json()),
