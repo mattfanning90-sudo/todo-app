@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Tasks</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -440,7 +440,7 @@
     .task-card[data-priority="medium"] { border-left-color: var(--priority-medium); }
     .task-card[data-priority="low"] { border-left-color: var(--priority-low); }
     .task-card.dragging { opacity: 0.4; transform: rotate(1deg); box-shadow: var(--shadow-lg); }
-    .task-card.drag-over { border-color: var(--primary); background: var(--primary-muted); }
+    .task-card.drag-over { border-color: var(--primary); background: var(--primary-muted); transform: scale(1.01); transition: transform 0.1s; }
     .task-card.completing { opacity: 0; transform: translateX(24px); }
 
     .task-item { padding: 10px 12px; }
@@ -1862,83 +1862,138 @@
   }
 
   function setupTouchDrag(card) {
-    let startX, startY, dragging = false, ghost = null;
+    let startTouch, dragActive = false, ghost = null;
+    let ghostOffsetX = 0, ghostOffsetY = 0;
+    let longPressTimer = null, rafId = null;
+    let lastX = 0, lastY = 0;
+    let autoScrollTimer = null;
 
-    card.addEventListener('touchstart', e => {
-      const t = e.touches[0];
-      startX = t.clientX; startY = t.clientY;
-      dragging = false;
-    }, { passive: true });
+    function activateDrag(touch) {
+      dragActive = true;
+      touchDragInProgress = true;
+      dragSrc = card;
+      dragSrcStage = card.dataset.stage;
+      if (navigator.vibrate) navigator.vibrate(40);
 
-    card.addEventListener('touchmove', e => {
-      const t = e.touches[0];
-      const dx = Math.abs(t.clientX - startX);
-      const dy = Math.abs(t.clientY - startY);
+      const rect = card.getBoundingClientRect();
+      ghostOffsetX = touch.clientX - rect.left;
+      ghostOffsetY = touch.clientY - rect.top;
 
-      if (!dragging && (dx > 8 || dy > 8)) {
-        dragging = true;
-        touchDragInProgress = true;
-        dragSrc = card; dragSrcStage = card.dataset.stage;
-        card.style.opacity = '0.4';
+      ghost = card.cloneNode(true);
+      const ghostPanel = ghost.querySelector('.status-panel');
+      if (ghostPanel) ghostPanel.remove();
+      Object.assign(ghost.style, {
+        position: 'fixed',
+        left: rect.left + 'px',
+        top: rect.top + 'px',
+        width: rect.width + 'px',
+        pointerEvents: 'none',
+        zIndex: '9999',
+        opacity: '0.96',
+        transform: 'scale(1.04) rotate(1.5deg)',
+        boxShadow: '0 20px 60px rgba(0,0,0,0.28)',
+        transition: 'transform 0.15s, box-shadow 0.15s',
+        willChange: 'left, top',
+        borderColor: 'var(--primary)',
+      });
+      document.body.appendChild(ghost);
 
-        ghost = document.createElement('div');
-        ghost.className = 'task-card';
-        ghost.style.cssText = `position:fixed;width:${card.offsetWidth}px;pointer-events:none;z-index:999;opacity:0.9;transform:rotate(2deg) scale(1.02);box-shadow:var(--shadow-lg);background:var(--bg-card);border:1.5px solid var(--primary);padding:10px 12px;font-size:0.88rem;font-weight:500;color:var(--text);`;
-        ghost.textContent = card.querySelector('.task-text').textContent;
-        document.body.appendChild(ghost);
-      }
+      card.style.cssText += ';opacity:0.25;transform:scale(0.97);transition:opacity 0.2s,transform 0.2s;';
+    }
 
-      if (dragging) {
-        e.preventDefault();
-        ghost.style.left = (t.clientX - ghost.offsetWidth / 2) + 'px';
-        ghost.style.top = (t.clientY - 36) + 'px';
+    function moveGhost(clientX, clientY) {
+      if (!ghost) return;
+      ghost.style.left = (clientX - ghostOffsetX) + 'px';
+      ghost.style.top  = (clientY - ghostOffsetY) + 'px';
+    }
 
-        ghost.style.display = 'none';
-        const el = document.elementFromPoint(t.clientX, t.clientY);
-        ghost.style.display = '';
+    function getDropTargets(clientX, clientY) {
+      ghost.style.visibility = 'hidden';
+      const el = document.elementFromPoint(clientX, clientY);
+      ghost.style.visibility = '';
+      return {
+        overCard: el?.closest('.task-card'),
+        overList: el?.closest('.task-list'),
+      };
+    }
 
-        document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
-        document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-        const overCard = el?.closest('.task-card');
-        const overList = el?.closest('.task-list');
-        if (overCard && overCard !== card) overCard.classList.add('drag-over');
-        else if (overList) overList.classList.add('drag-over-col');
-      }
-    }, { passive: false });
+    function updateHighlight(clientX, clientY) {
+      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
+      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
+      const { overCard, overList } = getDropTargets(clientX, clientY);
+      if (overCard && overCard !== card) overCard.classList.add('drag-over');
+      else if (overList) overList.classList.add('drag-over-col');
+    }
 
-    card.addEventListener('touchend', e => {
-      if (!dragging) return;
-      card.style.opacity = ''; ghost?.remove(); ghost = null;
+    function tickAutoScroll(clientY) {
+      if (autoScrollTimer) clearInterval(autoScrollTimer);
+      autoScrollTimer = setInterval(() => {
+        const zone = 90, speed = 8, h = window.innerHeight;
+        if (clientY < zone) window.scrollBy(0, -speed);
+        else if (clientY > h - zone) window.scrollBy(0, speed);
+        else { clearInterval(autoScrollTimer); autoScrollTimer = null; }
+      }, 16);
+    }
 
-      const t = e.changedTouches[0];
-      const el = document.elementFromPoint(t.clientX, t.clientY);
+    function endDrag(clientX, clientY) {
+      clearTimeout(longPressTimer);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
+      if (!dragActive) return;
+
+      const { overCard, overList } = getDropTargets(clientX, clientY);
+
+      ghost.remove(); ghost = null;
+      card.style.cssText = card.style.cssText.replace(/opacity:[^;]+;?/g, '').replace(/transform:[^;]+;?/g, '').replace(/transition:[^;]+;?/g, '');
 
       document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
       document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-
-      const overCard = el?.closest('.task-card');
-      const overList = el?.closest('.task-list');
 
       if (overCard && overCard !== card) {
         const list = overCard.closest('.task-list');
         const items = [...list.querySelectorAll('.task-card')];
-        const insertBefore = items.indexOf(dragSrc) < items.indexOf(overCard) ? overCard.nextSibling : overCard;
-        applyDrop(list, insertBefore);
+        const before = items.indexOf(card) < items.indexOf(overCard) ? overCard.nextSibling : overCard;
+        applyDrop(list, before);
       } else if (overList) {
         applyDrop(overList, null);
       }
 
-      dragging = false; dragSrc = null; dragSrcStage = null;
-      setTimeout(() => { touchDragInProgress = false; }, 50);
+      dragActive = false; dragSrc = null; dragSrcStage = null;
+      setTimeout(() => { touchDragInProgress = false; }, 60);
+    }
+
+    card.addEventListener('touchstart', e => {
+      if (e.touches.length > 1) return;
+      startTouch = e.touches[0];
+      longPressTimer = setTimeout(() => activateDrag(startTouch), 320);
+    }, { passive: true });
+
+    card.addEventListener('touchmove', e => {
+      const t = e.touches[0];
+      lastX = t.clientX; lastY = t.clientY;
+
+      if (!dragActive) {
+        const dx = Math.abs(t.clientX - startTouch.clientX);
+        const dy = Math.abs(t.clientY - startTouch.clientY);
+        if (dx > 6 || dy > 6) { clearTimeout(longPressTimer); }
+        return;
+      }
+
+      e.preventDefault();
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        moveGhost(lastX, lastY);
+        updateHighlight(lastX, lastY);
+        tickAutoScroll(lastY);
+      });
+    }, { passive: false });
+
+    card.addEventListener('touchend', e => {
+      const t = e.changedTouches[0];
+      endDrag(t.clientX, t.clientY);
     });
 
-    card.addEventListener('touchcancel', () => {
-      card.style.opacity = ''; ghost?.remove(); ghost = null;
-      dragging = false; dragSrc = null; dragSrcStage = null;
-      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
-      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-      setTimeout(() => { touchDragInProgress = false; }, 50);
-    });
+    card.addEventListener('touchcancel', () => endDrag(lastX, lastY));
   }
 
   function spawnRecurringTask(card) {
