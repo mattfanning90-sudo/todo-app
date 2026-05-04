@@ -1853,22 +1853,6 @@
     });
     inlineCatName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); card.querySelector('.btn-save-icat').click(); } e.stopPropagation(); });
 
-    // Share task
-    const shareSel = card.querySelector('.share-sel');
-    const shareBtn = card.querySelector('.share-task-btn');
-    populateShareSelect(shareSel);
-    shareBtn.addEventListener('click', async e => {
-      e.stopPropagation();
-      const recipientId = Number(shareSel.value);
-      if (!recipientId) return;
-      shareBtn.disabled = true;
-      await fetch(`/api/tasks/${task.id}/share`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient_user_id: recipientId, ...boardBody() }) });
-      shareBtn.textContent = '✓ Shared!';
-      shareBtn.classList.add('shared');
-      shareSel.value = '';
-      setTimeout(() => { shareBtn.textContent = 'Share'; shareBtn.classList.remove('shared'); shareBtn.disabled = false; }, 2500);
-    });
-
     const dueDateInput = card.querySelector('.due-date-input');
     dueDateInput.addEventListener('change', () => {
       card.dataset.dueDate = dueDateInput.value;
