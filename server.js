@@ -6,26 +6,11 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
 const chrono = require('chrono-node');
-const pgSession = require('connect-pg-simple')(session);
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
+const pgSession = require('connect-pg-simple')(session);
 const { pool, init } = require('./database');
 const path = require('path');
-
-const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
-  ? nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } })
-  : null;
-
-async function sendEmail({ to, subject, html }) {
-  if (!mailer) return false;
-  try {
-    await mailer.sendMail({ from: `"Tasks" <${process.env.SMTP_USER}>`, to, subject, html });
-    return true;
-  } catch (e) {
-    console.error('Email error:', e.message);
-    return false;
-  }
-}
 
 const app = express();
 app.use(express.json());
@@ -43,8 +28,89 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-const ADJECTIVES = ['Fluffy','Bouncy','Sleepy','Sparkly','Dizzy','Fuzzy','Wiggly','Wobbly','Zippy','Bubbly','Giggly','Squishy','Crunchy','Goofy','Wacky','Zany','Loopy','Nutty','Snappy','Perky','Peppy','Clumsy','Grumpy','Jumpy','Funky','Chunky','Spunky','Quirky','Ditzy','Kooky','Daffy','Slimy','Wobbly','Sproingy','Blobby','Noodly','Bonkers','Doozy','Wriggly','Zonked','Plonky','Snazzy','Swirly','Twirly','Zonky','Pudgy','Chubby','Floppy','Droopy','Squirmy'];
-const NOUNS = ['Penguin','Waffle','Noodle','Biscuit','Pickle','Muffin','Panda','Narwhal','Platypus','Hedgehog','Capybara','Quokka','Axolotl','Sloth','Lemur','Meerkat','Puffin','Wombat','Dumpling','Crumpet','Bagel','Pretzel','Donut','Brownie','Pudding','Sprinkle','Marshmallow','Jellybean','Cookie','Cupcake','Taco','Burrito','Blobfish','Salamander','Armadillo','Tapir','Manatee','Croissant','Scone','Streusel','Baguette','Churro','Macaron','Eclair','Strudel','Turnip','Parsnip','Radish','Courgette','Aubergine'];
+/* ── Email ── */
+const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
+  ? nodemailer.createTransport({ service: 'gmail', auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } })
+  : null;
+
+async function sendEmail({ to, subject, html }) {
+  if (!mailer) return false;
+  try { await mailer.sendMail({ from: `"Tasks" <${process.env.SMTP_USER}>`, to, subject, html }); return true; }
+  catch (e) { console.error('Email error:', e.message); return false; }
+}
+
+/* ── Board helpers ── */
+function slugify(name) {
+  return (name || 'board').toLowerCase()
+    .replace(/[^\w\s-]/g, '').replace(/[\s_]+/g, '-').replace(/^-+|-+$/g, '') || 'board';
+}
+
+async function uniqueSlug(ownerId, name) {
+  const base = slugify(name);
+  const { rows } = await pool.query(
+    "SELECT slug FROM boards WHERE owner_user_id = $1 AND slug ~ $2",
+    [ownerId, `^${base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(-[0-9]+)?$`]
+  );
+  if (!rows.length) return base;
+  let i = 2;
+  while (rows.find(r => r.slug === `${base}-${i}`)) i++;
+  return `${base}-${i}`;
+}
+
+async function ensureDefaultBoard(userId) {
+  const { rows } = await pool.query(
+    'SELECT * FROM boards WHERE owner_user_id = $1 ORDER BY id ASC LIMIT 1', [userId]
+  );
+  if (rows[0]) {
+    await pool.query('UPDATE tasks SET board_id = $1 WHERE user_id = $2 AND board_id IS NULL', [rows[0].id, userId]);
+    await pool.query('UPDATE categories SET board_id = $1 WHERE user_id = $2 AND board_id IS NULL', [rows[0].id, userId]);
+    return rows[0];
+  }
+  const { rows: created } = await pool.query(
+    'INSERT INTO boards (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING *',
+    [userId, 'My Board', 'my-board']
+  );
+  await pool.query('UPDATE tasks SET board_id = $1 WHERE user_id = $2 AND board_id IS NULL', [created[0].id, userId]);
+  await pool.query('UPDATE categories SET board_id = $1 WHERE user_id = $2 AND board_id IS NULL', [created[0].id, userId]);
+  // Migrate existing board_members rows
+  await pool.query(
+    'UPDATE board_members SET board_id = $1 WHERE board_owner_id = $2 AND board_id IS NULL',
+    [created[0].id, userId]
+  );
+  await pool.query(
+    'UPDATE invites SET board_id = $1 WHERE board_owner_id = $2 AND board_id IS NULL',
+    [created[0].id, userId]
+  );
+  return created[0];
+}
+
+async function getBoardContext(req) {
+  const boardId = req.query.board ? Number(req.query.board) : (req.body?.boardId ? Number(req.body.boardId) : null);
+  if (!boardId) {
+    const board = await ensureDefaultBoard(req.user.id);
+    return { boardId: board.id, ownerId: req.user.id };
+  }
+  const { rows: owned } = await pool.query(
+    'SELECT * FROM boards WHERE id = $1 AND owner_user_id = $2', [boardId, req.user.id]
+  );
+  if (owned[0]) return { boardId, ownerId: req.user.id };
+  const { rows: member } = await pool.query(
+    'SELECT b.* FROM boards b JOIN board_members bm ON bm.board_id = b.id WHERE b.id = $1 AND bm.member_user_id = $2',
+    [boardId, req.user.id]
+  );
+  if (member[0]) return { boardId, ownerId: member[0].owner_user_id };
+  throw Object.assign(new Error('Access denied'), { status: 403 });
+}
+
+/* ── User seeding ── */
+const DEFAULT_CATEGORIES = [
+  { name: 'Household', color: '#34A853' }, { name: 'Financial', color: '#FBBC05' },
+  { name: 'Health', color: '#EA4335' },    { name: 'Learning', color: '#4285F4' },
+  { name: 'Travel', color: '#8B5CF6' },    { name: 'Development', color: '#10B981' },
+];
+
+const ADJECTIVES = ['Fluffy','Bouncy','Sleepy','Sparkly','Dizzy','Fuzzy','Wiggly','Wobbly','Zippy','Bubbly','Giggly','Squishy','Crunchy','Goofy','Wacky','Zany','Loopy','Nutty','Snappy','Perky','Peppy','Clumsy','Grumpy','Jumpy','Funky','Chunky','Spunky','Quirky','Ditzy','Kooky','Daffy','Blobby','Noodly','Bonkers','Swirly','Twirly','Pudgy','Floppy','Droopy','Squirmy'];
+const NOUNS = ['Penguin','Waffle','Noodle','Biscuit','Pickle','Muffin','Panda','Narwhal','Platypus','Hedgehog','Capybara','Quokka','Axolotl','Sloth','Lemur','Meerkat','Puffin','Wombat','Dumpling','Crumpet','Bagel','Pretzel','Donut','Brownie','Pudding','Sprinkle','Marshmallow','Jellybean','Cookie','Cupcake','Taco','Burrito','Blobfish','Salamander','Armadillo','Croissant','Scone','Churro','Macaron','Turnip'];
 
 async function generateUsername() {
   const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
@@ -53,52 +119,28 @@ async function generateUsername() {
   const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [base]);
   if (!rows.length) return base;
   for (let i = 2; i <= 9999; i++) {
-    const candidate = `${base}${i}`;
-    const { rows: r } = await pool.query('SELECT id FROM users WHERE username = $1', [candidate]);
-    if (!r.length) return candidate;
+    const { rows: r } = await pool.query('SELECT id FROM users WHERE username = $1', [`${base}${i}`]);
+    if (!r.length) return `${base}${i}`;
   }
   return `${base}${Date.now()}`;
 }
 
-const DEFAULT_CATEGORIES = [
-  { name: 'Household',   color: '#34A853' },
-  { name: 'Financial',   color: '#FBBC05' },
-  { name: 'Health',      color: '#EA4335' },
-  { name: 'Learning',    color: '#4285F4' },
-  { name: 'Travel',      color: '#8B5CF6' },
-  { name: 'Development', color: '#10B981' },
-];
-
-const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
-
-async function seedCategories(userId) {
+async function seedCategories(userId, boardId) {
   const { rows } = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [userId]);
   if (Number(rows[0].c) === 0) {
     await pool.query('BEGIN');
     try {
       for (const c of DEFAULT_CATEGORIES) {
-        await pool.query('INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3)', [userId, c.name, c.color]);
+        await pool.query('INSERT INTO categories (user_id, board_id, name, color) VALUES ($1, $2, $3, $4)', [userId, boardId, c.name, c.color]);
       }
       await pool.query('COMMIT');
-    } catch (e) {
-      await pool.query('ROLLBACK');
-      throw e;
-    }
+    } catch (e) { await pool.query('ROLLBACK'); throw e; }
   }
 }
 
-async function getBoardOwner(req) {
-  const boardId = req.query.board || req.body?.boardOwner;
-  if (!boardId || Number(boardId) === req.user.id) return req.user.id;
-  const ownerId = Number(boardId);
-  const { rows } = await pool.query(
-    'SELECT id FROM board_members WHERE board_owner_id = $1 AND member_user_id = $2',
-    [ownerId, req.user.id]
-  );
-  if (!rows.length) throw Object.assign(new Error('Access denied'), { status: 403 });
-  return ownerId;
-}
+const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
+/* ── Auth strategies ── */
 passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -121,11 +163,21 @@ passport.use(new GoogleStrategy({
       await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
       user.username = username;
     }
-    await seedCategories(user.id);
+    const board = await ensureDefaultBoard(user.id);
+    await seedCategories(user.id, board.id);
     return done(null, user);
-  } catch (e) {
-    return done(e);
-  }
+  } catch (e) { return done(e); }
+}));
+
+passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1 AND password_hash IS NOT NULL', [email]);
+    const user = rows[0];
+    if (!user) return done(null, false);
+    const match = await bcrypt.compare(password, user.password_hash);
+    if (!match) return done(null, false);
+    return done(null, user);
+  } catch (e) { return done(e); }
 }));
 
 passport.serializeUser((user, done) => done(null, user.id));
@@ -139,9 +191,7 @@ passport.deserializeUser(async (id, done) => {
       user.username = username;
     }
     done(null, user || false);
-  } catch (e) {
-    done(e);
-  }
+  } catch (e) { done(e); }
 });
 
 function requireAuth(req, res, next) {
@@ -149,29 +199,13 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
-passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1 AND password_hash IS NOT NULL', [email]);
-    const user = rows[0];
-    if (!user) return done(null, false);
-    const match = await bcrypt.compare(password, user.password_hash);
-    if (!match) return done(null, false);
-    return done(null, user);
-  } catch (e) {
-    return done(e);
-  }
-}));
-
-/* ── Auth ── */
+/* ── Auth routes ── */
 app.get('/auth/google', (req, res, next) => {
   if (req.query.remember) req.session.rememberMe = true;
   passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
 });
 app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
-  if (req.session.rememberMe) {
-    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-    delete req.session.rememberMe;
-  }
+  if (req.session.rememberMe) { req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; delete req.session.rememberMe; }
   res.redirect('/');
 });
 app.get('/auth/logout', (req, res) => req.logout(() => res.redirect('/login')));
@@ -180,7 +214,6 @@ app.get('/', (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
-
 app.get('/login', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/');
   res.sendFile(path.join(__dirname, 'public', 'login.html'));
@@ -192,9 +225,9 @@ app.post('/auth/signup', wrap(async (req, res) => {
   if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
+
   const displayName = (req.body.name || '').trim() || email.split('@')[0];
   const requestedUsername = (req.body.username || '').trim();
-
   let username;
   if (requestedUsername && /^[a-zA-Z0-9_]{3,30}$/.test(requestedUsername)) {
     const taken = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [requestedUsername]);
@@ -210,7 +243,8 @@ app.post('/auth/signup', wrap(async (req, res) => {
     [`local:${email}`, email, displayName, password_hash, username]
   );
   const newUser = rows[0];
-  await seedCategories(newUser.id);
+  const board = await ensureDefaultBoard(newUser.id);
+  await seedCategories(newUser.id, board.id);
 
   const inviteToken = (req.body.invite_token || '').trim();
   if (inviteToken) {
@@ -219,15 +253,17 @@ app.post('/auth/signup', wrap(async (req, res) => {
       [inviteToken, email]
     );
     if (inv[0]) {
-      await pool.query(
-        'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-        [inv[0].board_owner_id, newUser.id]
-      );
+      const targetBoardId = inv[0].board_id || null;
+      if (targetBoardId) {
+        await pool.query(
+          'INSERT INTO board_members (board_id, board_owner_id, member_user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+          [targetBoardId, inv[0].inviter_user_id, newUser.id]
+        );
+      }
       await pool.query('UPDATE invites SET used_at = NOW() WHERE id = $1', [inv[0].id]);
       await pool.query(
-        'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
-        [inv[0].inviter_user_id, 'invite_accepted',
-         `@${username} accepted your board invitation`, newUser.id]
+        'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1,$2,$3,$4)',
+        [inv[0].inviter_user_id, 'invite_accepted', `@${username} accepted your board invitation`, newUser.id]
       );
     }
   }
@@ -250,29 +286,79 @@ app.post('/auth/login', (req, res, next) => {
   })(req, res, next);
 });
 
-/* ── Username availability ── */
-app.get('/api/check-username', async (req, res) => {
-  const { username } = req.query;
-  if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-    return res.json({ available: false });
-  }
-  const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
-  res.json({ available: !rows.length });
-});
-
 /* ── User ── */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated()) return res.json(null);
   res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username });
 });
 
-/* ── Boards ── */
-app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
+app.get('/api/check-username', async (req, res) => {
+  const { username } = req.query;
+  if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return res.json({ available: false });
+  const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
+  res.json({ available: !rows.length });
+});
+
+/* ── Boards CRUD ── */
+app.get('/api/boards', requireAuth, wrap(async (req, res) => {
+  await ensureDefaultBoard(req.user.id);
   const { rows } = await pool.query(
-    `SELECT u.id, u.name, u.email FROM board_members bm
-     JOIN users u ON u.id = bm.member_user_id
-     WHERE bm.board_owner_id = $1 ORDER BY bm.created_at ASC`,
+    'SELECT * FROM boards WHERE owner_user_id = $1 ORDER BY id ASC', [req.user.id]
+  );
+  res.json(rows);
+}));
+
+app.post('/api/boards', requireAuth, wrap(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  const slug = await uniqueSlug(req.user.id, name.trim());
+  const { rows } = await pool.query(
+    'INSERT INTO boards (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING *',
+    [req.user.id, name.trim(), slug]
+  );
+  res.json(rows[0]);
+}));
+
+app.put('/api/boards/:id', requireAuth, wrap(async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name required' });
+  const { rows } = await pool.query('SELECT * FROM boards WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const slug = await uniqueSlug(req.user.id, name.trim());
+  const { rows: updated } = await pool.query(
+    'UPDATE boards SET name = $1, slug = $2 WHERE id = $3 RETURNING *',
+    [name.trim(), slug, rows[0].id]
+  );
+  res.json(updated[0]);
+}));
+
+app.delete('/api/boards/:id', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM boards WHERE id = $1 AND owner_user_id = $2', [req.params.id, req.user.id]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  // Prevent deleting the only board
+  const { rows: count } = await pool.query('SELECT COUNT(*) as c FROM boards WHERE owner_user_id = $1', [req.user.id]);
+  if (Number(count[0].c) <= 1) return res.status(400).json({ error: 'Cannot delete your only board' });
+  await pool.query('DELETE FROM boards WHERE id = $1', [rows[0].id]);
+  res.json({ ok: true });
+}));
+
+/* ── Board members ── */
+app.get('/api/boards/memberships', requireAuth, wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    `SELECT b.*, u.name as owner_name, u.email as owner_email, u.username as owner_username
+     FROM board_members bm JOIN boards b ON b.id = bm.board_id JOIN users u ON u.id = b.owner_user_id
+     WHERE bm.member_user_id = $1 ORDER BY bm.created_at ASC`,
     [req.user.id]
+  );
+  res.json(rows);
+}));
+
+app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query(
+    `SELECT u.id, u.name, u.email, u.username FROM board_members bm
+     JOIN users u ON u.id = bm.member_user_id WHERE bm.board_id = $1 ORDER BY bm.created_at ASC`,
+    [boardId]
   );
   res.json(rows);
 }));
@@ -280,102 +366,93 @@ app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
 app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
+  const { boardId } = await getBoardContext(req);
 
-  const { rows } = await pool.query('SELECT id, name, email, username FROM users WHERE email = $1', [email]);
+  // Look up by email OR username
+  const isUsername = !email.includes('@');
+  const { rows } = isUsername
+    ? await pool.query('SELECT id, name, email, username FROM users WHERE LOWER(username) = LOWER($1)', [email])
+    : await pool.query('SELECT id, name, email, username FROM users WHERE email = $1', [email]);
   const invitee = rows[0];
 
   if (invitee) {
     if (invitee.id === req.user.id) return res.status(400).json({ error: 'Cannot invite yourself' });
     await pool.query(
-      'INSERT INTO board_members (board_owner_id, member_user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      [req.user.id, invitee.id]
+      'INSERT INTO board_members (board_id, board_owner_id, member_user_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [boardId, req.user.id, invitee.id]
     );
+    const boardName = (await pool.query('SELECT name FROM boards WHERE id = $1', [boardId])).rows[0]?.name || 'board';
     await pool.query(
-      'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1, $2, $3, $4)',
-      [invitee.id, 'board_invite', `${req.user.name || req.user.username || req.user.email} added you to their board`, req.user.id]
+      'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1,$2,$3,$4)',
+      [invitee.id, 'board_invite', `${req.user.name || req.user.username} added you to their "${boardName}" board`, req.user.id]
     );
     return res.json({ joined: true, id: invitee.id, name: invitee.name, email: invitee.email, username: invitee.username });
   }
 
-  // User doesn't exist — create an invite link
+  if (isUsername) return res.status(404).json({ error: 'No user found with that username.' });
+
+  // Create invite link
   const token = crypto.randomBytes(24).toString('hex');
   await pool.query(
-    'DELETE FROM invites WHERE invitee_email = $1 AND board_owner_id = $2 AND used_at IS NULL',
-    [email, req.user.id]
+    'DELETE FROM invites WHERE invitee_email = $1 AND board_id = $2 AND used_at IS NULL', [email, boardId]
   );
   await pool.query(
-    'INSERT INTO invites (token, inviter_user_id, invitee_email, board_owner_id) VALUES ($1, $2, $3, $4)',
-    [token, req.user.id, email, req.user.id]
+    'INSERT INTO invites (token, inviter_user_id, invitee_email, board_id, board_owner_id) VALUES ($1,$2,$3,$4,$5)',
+    [token, req.user.id, email, boardId, req.user.id]
   );
-
   const appUrl = process.env.APP_URL || `https://${req.get('host')}`;
   const inviteLink = `${appUrl}/login?invite=${token}&email=${encodeURIComponent(email)}`;
   const inviterName = req.user.name || req.user.username || req.user.email;
+  const boardName = (await pool.query('SELECT name FROM boards WHERE id = $1', [boardId])).rows[0]?.name || 'board';
 
   const emailSent = await sendEmail({
-    to: email,
-    subject: `${inviterName} invited you to their Tasks board`,
+    to: email, subject: `${inviterName} invited you to their Tasks board`,
     html: `<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#F8FAFC;border-radius:12px;border:1px solid #E2E8F0;">
-      <div style="background:#3B82F6;width:40px;height:40px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:20px;">
-        <span style="color:#fff;font-size:20px;line-height:1;">✓</span>
-      </div>
-      <h2 style="color:#0F172A;margin:0 0 8px;font-size:1.2rem;">You've been invited to Tasks</h2>
-      <p style="color:#64748B;margin:0 0 24px;line-height:1.6;"><strong>${inviterName}</strong> has invited you to collaborate on their board.</p>
-      <a href="${inviteLink}" style="background:#3B82F6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;margin-bottom:24px;font-size:0.95rem;">Accept &amp; Create Account →</a>
-      <p style="color:#94A3B8;font-size:0.75rem;margin:0;">Or copy this link:<br/><a href="${inviteLink}" style="color:#3B82F6;word-break:break-all;">${inviteLink}</a></p>
+      <h2 style="color:#0F172A;margin:0 0 8px;">${inviterName} invited you to Tasks</h2>
+      <p style="color:#64748B;margin:0 0 24px;">You've been invited to collaborate on the <strong>${boardName}</strong> board.</p>
+      <a href="${inviteLink}" style="background:#3B82F6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Accept &amp; Create Account →</a>
+      <p style="color:#94A3B8;font-size:0.75rem;margin-top:20px;">Or copy: <a href="${inviteLink}" style="color:#3B82F6;">${inviteLink}</a></p>
     </div>`
   });
-
   res.json({ pending: true, email, inviteLink, emailSent });
 }));
 
+app.delete('/api/boards/members/:userId', requireAuth, wrap(async (req, res) => {
+  const { boardId } = await getBoardContext(req);
+  await pool.query('DELETE FROM board_members WHERE board_id = $1 AND member_user_id = $2', [boardId, req.params.userId]);
+  res.json({ ok: true });
+}));
+
 app.get('/api/boards/invites', requireAuth, wrap(async (req, res) => {
+  const { boardId } = await getBoardContext(req);
   const { rows } = await pool.query(
-    'SELECT * FROM invites WHERE board_owner_id = $1 AND used_at IS NULL ORDER BY created_at DESC',
-    [req.user.id]
+    'SELECT * FROM invites WHERE board_id = $1 AND used_at IS NULL ORDER BY created_at DESC', [boardId]
   );
   res.json(rows);
 }));
 
 app.delete('/api/boards/invites/:id', requireAuth, wrap(async (req, res) => {
-  await pool.query('DELETE FROM invites WHERE id = $1 AND board_owner_id = $2', [req.params.id, req.user.id]);
+  const { boardId } = await getBoardContext(req);
+  await pool.query('DELETE FROM invites WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   res.json({ ok: true });
 }));
 
 app.get('/api/invite/:token', async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT i.invitee_email, u.name as inviter_name, u.username as inviter_username, u.email as inviter_email
-     FROM invites i JOIN users u ON u.id = i.inviter_user_id
+    `SELECT i.invitee_email, b.name as board_name, u.name as inviter_name, u.username as inviter_username, u.email as inviter_email
+     FROM invites i JOIN users u ON u.id = i.inviter_user_id LEFT JOIN boards b ON b.id = i.board_id
      WHERE i.token = $1 AND i.used_at IS NULL`,
     [req.params.token]
   );
   if (!rows[0]) return res.status(404).json({ error: 'Invalid or expired invite link' });
   const r = rows[0];
-  res.json({ email: r.invitee_email, inviterName: r.inviter_name || r.inviter_username || r.inviter_email });
+  res.json({ email: r.invitee_email, inviterName: r.inviter_name || r.inviter_username || r.inviter_email, boardName: r.board_name });
 });
-
-app.delete('/api/boards/members/:userId', requireAuth, wrap(async (req, res) => {
-  await pool.query(
-    'DELETE FROM board_members WHERE board_owner_id = $1 AND member_user_id = $2',
-    [req.user.id, req.params.userId]
-  );
-  res.json({ ok: true });
-}));
-
-app.get('/api/boards/memberships', requireAuth, wrap(async (req, res) => {
-  const { rows } = await pool.query(
-    `SELECT u.id, u.name, u.email FROM board_members bm
-     JOIN users u ON u.id = bm.board_owner_id
-     WHERE bm.member_user_id = $1 ORDER BY bm.created_at ASC`,
-    [req.user.id]
-  );
-  res.json(rows);
-}));
 
 /* ── Notifications ── */
 app.get('/api/notifications', requireAuth, wrap(async (req, res) => {
   const { rows } = await pool.query(
-    `SELECT n.*, u.name as from_name, u.email as from_email
+    `SELECT n.*, u.name as from_name, u.email as from_email, u.username as from_username
      FROM notifications n LEFT JOIN users u ON u.id = n.from_user_id
      WHERE n.user_id = $1 ORDER BY n.created_at DESC LIMIT 20`,
     [req.user.id]
@@ -390,25 +467,25 @@ app.post('/api/notifications/read', requireAuth, wrap(async (req, res) => {
 
 /* ── Categories ── */
 app.get('/api/categories', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
-  const { rows } = await pool.query('SELECT * FROM categories WHERE user_id = $1 ORDER BY id ASC', [ownerId]);
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query('SELECT * FROM categories WHERE board_id = $1 ORDER BY id ASC', [boardId]);
   res.json(rows);
 }));
 
 app.post('/api/categories', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
+  const { boardId, ownerId } = await getBoardContext(req);
   const { name, color = '#667eea' } = req.body;
   if (!name) return res.status(400).json({ error: 'Name required' });
   const { rows } = await pool.query(
-    'INSERT INTO categories (user_id, name, color) VALUES ($1, $2, $3) RETURNING *',
-    [ownerId, name, color]
+    'INSERT INTO categories (user_id, board_id, name, color) VALUES ($1, $2, $3, $4) RETURNING *',
+    [ownerId, boardId, name, color]
   );
   res.json(rows[0]);
 }));
 
 app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
-  const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   await pool.query('UPDATE tasks SET category_id = NULL WHERE category_id = $1', [rows[0].id]);
   await pool.query('DELETE FROM categories WHERE id = $1', [rows[0].id]);
@@ -417,31 +494,25 @@ app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
 
 /* ── Tasks ── */
 app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
+  const { boardId } = await getBoardContext(req);
   const { rows } = await pool.query(
-    `SELECT t.*, u.name as assigned_to_name, u.email as assigned_to_email
+    `SELECT t.*, u.name as assigned_to_name, u.email as assigned_to_email, u.username as assigned_to_username
      FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to_user_id
-     WHERE t.user_id = $1 ORDER BY t.position ASC, t.created_at ASC`,
-    [ownerId]
+     WHERE t.board_id = $1 ORDER BY t.position ASC, t.created_at ASC`,
+    [boardId]
   );
-  rows.forEach(t => {
-    t.owners = JSON.parse(t.owners || '[]');
-    t.subtasks = JSON.parse(t.subtasks || '[]');
-  });
+  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
   res.json(rows);
 }));
 
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
-  const {
-    text: rawText, status = '', owners = [], cal_start = '', cal_end = '',
+  const { boardId, ownerId } = await getBoardContext(req);
+  const { text: rawText, status = '', owners = [], cal_start = '', cal_end = '',
     stage = 'backlog', category_id = null, due_date: explicitDue = '',
-    priority = 'none', recurrence = '', subtasks = [], assigned_to_user_id = null
-  } = req.body;
+    priority = 'none', recurrence = '', subtasks = [], assigned_to_user_id = null } = req.body;
   if (!rawText) return res.status(400).json({ error: 'Text required' });
 
-  let due_date = explicitDue;
-  let text = rawText;
+  let due_date = explicitDue, text = rawText;
   if (!explicitDue) {
     const parsed = chrono.parse(rawText);
     if (parsed.length > 0) {
@@ -451,15 +522,14 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
     }
   }
 
-  const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [ownerId]);
+  const maxResult = await pool.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [boardId]);
   const position = (maxResult.rows[0].m ?? -1) + 1;
 
   const { rows } = await pool.query(
-    `INSERT INTO tasks
-       (user_id, text, status, owners, cal_start, cal_end, position, stage,
-        category_id, due_date, priority, recurrence, subtasks, assigned_to_user_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [ownerId, text, status, JSON.stringify(owners), cal_start, cal_end, position,
+    `INSERT INTO tasks (user_id, board_id, text, status, owners, cal_start, cal_end, position, stage,
+       category_id, due_date, priority, recurrence, subtasks, assigned_to_user_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
+    [req.user.id, boardId, text, status, JSON.stringify(owners), cal_start, cal_end, position,
      stage, category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id]
   );
   const task = rows[0];
@@ -470,91 +540,96 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
     await pool.query(
       'INSERT INTO notifications (user_id, type, message, task_id, from_user_id) VALUES ($1,$2,$3,$4,$5)',
       [assigned_to_user_id, 'task_assigned',
-       `${req.user.name || req.user.email} assigned you: "${text.slice(0, 60)}"`,
-       task.id, req.user.id]
+       `${req.user.name || req.user.username} assigned you: "${text.slice(0, 60)}"`, task.id, req.user.id]
     );
   }
   res.json(task);
 }));
 
 app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
-  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   const task = rows[0];
 
-  const {
-    text, status = '', owners = [], cal_start = '', cal_end = '', stage,
+  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage,
     category_id = null, due_date = '', priority = 'none', recurrence = '',
-    subtasks = [], assigned_to_user_id = null
-  } = req.body;
+    subtasks = [], assigned_to_user_id = null } = req.body;
 
   if (assigned_to_user_id && assigned_to_user_id !== task.assigned_to_user_id && assigned_to_user_id !== req.user.id) {
     await pool.query(
       'INSERT INTO notifications (user_id, type, message, task_id, from_user_id) VALUES ($1,$2,$3,$4,$5)',
       [assigned_to_user_id, 'task_assigned',
-       `${req.user.name || req.user.email} assigned you: "${(text || task.text).slice(0, 60)}"`,
-       task.id, req.user.id]
+       `${req.user.name || req.user.username} assigned you: "${(text || task.text).slice(0, 60)}"`, task.id, req.user.id]
     );
   }
 
   await pool.query(
-    `UPDATE tasks SET
-       text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
-       stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
-       recurrence = $10, subtasks = $11, assigned_to_user_id = $12
-     WHERE id = $13`,
+    `UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
+     stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
+     recurrence = $10, subtasks = $11, assigned_to_user_id = $12 WHERE id = $13`,
     [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null,
      category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id, task.id]
   );
   res.json({ ok: true });
 }));
 
-app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
-  const { recipient_user_id } = req.body;
-  if (!recipient_user_id) return res.status(400).json({ error: 'Recipient required' });
-  const ownerId = await getBoardOwner(req);
-  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
-  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
-  const t = rows[0];
-  const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [recipient_user_id]);
-  const position = (maxPos.rows[0].m ?? -1) + 1;
-  await pool.query(
-    `INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'backlog',$8,$9,$10,$11)`,
-    [recipient_user_id, t.text, t.status, t.owners, t.cal_start, t.cal_end, position, t.due_date, t.priority, t.recurrence, t.subtasks]
-  );
-  const sharer = req.user.name || req.user.username || req.user.email;
-  await pool.query(
-    'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1,$2,$3,$4)',
-    [recipient_user_id, 'task_shared', `${sharer} shared a task with you: "${t.text.slice(0,60)}"`, req.user.id]
-  );
-  res.json({ ok: true });
-}));
-
 app.delete('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
-  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   await pool.query('DELETE FROM tasks WHERE id = $1', [rows[0].id]);
   res.json({ ok: true });
 }));
 
 app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
-  const ownerId = await getBoardOwner(req);
+  const { boardId } = await getBoardContext(req);
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
   await pool.query('BEGIN');
   try {
     for (const [idx, id] of order.entries()) {
-      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND user_id = $3', [idx, id, ownerId]);
+      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND board_id = $3', [idx, id, boardId]);
     }
     await pool.query('COMMIT');
-  } catch (e) {
-    await pool.query('ROLLBACK');
-    throw e;
-  }
+  } catch (e) { await pool.query('ROLLBACK'); throw e; }
   res.json({ ok: true });
+}));
+
+app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
+  const { recipient_user_id } = req.body;
+  if (!recipient_user_id) return res.status(400).json({ error: 'Recipient required' });
+  const { boardId } = await getBoardContext(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const t = rows[0];
+  const recipientBoard = await ensureDefaultBoard(recipient_user_id);
+  const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [recipientBoard.id]);
+  const position = (maxPos.rows[0].m ?? -1) + 1;
+  await pool.query(
+    `INSERT INTO tasks (user_id, board_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'backlog',$9,$10,$11,$12)`,
+    [recipient_user_id, recipientBoard.id, t.text, t.status, t.owners, t.cal_start, t.cal_end, position, t.due_date, t.priority, t.recurrence, t.subtasks]
+  );
+  const sharer = req.user.name || req.user.username || req.user.email;
+  await pool.query(
+    'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1,$2,$3,$4)',
+    [recipient_user_id, 'task_shared', `${sharer} shared a task with you: "${t.text.slice(0, 60)}"`, req.user.id]
+  );
+  res.json({ ok: true });
+}));
+
+/* ── User search (for assign/share) ── */
+app.get('/api/users/search', requireAuth, wrap(async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 2) return res.json([]);
+  const { rows } = await pool.query(
+    `SELECT id, name, email, username FROM users
+     WHERE (LOWER(username) LIKE LOWER($1) OR LOWER(email) LIKE LOWER($1) OR LOWER(name) LIKE LOWER($1))
+     AND id != $2 LIMIT 8`,
+    [`%${q}%`, req.user.id]
+  );
+  res.json(rows);
 }));
 
 app.use((err, req, res, next) => {

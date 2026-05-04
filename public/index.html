@@ -882,6 +882,25 @@
 <!-- Hidden filter-bar for backward compat -->
 <div id="filter-bar" style="display:none"></div>
 
+<!-- Create board modal -->
+<div class="modal-overlay" id="create-board-modal" style="display:none" onclick="closeCreateBoardModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:360px;">
+    <div class="modal-header">
+      <h2>New Board</h2>
+      <button class="modal-close" onclick="closeCreateBoardModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.83rem;color:var(--text-muted);margin-bottom:14px;">Give your board a name. Each board has its own tasks and categories.</p>
+      <div class="invite-row" style="flex-direction:column;gap:10px;">
+        <input type="text" id="new-board-name" placeholder="e.g. Work, Household, Side Project" maxlength="50"
+          style="padding:10px 12px;border:1.5px solid var(--border-input);border-radius:var(--r-md);font-size:0.88rem;outline:none;background:var(--bg-input);color:var(--text);font-family:inherit;width:100%;" />
+        <button onclick="createBoard()" style="padding:10px;background:var(--primary);border:none;border-radius:var(--r-md);color:#fff;font-size:0.88rem;font-weight:600;cursor:pointer;font-family:inherit;width:100%;">Create Board</button>
+      </div>
+      <div id="create-board-msg" style="font-size:0.78rem;margin-top:8px;"></div>
+    </div>
+  </div>
+</div>
+
 <!-- Members modal -->
 <div class="modal-overlay" id="members-modal" style="display:none" onclick="closeMembersModal()">
   <div class="modal" onclick="event.stopPropagation()">
@@ -895,7 +914,7 @@
       <div class="invite-section">
         <h3>Invite by email</h3>
         <div class="invite-row">
-          <input type="email" id="invite-email" placeholder="name@example.com" />
+          <input type="text" id="invite-email" placeholder="@username or email" />
           <button onclick="inviteMember()">Invite</button>
         </div>
         <div class="invite-msg" id="invite-msg"></div>
@@ -920,11 +939,12 @@
   let myName = '';
   let boardMembers = [];
   let memberships = [];
-  let currentBoardOwner = null;
+  let myBoards = [];
+  let currentBoard = null; // { id, name, ownerId } — null = default board
   let sidebarOpen = true;
 
-  function boardParam() { return currentBoardOwner ? `?board=${currentBoardOwner.id}` : ''; }
-  function boardBody()  { return currentBoardOwner ? { boardOwner: currentBoardOwner.id } : {}; }
+  function boardParam() { return currentBoard ? `?board=${currentBoard.id}` : ''; }
+  function boardBody()  { return currentBoard ? { boardId: currentBoard.id } : {}; }
 
   /* ── Theme ── */
   function initTheme() {
@@ -1102,15 +1122,20 @@
 
   function renderSidebarBoards() {
     const el = document.getElementById('sidebar-boards');
-    const myActive = !currentBoardOwner;
-    el.innerHTML = `<button class="sidebar-nav-item${myActive ? ' active' : ''}" onclick="switchBoard(null)">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="12"/></svg>
-      My Board
-    </button>` + memberships.map(b => `
-      <button class="sidebar-nav-item${currentBoardOwner?.id === b.id ? ' active' : ''}" onclick='switchBoard(${JSON.stringify(b).replace(/'/g,"&#39;")})'>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="12"/></svg>
-        ${escapeHtml(b.name || b.email)}'s Board
+    const boardIcon = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="12"/></svg>`;
+    const myBoardBtns = myBoards.map((b, i) => `
+      <button class="sidebar-nav-item${currentBoard?.id === b.id || (!currentBoard && i === 0) ? ' active' : ''}"
+        onclick='switchBoard(${JSON.stringify({id:b.id,name:b.name,ownerId:myId}).replace(/'/g,"&#39;")})'>
+        ${boardIcon} ${escapeHtml(b.name)}
       </button>`).join('');
+    const sharedBtns = memberships.map(b => `
+      <button class="sidebar-nav-item${currentBoard?.id === b.id ? ' active' : ''}"
+        onclick='switchBoard(${JSON.stringify({id:b.id,name:b.name,ownerId:b.owner_user_id}).replace(/'/g,"&#39;")})'>
+        ${boardIcon} ${escapeHtml(b.name)} <span style="font-size:0.68rem;opacity:0.55;margin-left:2px;">· ${escapeHtml(b.owner_username || b.owner_email)}</span>
+      </button>`).join('');
+    el.innerHTML = myBoardBtns +
+      (memberships.length ? `<div style="font-size:0.67rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.08em;padding:8px 8px 2px;">Shared</div>${sharedBtns}` : '') +
+      `<button class="sidebar-nav-item" onclick="openCreateBoardModal()" style="color:var(--primary);">${boardIcon} + New board</button>`;
   }
 
   function toggleNewCatForm() {
@@ -1211,7 +1236,8 @@
       document.getElementById('user-name').textContent = displayName;
       document.getElementById('user-avatar').textContent = (user.username || myName)[0].toUpperCase();
 
-      [memberships, boardMembers] = await Promise.all([
+      [myBoards, memberships, boardMembers] = await Promise.all([
+        fetch('/api/boards').then(r => r.json()),
         fetch('/api/boards/memberships').then(r => r.json()),
         fetch('/api/boards/members').then(r => r.json()),
       ]);
@@ -1234,10 +1260,21 @@
 
   /* ── Board switching ── */
   function renderBoardMenu() {
-    const el = document.getElementById('board-menu-memberships');
-    el.innerHTML = memberships.map(b =>
-      `<div class="board-menu-item" onclick='switchBoard(${JSON.stringify(b).replace(/'/g,"&#39;")})'>${escapeHtml(b.name || b.email)}'s Board</div>`
+    document.getElementById('my-board-item').textContent = (myBoards[0]?.name || 'My Board') + (currentBoard ? '' : ' ✓');
+    document.getElementById('my-board-item').classList.toggle('active', !currentBoard);
+
+    const myExtra = myBoards.slice(1).map(b =>
+      `<div class="board-menu-item${currentBoard?.id === b.id ? ' active' : ''}" onclick='switchBoard(${JSON.stringify({id:b.id,name:b.name,ownerId:myId}).replace(/'/g,"&#39;")})'>${currentBoard?.id === b.id ? '✓ ' : ''}${escapeHtml(b.name)}</div>`
     ).join('');
+
+    const sharedBoards = memberships.map(b =>
+      `<div class="board-menu-item${currentBoard?.id === b.id ? ' active' : ''}" onclick='switchBoard(${JSON.stringify({id:b.id,name:b.name,ownerId:b.owner_user_id}).replace(/'/g,"&#39;")})'>${escapeHtml(b.name)} <span style="font-size:0.72rem;opacity:0.6;">· ${escapeHtml(b.owner_username || b.owner_email)}</span></div>`
+    ).join('');
+
+    document.getElementById('board-menu-memberships').innerHTML =
+      myExtra +
+      (memberships.length ? `<div class="board-menu-sep"></div><div style="padding:6px 14px;font-size:0.7rem;font-weight:700;color:var(--text-light);text-transform:uppercase;letter-spacing:0.06em;">Shared with me</div>${sharedBoards}` : '') +
+      `<div class="board-menu-sep"></div><div class="board-menu-item" onclick="closeBoardMenu();openCreateBoardModal()">+ Create board</div>`;
   }
 
   function toggleBoardMenu() {
@@ -1251,26 +1288,48 @@
 
   async function switchBoard(board) {
     closeBoardMenu();
-    currentBoardOwner = board;
-    document.getElementById('board-label').textContent = board ? `${board.name || board.email}'s Board` : 'My Board';
-    document.getElementById('my-board-item').classList.toggle('active', !board);
+    currentBoard = board;
+    const defaultName = myBoards[0]?.name || 'My Board';
+    document.getElementById('board-label').textContent = board ? board.name : defaultName;
     const banner = document.getElementById('viewing-banner');
-    if (board) { banner.textContent = `Viewing ${board.name || board.email}'s board`; banner.style.display = 'inline'; }
+    const isOwn = !board || board.ownerId === myId;
+    if (!isOwn) { banner.textContent = `Viewing shared board`; banner.style.display = 'inline'; }
     else { banner.style.display = 'none'; }
 
     STAGES.forEach(s => { getList(s).innerHTML = '<li class="col-empty">No tasks yet</li>'; });
     activeFilter = null; todayFilter = false;
 
     [boardMembers, categories] = await Promise.all([
-      fetch('/api/boards/members').then(r => r.json()),
+      fetch('/api/boards/members' + boardParam()).then(r => r.json()),
       fetch('/api/categories' + boardParam()).then(r => r.json()),
     ]);
     renderFilterBar();
+    renderBoardMenu();
     renderSidebarBoards();
 
     const tasks = await (await fetch('/api/tasks' + boardParam())).json();
     tasks.forEach(t => createTaskCard(t));
     updateCounts();
+  }
+
+  /* ── Create board ── */
+  function openCreateBoardModal() {
+    document.getElementById('create-board-modal').style.display = 'flex';
+    document.getElementById('new-board-name').value = '';
+    document.getElementById('create-board-msg').textContent = '';
+    setTimeout(() => document.getElementById('new-board-name').focus(), 50);
+  }
+  function closeCreateBoardModal() { document.getElementById('create-board-modal').style.display = 'none'; }
+  async function createBoard() {
+    const name = document.getElementById('new-board-name').value.trim();
+    const msg = document.getElementById('create-board-msg');
+    if (!name) { msg.style.color = '#EF4444'; msg.textContent = 'Please enter a name.'; return; }
+    const res = await fetch('/api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const board = await res.json();
+    if (!res.ok) { msg.style.color = '#EF4444'; msg.textContent = board.error || 'Error'; return; }
+    myBoards.push(board);
+    closeCreateBoardModal();
+    await switchBoard({ id: board.id, name: board.name, ownerId: myId });
   }
 
   /* ── Members modal ── */
@@ -1393,8 +1452,8 @@
 
   /* ── Assign to ── */
   function populateAssignSelect(selectEl, currentAssigneeId) {
-    const people = currentBoardOwner
-      ? [{ id: currentBoardOwner.id, name: currentBoardOwner.name, email: currentBoardOwner.email }, ...boardMembers]
+    const people = currentBoard
+      ? [{ id: currentBoard.id, name: currentBoard.name, email: currentBoard.email }, ...boardMembers]
       : [{ id: myId, name: myName, email: '' }, ...boardMembers];
     selectEl.innerHTML = '<option value="">Unassigned</option>' +
       people.map(u => `<option value="${u.id}" ${currentAssigneeId == u.id ? 'selected' : ''}>${escapeHtml(u.name || u.email)}</option>`).join('');
@@ -1419,8 +1478,8 @@
     const existing = badgesEl.querySelector('.assignee-badge');
     if (existing) existing.remove();
     if (!userId) return;
-    const people = currentBoardOwner
-      ? [{ id: currentBoardOwner.id, name: currentBoardOwner.name, email: currentBoardOwner.email }, ...boardMembers]
+    const people = currentBoard
+      ? [{ id: currentBoard.id, name: currentBoard.name, email: currentBoard.email }, ...boardMembers]
       : [{ id: myId, name: myName, email: '' }, ...boardMembers];
     const person = people.find(u => u.id == userId);
     if (person) {
@@ -2180,6 +2239,7 @@
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });
   document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
   document.getElementById('invite-email').addEventListener('keydown', e => { if (e.key === 'Enter') inviteMember(); });
+  document.getElementById('new-board-name').addEventListener('keydown', e => { if (e.key === 'Enter') createBoard(); });
   document.addEventListener('click', e => {
     if (!document.getElementById('board-switcher').contains(e.target)) closeBoardMenu();
     if (!document.getElementById('notif-btn').closest('.notif-wrap').contains(e.target)) {

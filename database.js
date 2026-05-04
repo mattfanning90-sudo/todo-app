@@ -15,19 +15,38 @@ async function init() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
+
+  // Named boards
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS boards (
+      id SERIAL PRIMARY KEY,
+      owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(owner_user_id, slug)
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS categories (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       color TEXT NOT NULL DEFAULT '#667eea',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await pool.query(`ALTER TABLE categories ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tasks (
       id SERIAL PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
       text TEXT NOT NULL,
       status TEXT DEFAULT '',
       owners TEXT DEFAULT '[]',
@@ -39,33 +58,38 @@ async function init() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'none'`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT DEFAULT ''`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks TEXT DEFAULT '[]'`);
+  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS board_members (
+      id SERIAL PRIMARY KEY,
+      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+      board_owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      member_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await pool.query(`ALTER TABLE board_members ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS invites (
       id SERIAL PRIMARY KEY,
       token TEXT UNIQUE NOT NULL,
       inviter_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       invitee_email TEXT NOT NULL,
-      board_owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE,
+      board_owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       used_at TIMESTAMP DEFAULT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_date TEXT DEFAULT ''`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'none'`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recurrence TEXT DEFAULT ''`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS subtasks TEXT DEFAULT '[]'`);
-  await pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS assigned_to_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL`);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS board_members (
-      id SERIAL PRIMARY KEY,
-      board_owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      member_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(board_owner_id, member_user_id)
-    )
-  `);
+  await pool.query(`ALTER TABLE invites ADD COLUMN IF NOT EXISTS board_id INTEGER REFERENCES boards(id) ON DELETE CASCADE`);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS notifications (
       id SERIAL PRIMARY KEY,
