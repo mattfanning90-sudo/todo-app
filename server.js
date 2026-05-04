@@ -510,6 +510,28 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
+  const { recipient_user_id } = req.body;
+  if (!recipient_user_id) return res.status(400).json({ error: 'Recipient required' });
+  const ownerId = await getBoardOwner(req);
+  const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);
+  if (!rows[0]) return res.status(404).json({ error: 'Not found' });
+  const t = rows[0];
+  const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE user_id = $1', [recipient_user_id]);
+  const position = (maxPos.rows[0].m ?? -1) + 1;
+  await pool.query(
+    `INSERT INTO tasks (user_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'backlog',$8,$9,$10,$11)`,
+    [recipient_user_id, t.text, t.status, t.owners, t.cal_start, t.cal_end, position, t.due_date, t.priority, t.recurrence, t.subtasks]
+  );
+  const sharer = req.user.name || req.user.username || req.user.email;
+  await pool.query(
+    'INSERT INTO notifications (user_id, type, message, from_user_id) VALUES ($1,$2,$3,$4)',
+    [recipient_user_id, 'task_shared', `${sharer} shared a task with you: "${t.text.slice(0,60)}"`, req.user.id]
+  );
+  res.json({ ok: true });
+}));
+
 app.delete('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   const ownerId = await getBoardOwner(req);
   const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND user_id = $2', [req.params.id, ownerId]);

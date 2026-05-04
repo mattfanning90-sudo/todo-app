@@ -570,6 +570,33 @@
     }
     .recurrence-sel:focus, .assign-sel:focus { border-color: var(--primary); }
 
+    /* Save button */
+    .panel-save-row { display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
+    .save-task-btn { padding: 7px 20px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.2s; }
+    .save-task-btn:hover { background: var(--primary-hover); }
+    .save-task-btn.saved { background: #22C55E; }
+
+    /* Inline new category */
+    .add-cat-inline-btn { font-size: 0.73rem; color: var(--primary); background: none; border: none; cursor: pointer; padding: 4px 0 0; font-family: inherit; font-weight: 600; display: block; }
+    .add-cat-inline-btn:hover { text-decoration: underline; }
+    .inline-cat-form { display: none; background: var(--bg-hover); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px; margin-top: 6px; }
+    .inline-cat-form.open { display: block; }
+    .inline-cat-form input { width: 100%; padding: 5px 8px; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.82rem; outline: none; background: var(--bg-card); color: var(--text); font-family: inherit; margin-bottom: 6px; }
+    .inline-cat-form input:focus { border-color: var(--primary); }
+    .inline-cat-palette { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+    .inline-cat-actions { display: flex; gap: 5px; }
+    .btn-save-icat { padding: 4px 10px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-save-icat:hover { background: var(--primary-hover); }
+    .btn-cancel-icat { padding: 4px 8px; background: none; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.78rem; color: var(--text-muted); cursor: pointer; font-family: inherit; }
+
+    /* Share task */
+    .share-row { display: flex; gap: 6px; margin-top: 4px; }
+    .share-sel { flex: 1; padding: 6px 9px; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.83rem; color: var(--text); background: var(--bg-card); outline: none; cursor: pointer; font-family: inherit; }
+    .share-sel:focus { border-color: var(--primary); }
+    .share-task-btn { padding: 6px 12px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s; }
+    .share-task-btn:hover { background: var(--primary-hover); }
+    .share-task-btn.shared { background: #22C55E; }
+
     .owner-row { display: flex; gap: 6px; align-items: center; }
     .owner-row input { flex: 1; }
     .owner-add-btn {
@@ -1373,6 +1400,20 @@
       people.map(u => `<option value="${u.id}" ${currentAssigneeId == u.id ? 'selected' : ''}>${escapeHtml(u.name || u.email)}</option>`).join('');
   }
 
+  function populateShareSelect(selectEl) {
+    const people = [...boardMembers];
+    memberships.forEach(m => { if (!people.find(p => p.id === m.id)) people.push(m); });
+    const targets = people.filter(u => u.id !== myId);
+    if (!targets.length) {
+      selectEl.innerHTML = '<option value="">No connections yet</option>';
+      selectEl.disabled = true;
+    } else {
+      selectEl.disabled = false;
+      selectEl.innerHTML = '<option value="">Share with…</option>' +
+        targets.map(u => `<option value="${u.id}">${escapeHtml(u.name || u.username || u.email)}</option>`).join('');
+    }
+  }
+
   function updateAssigneeBadge(card, userId) {
     const badgesEl = card.querySelector('.task-badges');
     const existing = badgesEl.querySelector('.assignee-badge');
@@ -1515,6 +1556,15 @@
 
         <label>Category</label>
         <div class="cat-selector"></div>
+        <button class="add-cat-inline-btn" type="button">+ New category</button>
+        <div class="inline-cat-form">
+          <input type="text" class="inline-cat-name" placeholder="Category name…" maxlength="30" />
+          <div class="inline-cat-palette"></div>
+          <div class="inline-cat-actions">
+            <button type="button" class="btn-save-icat">Add</button>
+            <button type="button" class="btn-cancel-icat">Cancel</button>
+          </div>
+        </div>
 
         <label>Subtasks</label>
         <div class="subtask-list"></div>
@@ -1536,14 +1586,24 @@
         </div>
         <div class="owner-chips"></div>
 
+        <label>Share to someone's board</label>
+        <div class="share-row">
+          <select class="share-sel"></select>
+          <button type="button" class="share-task-btn">Share</button>
+        </div>
+
         <label>Add to Google Calendar</label>
         <div class="cal-row">
           <div class="field"><label>Start</label><input type="datetime-local" class="cal-start" /></div>
           <div class="field"><label>End</label><input type="datetime-local" class="cal-end" /></div>
-          <button class="open-cal-btn">
+          <button type="button" class="open-cal-btn">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
             Calendar
           </button>
+        </div>
+
+        <div class="panel-save-row">
+          <button type="button" class="save-task-btn">Save</button>
         </div>
       </div>`;
 
@@ -1575,6 +1635,67 @@
       card.dataset.assignedToUserId = assignSel.value;
       updateAssigneeBadge(card, assignSel.value);
       apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    });
+
+    // Save button
+    const saveBtn = card.querySelector('.save-task-btn');
+    saveBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+      saveBtn.textContent = '✓ Saved';
+      saveBtn.classList.add('saved');
+      setTimeout(() => { saveBtn.textContent = 'Save'; saveBtn.classList.remove('saved'); }, 2000);
+    });
+
+    // Inline new category
+    const addCatBtn = card.querySelector('.add-cat-inline-btn');
+    const inlineCatForm = card.querySelector('.inline-cat-form');
+    const inlineCatName = card.querySelector('.inline-cat-name');
+    const inlinePalette = card.querySelector('.inline-cat-palette');
+    let inlineColor = COLOR_PALETTE[0];
+
+    COLOR_PALETTE.forEach(color => {
+      const sw = document.createElement('div');
+      sw.className = 'color-swatch' + (color === inlineColor ? ' selected' : '');
+      sw.style.cssText = `width:16px;height:16px;border-radius:50%;background:${color};cursor:pointer;border:2px solid transparent;flex-shrink:0;`;
+      sw.addEventListener('click', e => {
+        e.stopPropagation();
+        inlineColor = color;
+        inlinePalette.querySelectorAll('div').forEach(s => s.style.borderColor = 'transparent');
+        sw.style.borderColor = 'var(--text)';
+      });
+      inlinePalette.appendChild(sw);
+    });
+
+    addCatBtn.addEventListener('click', e => { e.stopPropagation(); inlineCatForm.classList.toggle('open'); if (inlineCatForm.classList.contains('open')) inlineCatName.focus(); });
+    card.querySelector('.btn-cancel-icat').addEventListener('click', e => { e.stopPropagation(); inlineCatForm.classList.remove('open'); inlineCatName.value = ''; });
+    card.querySelector('.btn-save-icat').addEventListener('click', async e => {
+      e.stopPropagation();
+      const name = inlineCatName.value.trim();
+      if (!name) return;
+      const cat = await apiPost('/api/categories', { name, color: inlineColor, ...boardBody() });
+      categories.push(cat);
+      renderFilterBar();
+      inlineCatName.value = '';
+      inlineCatForm.classList.remove('open');
+      document.querySelectorAll('.cat-selector').forEach(sel => renderCatSelector(sel, sel.closest('.task-card')));
+    });
+    inlineCatName.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); card.querySelector('.btn-save-icat').click(); } e.stopPropagation(); });
+
+    // Share task
+    const shareSel = card.querySelector('.share-sel');
+    const shareBtn = card.querySelector('.share-task-btn');
+    populateShareSelect(shareSel);
+    shareBtn.addEventListener('click', async e => {
+      e.stopPropagation();
+      const recipientId = Number(shareSel.value);
+      if (!recipientId) return;
+      shareBtn.disabled = true;
+      await fetch(`/api/tasks/${task.id}/share`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient_user_id: recipientId, ...boardBody() }) });
+      shareBtn.textContent = '✓ Shared!';
+      shareBtn.classList.add('shared');
+      shareSel.value = '';
+      setTimeout(() => { shareBtn.textContent = 'Share'; shareBtn.classList.remove('shared'); shareBtn.disabled = false; }, 2500);
     });
 
     const dueDateInput = card.querySelector('.due-date-input');
