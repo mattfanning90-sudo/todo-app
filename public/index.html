@@ -570,6 +570,23 @@
     }
     .recurrence-sel:focus, .assign-sel:focus { border-color: var(--primary); }
 
+    /* User search */
+    .user-search-wrap { position: relative; margin-top: 4px; }
+    .user-search-wrap input { width: 100%; padding: 6px 9px; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.83rem; color: var(--text); background: var(--bg-card); outline: none; font-family: inherit; }
+    .user-search-wrap input:focus { border-color: var(--primary); }
+    .user-search-results { position: absolute; top: 100%; left: 0; right: 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-sm); box-shadow: var(--shadow-md); z-index: 50; max-height: 180px; overflow-y: auto; margin-top: 2px; }
+    .user-result { display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; transition: background 0.1s; font-size: 0.83rem; }
+    .user-result:hover { background: var(--bg-hover); }
+    .user-result-avatar { width: 24px; height: 24px; border-radius: 50%; background: var(--primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700; flex-shrink: 0; }
+    .user-result-info { flex: 1; min-width: 0; }
+    .user-result-name { font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-result-sub { font-size: 0.72rem; color: var(--text-muted); }
+    .user-result-empty { padding: 10px; text-align: center; color: var(--text-light); font-size: 0.82rem; }
+    .assign-chip-row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+    .assign-chip { display: flex; align-items: center; gap: 5px; background: var(--primary-muted); color: var(--primary); border: 1px solid rgba(59,130,246,0.2); border-radius: 20px; padding: 2px 8px; font-size: 0.75rem; font-weight: 600; }
+    .assign-chip button { background: none; border: none; cursor: pointer; color: inherit; opacity: 0.6; font-size: 0.85rem; padding: 0; line-height: 1; }
+    .assign-chip button:hover { opacity: 1; color: #EF4444; }
+
     /* Save button */
     .panel-save-row { display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
     .save-task-btn { padding: 7px 20px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.2s; }
@@ -1020,6 +1037,7 @@
       recurrence: card.querySelector('.recurrence-sel').value,
       subtasks: JSON.parse(card.dataset.subtasks || '[]'),
       assigned_to_user_id: card.dataset.assignedToUserId ? Number(card.dataset.assignedToUserId) : null,
+      // boardId handled by boardBody() spread below
       ...boardBody(),
     };
   }
@@ -1459,6 +1477,15 @@
       people.map(u => `<option value="${u.id}" ${currentAssigneeId == u.id ? 'selected' : ''}>${escapeHtml(u.name || u.email)}</option>`).join('');
   }
 
+  function clearAssign(e, taskId) {
+    e.stopPropagation();
+    const card = e.target.closest('.task-card');
+    card.dataset.assignedToUserId = '';
+    card.querySelector('.assign-chip-row').innerHTML = '';
+    updateAssigneeBadge(card, null);
+    apiPut(`/api/tasks/${taskId}`, getCardPayload(card));
+  }
+
   function populateShareSelect(selectEl) {
     const people = [...boardMembers];
     memberships.forEach(m => { if (!people.find(p => p.id === m.id)) people.push(m); });
@@ -1633,7 +1660,11 @@
         </div>
 
         <label>Assigned to</label>
-        <select class="assign-sel"></select>
+        <div class="user-search-wrap">
+          <input type="text" class="assign-search" placeholder="Search @username or email…" autocomplete="off" />
+          <div class="user-search-results assign-results" style="display:none"></div>
+        </div>
+        <div class="assign-chip-row"></div>
 
         <label>Notes</label>
         <textarea class="status-area" placeholder="Add notes or a status update…" rows="2"></textarea>
@@ -1646,9 +1677,9 @@
         <div class="owner-chips"></div>
 
         <label>Share to someone's board</label>
-        <div class="share-row">
-          <select class="share-sel"></select>
-          <button type="button" class="share-task-btn">Share</button>
+        <div class="user-search-wrap">
+          <input type="text" class="share-search" placeholder="Search @username or email…" autocomplete="off" />
+          <div class="user-search-results share-results" style="display:none"></div>
         </div>
 
         <label>Add to Google Calendar</label>
@@ -1688,13 +1719,89 @@
     updateSubtaskCount(card);
     updateStatusPreview();
 
-    const assignSel = card.querySelector('.assign-sel');
-    populateAssignSelect(assignSel, task.assigned_to_user_id);
-    assignSel.addEventListener('change', () => {
-      card.dataset.assignedToUserId = assignSel.value;
-      updateAssigneeBadge(card, assignSel.value);
-      apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+    // Assign-to search
+    const assignSearch = card.querySelector('.assign-search');
+    const assignResults = card.querySelector('.assign-results');
+    const assignChipRow = card.querySelector('.assign-chip-row');
+
+    if (task.assigned_to_user_id) {
+      const label = task.assigned_to_name || task.assigned_to_username || task.assigned_to_email || '?';
+      renderAssignChip(card, task.assigned_to_user_id, label, task.id);
+    }
+
+    let assignTimer;
+    assignSearch.addEventListener('input', () => {
+      clearTimeout(assignTimer);
+      const q = assignSearch.value.trim();
+      if (!q) { assignResults.style.display = 'none'; return; }
+      assignTimer = setTimeout(async () => {
+        const users = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+        if (!users.length) { assignResults.innerHTML = '<div class="user-result-empty">No users found</div>'; assignResults.style.display = 'block'; return; }
+        assignResults.innerHTML = users.map(u => `
+          <div class="user-result" data-id="${u.id}" data-name="${escapeHtml(u.name || u.username || u.email)}">
+            <div class="user-result-avatar">${(u.name || u.username || u.email)[0].toUpperCase()}</div>
+            <div class="user-result-info">
+              <div class="user-result-name">${escapeHtml(u.name || u.username)}</div>
+              <div class="user-result-sub">@${escapeHtml(u.username || '')} · ${escapeHtml(u.email)}</div>
+            </div>
+          </div>`).join('');
+        assignResults.style.display = 'block';
+        assignResults.querySelectorAll('.user-result').forEach(row => {
+          row.addEventListener('click', () => {
+            const uid = Number(row.dataset.id);
+            const name = row.dataset.name;
+            card.dataset.assignedToUserId = uid;
+            assignSearch.value = '';
+            assignResults.style.display = 'none';
+            renderAssignChip(card, uid, name, task.id);
+            apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
+          });
+        });
+      }, 280);
     });
+    assignSearch.addEventListener('blur', () => setTimeout(() => { assignResults.style.display = 'none'; }, 200));
+
+    function renderAssignChip(card, uid, name, taskId) {
+      const row = card.querySelector('.assign-chip-row');
+      row.innerHTML = uid ? `<div class="assign-chip">👤 ${escapeHtml(name)}<button onclick="clearAssign(event,'${taskId}')">×</button></div>` : '';
+      updateAssigneeBadge(card, uid);
+    }
+
+    // Share search
+    const shareSearch = card.querySelector('.share-search');
+    const shareResults = card.querySelector('.share-results');
+    let shareTimer;
+    shareSearch.addEventListener('input', () => {
+      clearTimeout(shareTimer);
+      const q = shareSearch.value.trim();
+      if (!q) { shareResults.style.display = 'none'; return; }
+      shareTimer = setTimeout(async () => {
+        const users = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+        if (!users.length) { shareResults.innerHTML = '<div class="user-result-empty">No users found</div>'; shareResults.style.display = 'block'; return; }
+        shareResults.innerHTML = users.map(u => `
+          <div class="user-result" data-id="${u.id}" data-name="${escapeHtml(u.name || u.username || u.email)}">
+            <div class="user-result-avatar">${(u.name || u.username || u.email)[0].toUpperCase()}</div>
+            <div class="user-result-info">
+              <div class="user-result-name">${escapeHtml(u.name || u.username)}</div>
+              <div class="user-result-sub">@${escapeHtml(u.username || '')} · ${escapeHtml(u.email)}</div>
+            </div>
+          </div>`).join('');
+        shareResults.style.display = 'block';
+        shareResults.querySelectorAll('.user-result').forEach(row => {
+          row.addEventListener('click', async () => {
+            const uid = Number(row.dataset.id);
+            const name = row.dataset.name;
+            shareResults.style.display = 'none';
+            shareSearch.value = `Sharing to ${name}…`;
+            shareSearch.disabled = true;
+            await fetch(`/api/tasks/${task.id}/share`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient_user_id: uid, ...boardBody() }) });
+            shareSearch.value = `✓ Shared with ${name}`;
+            setTimeout(() => { shareSearch.value = ''; shareSearch.disabled = false; }, 2500);
+          });
+        });
+      }, 280);
+    });
+    shareSearch.addEventListener('blur', () => setTimeout(() => { shareResults.style.display = 'none'; }, 200));
 
     // Save button
     const saveBtn = card.querySelector('.save-task-btn');
