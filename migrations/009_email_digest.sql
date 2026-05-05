@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_frequency TEXT DEFAULT 'none';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent TIMESTAMP;

@@ -588,7 +588,7 @@
     .assign-chip button:hover { opacity: 1; color: #EF4444; }
 
     /* Save button */
-    .panel-save-row { display: flex; justify-content: flex-end; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
+    .panel-save-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
     .save-task-btn { padding: 7px 20px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.2s; }
     .save-task-btn:hover { background: var(--primary-hover); }
     .save-task-btn.saved { background: #22C55E; }
@@ -605,6 +605,44 @@
     .btn-save-icat { padding: 4px 10px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.78rem; font-weight: 600; cursor: pointer; font-family: inherit; }
     .btn-save-icat:hover { background: var(--primary-hover); }
     .btn-cancel-icat { padding: 4px 8px; background: none; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 0.78rem; color: var(--text-muted); cursor: pointer; font-family: inherit; }
+
+    /* Pull to refresh */
+    .ptr-indicator {
+      position: fixed; top: -56px; left: 50%; transform: translateX(-50%);
+      width: 36px; height: 36px; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      box-shadow: var(--shadow-md); transition: top 0.2s; z-index: 999;
+    }
+    .ptr-indicator.visible { top: 64px; }
+    .ptr-indicator svg { transition: transform 0.3s; color: var(--primary); }
+    .ptr-indicator.spinning svg { animation: ptr-spin 0.7s linear infinite; }
+    @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+    /* Archive */
+    .archived-view { display: none; padding: 8px 20px 20px; }
+    .archived-view.active { display: block; }
+    .archived-empty { color: var(--text-light); font-size: 0.9rem; text-align: center; padding: 40px 0; }
+    .archived-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--r-md);
+      margin-bottom: 8px; opacity: 0.75;
+    }
+    .archived-item:hover { opacity: 1; }
+    .archived-info { flex: 1; min-width: 0; }
+    .archived-text { font-size: 0.88rem; color: var(--text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .archived-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .restore-btn { padding: 4px 12px; background: none; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.78rem; color: var(--text-muted); cursor: pointer; font-family: inherit; white-space: nowrap; transition: all 0.15s; flex-shrink: 0; }
+    .restore-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* Digest settings */
+    .digest-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; margin-bottom: 6px; }
+    .digest-row label { font-size: 0.78rem; color: var(--text-muted); flex-shrink: 0; }
+    .digest-row select { flex: 1; padding: 5px 8px; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.78rem; color: var(--text); background: var(--bg-card); outline: none; cursor: pointer; font-family: inherit; }
+    .digest-row select:focus { border-color: var(--primary); }
+
+    /* Archive button in panel */
+    .archive-btn { padding: 7px 14px; background: none; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.82rem; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .archive-btn:hover { border-color: #EF4444; color: #EF4444; }
 
     /* Share task */
     .share-row { display: flex; gap: 6px; margin-top: 4px; }
@@ -784,6 +822,11 @@
   </div>
 </header>
 
+<!-- Pull to refresh indicator -->
+<div class="ptr-indicator" id="ptr-indicator">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.5 15a9 9 0 1 1-2.5-8.5L23 10"/></svg>
+</div>
+
 <!-- App body -->
 <div class="app-body">
 
@@ -800,6 +843,11 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         Today
         <span class="nav-count" id="nav-count-today">0</span>
+      </button>
+      <button class="sidebar-nav-item" id="nav-archived" onclick="viewArchived()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg>
+        Archived
+        <span class="nav-count" id="nav-count-archived">0</span>
       </button>
     </div>
 
@@ -835,6 +883,15 @@
     </div>
 
     <div class="sidebar-bottom">
+      <div class="digest-row">
+        <label>Email digest</label>
+        <select id="digest-frequency" onchange="saveDigestFrequency(this.value)">
+          <option value="none">Off</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="fortnightly">Fortnightly</option>
+        </select>
+      </div>
       <button class="members-btn" onclick="openMembersModal()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Manage Members
@@ -891,6 +948,10 @@
           <ul class="task-list" id="list-done"><li class="col-empty">No tasks yet</li></ul>
         </div>
       </div>
+    </div>
+    <!-- Archived view -->
+    <div class="archived-view" id="archived-view">
+      <div id="archived-list"></div>
     </div>
   </main>
 </div>
@@ -1085,6 +1146,7 @@
 
   function filterToday() {
     closeSidebarMobile();
+    exitArchivedView();
     todayFilter = true;
     activeFilter = null;
     applyFilter();
@@ -1094,6 +1156,7 @@
   }
 
   function clearTodayFilter() {
+    exitArchivedView();
     todayFilter = false;
     document.getElementById('nav-today').classList.remove('active');
     document.getElementById('nav-all').classList.add('active');
@@ -1272,6 +1335,10 @@
       tasks.forEach(t => createTaskCard(t));
       updateCounts();
       setupColumnDrop();
+      loadArchivedCount();
+
+      const digestSel = document.getElementById('digest-frequency');
+      if (user.digest_frequency) digestSel.value = user.digest_frequency;
     } catch (err) {
       console.error('Failed to load:', err);
     }
@@ -1307,6 +1374,7 @@
 
   async function switchBoard(board) {
     closeBoardMenu();
+    exitArchivedView();
     currentBoard = board;
     const defaultName = myBoards[0]?.name || 'My Board';
     document.getElementById('board-label').textContent = board ? board.name : defaultName;
@@ -1329,6 +1397,7 @@
     const tasks = await (await fetch('/api/tasks' + boardParam())).json();
     tasks.forEach(t => createTaskCard(t));
     updateCounts();
+    loadArchivedCount();
   }
 
   /* ── Create board ── */
@@ -1694,6 +1763,7 @@
         </div>
 
         <div class="panel-save-row">
+          <button type="button" class="archive-btn">Archive</button>
           <button type="button" class="save-task-btn">Save</button>
         </div>
       </div>`;
@@ -1816,6 +1886,15 @@
         saveBtn.classList.remove('saved');
         panel.classList.remove('open');
       }, 800);
+    });
+
+    const archiveBtn = card.querySelector('.archive-btn');
+    archiveBtn.addEventListener('click', async e => {
+      e.stopPropagation();
+      await apiPut(`/api/tasks/${task.id}`, { ...getCardPayload(card), archived: true });
+      card.remove();
+      updateCounts();
+      loadArchivedCount();
     });
 
     // Inline new category
@@ -2326,6 +2405,132 @@
       category_id: card.dataset.categoryId ? Number(card.dataset.categoryId) : null,
       ...boardBody(),
     }).then(newTask => { createTaskCard(newTask); updateCounts(); });
+  }
+
+  /* ── Archive ── */
+  let viewingArchived = false;
+
+  async function loadArchivedCount() {
+    try {
+      const tasks = await (await fetch('/api/tasks' + boardParam() + (boardParam() ? '&' : '?') + 'archived=true')).json();
+      document.getElementById('nav-count-archived').textContent = tasks.length;
+    } catch(e) {}
+  }
+
+  async function viewArchived() {
+    closeSidebarMobile();
+    viewingArchived = true;
+    document.getElementById('nav-all').classList.remove('active');
+    document.getElementById('nav-today').classList.remove('active');
+    document.getElementById('nav-archived').classList.add('active');
+    document.querySelector('.board-scroll').style.display = 'none';
+    document.querySelector('.content-top').style.display = 'none';
+    const archivedView = document.getElementById('archived-view');
+    archivedView.classList.add('active');
+
+    const list = document.getElementById('archived-list');
+    list.innerHTML = '<div class="archived-empty">Loading…</div>';
+    const sep = boardParam() ? '&' : '?';
+    const tasks = await (await fetch('/api/tasks' + boardParam() + sep + 'archived=true')).json();
+
+    if (!tasks.length) {
+      list.innerHTML = '<div class="archived-empty">No archived tasks yet.</div>';
+      return;
+    }
+    list.innerHTML = tasks.map(t => `
+      <div class="archived-item">
+        <div class="archived-info">
+          <div class="archived-text">${escapeHtml(t.text)}</div>
+          <div class="archived-meta">Was ${(t.stage||'').replace('_',' ')} · archived ${t.archived_at ? new Date(t.archived_at).toLocaleDateString('en',{month:'short',day:'numeric'}) : ''}</div>
+        </div>
+        <button class="restore-btn" onclick="restoreTask(${t.id}, this)">Restore</button>
+      </div>
+    `).join('');
+  }
+
+  async function restoreTask(id, btn) {
+    btn.textContent = '…';
+    btn.disabled = true;
+    await apiPut(`/api/tasks/${id}`, { archived: false, ...boardBody() });
+    btn.closest('.archived-item').remove();
+    loadArchivedCount();
+    const list = document.getElementById('archived-list');
+    if (!list.querySelector('.archived-item')) {
+      list.innerHTML = '<div class="archived-empty">No archived tasks yet.</div>';
+    }
+  }
+
+  function exitArchivedView() {
+    if (!viewingArchived) return;
+    viewingArchived = false;
+    document.getElementById('nav-archived').classList.remove('active');
+    document.querySelector('.board-scroll').style.display = '';
+    document.querySelector('.content-top').style.display = '';
+    document.getElementById('archived-view').classList.remove('active');
+  }
+
+  /* ── Pull to refresh ── */
+  (function() {
+    const indicator = document.getElementById('ptr-indicator');
+    let startY = 0, pulling = false, triggered = false;
+    const THRESHOLD = 70;
+
+    document.addEventListener('touchstart', e => {
+      if (window.scrollY === 0 && !document.querySelector('.task-card.dragging')) {
+        startY = e.touches[0].clientY;
+        pulling = true;
+        triggered = false;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', e => {
+      if (!pulling) return;
+      const dy = e.touches[0].clientY - startY;
+      if (dy > 10) {
+        indicator.classList.add('visible');
+        const rotate = Math.min(dy / THRESHOLD, 1) * 180;
+        indicator.querySelector('svg').style.transform = `rotate(${rotate}deg)`;
+        if (dy >= THRESHOLD && !triggered) triggered = true;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', async () => {
+      if (!pulling) return;
+      pulling = false;
+      if (triggered) {
+        indicator.classList.add('spinning');
+        await loadAll();
+        setTimeout(() => { indicator.classList.remove('visible', 'spinning'); }, 400);
+      } else {
+        indicator.classList.remove('visible');
+      }
+    });
+  })();
+
+  async function loadAll() {
+    document.querySelectorAll('.task-card').forEach(c => c.remove());
+    STAGES.forEach(s => {
+      const empty = getList(s).querySelector('.col-empty');
+      if (empty) empty.style.display = 'block';
+    });
+    [myBoards, memberships, boardMembers] = await Promise.all([
+      fetch('/api/boards').then(r => r.json()),
+      fetch('/api/boards/memberships').then(r => r.json()),
+      fetch('/api/boards/members' + boardParam()).then(r => r.json()),
+    ]);
+    renderBoardMenu();
+    renderSidebarBoards();
+    categories = await (await fetch('/api/categories' + boardParam())).json();
+    renderFilterBar();
+    const tasks = await (await fetch('/api/tasks' + boardParam())).json();
+    tasks.forEach(t => createTaskCard(t));
+    updateCounts();
+    loadArchivedCount();
+  }
+
+  /* ── Email digest ── */
+  async function saveDigestFrequency(value) {
+    await apiFetch('PUT', '/api/user/digest', { frequency: value });
   }
 
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });

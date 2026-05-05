@@ -13,6 +13,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { pool, init } = require('./database');
 const { initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup } = require('./backup');
+const cron = require('node-cron');
 const path = require('path');
 
 const isProd = process.env.NODE_ENV === 'production';
@@ -214,7 +215,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
-    const { rows } = await pool.query('SELECT id, name, email, username FROM users WHERE id = $1', [id]);
+    const { rows } = await pool.query('SELECT id, name, email, username, digest_frequency FROM users WHERE id = $1', [id]);
     const user = rows[0];
     if (user && !user.username) {
       const username = await generateUsername();
@@ -332,8 +333,15 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
 /* ── User ── */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated()) return res.json(null);
-  res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username });
+  res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username, digest_frequency: req.user.digest_frequency || 'none' });
 });
+
+app.put('/api/user/digest', requireAuth, wrap(async (req, res) => {
+  const { frequency } = req.body;
+  if (!['none', 'daily', 'weekly', 'fortnightly'].includes(frequency)) return res.status(400).json({ error: 'Invalid frequency' });
+  await pool.query('UPDATE users SET digest_frequency = $1 WHERE id = $2', [frequency, req.user.id]);
+  res.json({ ok: true });
+}));
 
 app.get('/api/check-username', usernameLimiter, async (req, res) => {
   const { username } = req.query;
@@ -545,11 +553,13 @@ app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
 /* ── Tasks ── */
 app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
   const { boardId } = await getBoardContext(req);
+  const showArchived = req.query.archived === 'true';
   const { rows } = await pool.query(
     `SELECT t.*, u.name as assigned_to_name, u.email as assigned_to_email, u.username as assigned_to_username
      FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to_user_id
-     WHERE t.board_id = $1 ORDER BY t.position ASC, t.created_at ASC`,
-    [boardId]
+     WHERE t.board_id = $1 AND (t.archived = $2)
+     ORDER BY t.position ASC, t.created_at ASC`,
+    [boardId, showArchived]
   );
   rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
   res.json(rows);
@@ -605,7 +615,7 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
 
   const { text, status = '', owners = [], cal_start = '', cal_end = '', stage,
     category_id = null, due_date = '', priority = 'none', recurrence = '',
-    subtasks = [], assigned_to_user_id = null } = req.body;
+    subtasks = [], assigned_to_user_id = null, archived } = req.body;
 
   if (assigned_to_user_id && assigned_to_user_id !== task.assigned_to_user_id && assigned_to_user_id !== req.user.id) {
     await pool.query(
@@ -615,12 +625,17 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
     );
   }
 
+  const archiveVal = archived === true ? true : archived === false ? false : task.archived;
+  const archiveAt = archived === true && !task.archived_at ? new Date() : task.archived_at;
+
   await pool.query(
     `UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
      stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
-     recurrence = $10, subtasks = $11, assigned_to_user_id = $12 WHERE id = $13`,
+     recurrence = $10, subtasks = $11, assigned_to_user_id = $12,
+     archived = $13, archived_at = $14 WHERE id = $15`,
     [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null,
-     category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id, task.id]
+     category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id,
+     archiveVal, archiveAt, task.id]
   );
   res.json({ ok: true });
 }));
@@ -768,12 +783,79 @@ app.use((err, req, res, next) => {
   res.status(status).json({ error: message });
 });
 
+/* ── Email digest ── */
+function buildDigestEmail(user, tasks, date) {
+  const today = date.toISOString().split('T')[0];
+  const overdue = tasks.filter(t => t.due_date && t.due_date < today);
+  const dueToday = tasks.filter(t => t.due_date === today);
+  const other = tasks.filter(t => !t.due_date || (t.due_date > today));
+  const appUrl = process.env.APP_URL || 'https://todo-app-production-a338.up.railway.app';
+
+  const row = t => `<tr>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#0F172A;font-size:0.88rem;">${t.text.slice(0, 80)}</td>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;white-space:nowrap;padding-left:12px;">${t.due_date || '—'}</td>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;padding-left:12px;">${t.stage.replace('_', ' ')}</td>
+  </tr>`;
+
+  const section = (title, color, items) => !items.length ? '' : `
+    <p style="color:${color};font-size:0.78rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;margin:20px 0 6px 0;">${title} (${items.length})</p>
+    <table style="width:100%;border-collapse:collapse;">${items.slice(0, 25).map(row).join('')}</table>`;
+
+  return `<div style="font-family:Inter,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:32px 24px;background:#F8FAFC;border-radius:12px;border:1px solid #E2E8F0;">
+    <h2 style="color:#0F172A;margin:0 0 4px;font-size:1.2rem;">Your task summary</h2>
+    <p style="color:#64748B;margin:0 0 20px;font-size:0.88rem;">${date.toLocaleDateString('en', { weekday:'long', year:'numeric', month:'long', day:'numeric' })}</p>
+    ${section('⚠️ Overdue', '#EF4444', overdue)}
+    ${section('📅 Due today', '#F59E0B', dueToday)}
+    ${section('📋 Open tasks', '#3B82F6', other)}
+    <p style="color:#94A3B8;font-size:0.75rem;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:16px;">
+      You're receiving this as your ${user.digest_frequency} digest.
+      <a href="${appUrl}" style="color:#3B82F6;">View your board →</a>
+    </p>
+  </div>`;
+}
+
+async function runDigests() {
+  try {
+    const now = new Date();
+    const { rows: users } = await pool.query(
+      `SELECT id, email, name, username, digest_frequency, digest_last_sent
+       FROM users WHERE digest_frequency != 'none' AND email IS NOT NULL`
+    );
+    for (const user of users) {
+      const hoursSince = user.digest_last_sent
+        ? (now - new Date(user.digest_last_sent)) / 3600000 : Infinity;
+      const due = (user.digest_frequency === 'daily' && hoursSince >= 23) ||
+                  (user.digest_frequency === 'weekly' && hoursSince >= 167) ||
+                  (user.digest_frequency === 'fortnightly' && hoursSince >= 335);
+      if (!due) continue;
+      const { rows: boards } = await pool.query(
+        'SELECT id FROM boards WHERE owner_user_id = $1 ORDER BY id ASC LIMIT 1', [user.id]
+      );
+      if (!boards[0]) continue;
+      const { rows: tasks } = await pool.query(
+        `SELECT text, stage, due_date, priority FROM tasks
+         WHERE board_id = $1 AND (archived IS NULL OR archived = false) AND stage != 'done'
+         ORDER BY due_date ASC NULLS LAST LIMIT 50`,
+        [boards[0].id]
+      );
+      if (!tasks.length) continue;
+      const sent = await sendEmail({
+        to: user.email,
+        subject: `Your task summary — ${now.toLocaleDateString('en', { weekday:'long', month:'short', day:'numeric' })}`,
+        html: buildDigestEmail(user, tasks, now),
+      });
+      if (sent) await pool.query('UPDATE users SET digest_last_sent = $1 WHERE id = $2', [now, user.id]);
+    }
+  } catch (e) { console.error('Digest error:', e.message); }
+}
+
 const PORT = process.env.PORT || 3000;
 init()
   .then(async () => {
     await initBackup();
-    await runBackup(pool);       // snapshot on every startup
-    scheduleDailyBackup(pool);   // then daily at 2am
+    await runBackup(pool);
+    scheduleDailyBackup(pool);
+    cron.schedule('0 * * * *', runDigests); // digest check every hour
     app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
   })
   .catch(err => { console.error('DB init failed:', err); process.exit(1); });
