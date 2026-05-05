@@ -818,6 +818,7 @@
       <span class="user-name" id="user-name"></span>
     </div>
     <a class="logout-link" href="/api/export" style="margin-right:8px;" title="Download a backup of all your tasks">Export</a>
+    <button class="logout-link" onclick="openHelpModal()" style="background:none;border:none;cursor:pointer;margin-right:8px;" title="Help & features">Help</button>
     <a class="logout-link" href="/auth/logout">Sign out</a>
   </div>
 </header>
@@ -960,6 +961,61 @@
 
 <!-- Hidden filter-bar for backward compat -->
 <div id="filter-bar" style="display:none"></div>
+
+<!-- Help / About modal -->
+<div class="modal-overlay" id="help-modal" style="display:none" onclick="closeHelpModal()">
+  <div class="modal" onclick="event.stopPropagation()" style="max-width:600px;max-height:85vh;display:flex;flex-direction:column;">
+    <div class="modal-header">
+      <h2>How to use Tasks</h2>
+      <button class="modal-close" onclick="closeHelpModal()">×</button>
+    </div>
+    <div class="modal-body" style="overflow-y:auto;line-height:1.7;">
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Getting started</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">Type a task in the box at the top and press <strong>Add Task</strong> or <strong>Enter</strong>. You can include a natural-language date and it will be parsed automatically — try <em>"dentist Thursday 2pm"</em> or <em>"pay rent next Monday"</em>.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Kanban board</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">Tasks live in three columns: <strong>Backlog</strong>, <strong>In Progress</strong>, and <strong>Done</strong>. Use the arrow buttons on each card to move between stages, or drag and drop. On mobile, press and hold a card for 0.3s to start dragging.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Task details</h3>
+      <p style="margin:0 0 4px;font-size:0.84rem;color:var(--text-muted);">Click any task to open its detail panel. From there you can:</p>
+      <ul style="margin:0 0 14px;padding-left:18px;font-size:0.84rem;color:var(--text-muted);">
+        <li><strong>Due date</strong> — set a deadline; overdue tasks show in red, today in amber</li>
+        <li><strong>Priority</strong> — None / Low / Medium / High, shown as a coloured dot on the card</li>
+        <li><strong>Repeat</strong> — recurring tasks auto-create the next occurrence when marked Done</li>
+        <li><strong>Category</strong> — assign a colour-coded category, or create a new one inline</li>
+        <li><strong>Subtasks</strong> — break a task into smaller steps with a progress counter</li>
+        <li><strong>Assign to</strong> — assign a board member; they get a notification</li>
+        <li><strong>Notes</strong> — free-text notes or a status update</li>
+        <li><strong>Share to board</strong> — send a copy of this task to another user's board</li>
+        <li><strong>Google Calendar</strong> — add a start/end time and open in Google Calendar</li>
+        <li><strong>Archive</strong> — move completed tasks out of view (they can be restored)</li>
+      </ul>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Boards</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">You can create multiple boards for different areas of your life (e.g. Work, Household, Side Project). Each board has its own tasks and categories. Switch boards using the board switcher in the header. Invite others to a board via <strong>Manage Members</strong> in the sidebar — they'll see and collaborate on the same tasks.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Categories &amp; filters</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">Add colour-coded categories in the sidebar. Click a category to filter the board to only those tasks. Click again to clear the filter. Use <strong>Today</strong> to see only tasks due today.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Archive</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">Click <strong>Archive</strong> inside a task panel to remove it from the board without deleting it. Archived tasks are preserved for future reference. Click <strong>Archived</strong> in the sidebar to browse them and restore any task back to your board.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Email digest</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">Set a <strong>Daily</strong>, <strong>Weekly</strong>, or <strong>Fortnightly</strong> email summary at the bottom of the sidebar. The digest shows your overdue tasks, what's due today, and your open backlog — sent to the email address on your account.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Notifications</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">The bell icon in the header shows in-app notifications — when someone assigns you a task, shares a task with you, or accepts a board invite.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Mobile &amp; offline</h3>
+      <p style="margin:0 0 14px;font-size:0.84rem;color:var(--text-muted);">On iPhone, go to <strong>Share → Add to Home Screen</strong> in Safari to install the app as a home screen icon. Pull down on the board to refresh. The app requires a connection — your data is always saved to the cloud.</p>
+
+      <h3 style="margin:0 0 6px;font-size:0.92rem;color:var(--primary);">Import &amp; export</h3>
+      <p style="margin:0 0 4px;font-size:0.84rem;color:var(--text-muted);">Use the <strong>Import</strong> button to paste a JSON task list (e.g. from Claude). Use the <strong>Export</strong> link in the header to download a full backup of your tasks at any time.</p>
+
+    </div>
+  </div>
+</div>
 
 <!-- Create board modal -->
 <div class="modal-overlay" id="create-board-modal" style="display:none" onclick="closeCreateBoardModal()">
@@ -2527,6 +2583,10 @@
     updateCounts();
     loadArchivedCount();
   }
+
+  /* ── Help modal ── */
+  function openHelpModal() { document.getElementById('help-modal').style.display = 'flex'; }
+  function closeHelpModal() { document.getElementById('help-modal').style.display = 'none'; }
 
   /* ── Email digest ── */
   async function saveDigestFrequency(value) {
