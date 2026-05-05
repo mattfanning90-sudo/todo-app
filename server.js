@@ -577,9 +577,14 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
   if (!explicitDue) {
     const parsed = chrono.parse(rawText);
     if (parsed.length > 0) {
-      due_date = parsed[0].date().toISOString().split('T')[0];
-      const stripped = rawText.replace(parsed[0].text, '').trim().replace(/\s+/g, ' ');
-      if (stripped.length > 0) text = stripped;
+      const parsedDate = parsed[0].date();
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      // Never set a past due date from NL parsing unless the text explicitly says so
+      if (parsedDate >= today) {
+        due_date = parsedDate.toISOString().split('T')[0];
+        const stripped = rawText.replace(parsed[0].text, '').trim().replace(/\s+/g, ' ');
+        if (stripped.length > 0) text = stripped;
+      }
     }
   }
 
@@ -628,14 +633,19 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   const archiveVal = archived === true ? true : archived === false ? false : task.archived;
   const archiveAt = archived === true && !task.archived_at ? new Date() : task.archived_at;
 
+  const newStage = stage || task.stage;
+  const completedAt = newStage === 'done' && task.stage !== 'done' ? new Date()
+    : newStage !== 'done' && task.stage === 'done' ? null
+    : task.completed_at;
+
   await pool.query(
     `UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
      stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
      recurrence = $10, subtasks = $11, assigned_to_user_id = $12,
-     archived = $13, archived_at = $14 WHERE id = $15`,
+     archived = $13, archived_at = $14, completed_at = $15 WHERE id = $16`,
     [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null,
      category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id,
-     archiveVal, archiveAt, task.id]
+     archiveVal, archiveAt, completedAt, task.id]
   );
   res.json({ ok: true });
 }));
@@ -761,6 +771,68 @@ app.post('/api/import', requireAuth, wrap(async (req, res) => {
     await pool.query('COMMIT');
   } catch (e) { await pool.query('ROLLBACK'); throw e; }
   res.json({ ok: true });
+}));
+
+/* ── Dashboard ── */
+app.get('/api/dashboard', requireAuth, wrap(async (req, res) => {
+  const { rows: boardRows } = await pool.query(
+    `SELECT id FROM boards WHERE owner_user_id = $1
+     UNION SELECT board_id FROM board_members WHERE member_user_id = $1`,
+    [req.user.id]
+  );
+  const boardIds = boardRows.map(r => r.id);
+  if (!boardIds.length) return res.json({ stats: {}, trend: [], priorities: [], categories: [] });
+
+  const [statsRes, trendRes, priorityRes, categoryRes] = await Promise.all([
+    pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE stage != 'done' AND (archived IS NULL OR archived = false)) AS open,
+        COUNT(*) FILTER (WHERE stage = 'in_progress' AND (archived IS NULL OR archived = false)) AS in_progress,
+        COUNT(*) FILTER (WHERE stage = 'done' AND (archived IS NULL OR archived = false)) AS done_total,
+        COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND stage != 'done' AND (archived IS NULL OR archived = false)) AS overdue,
+        COUNT(*) FILTER (WHERE completed_at >= NOW() - INTERVAL '7 days') AS completed_week,
+        COUNT(*) FILTER (WHERE archived = true) AS archived_count
+      FROM tasks WHERE board_id = ANY($1)
+    `, [boardIds]),
+    pool.query(`
+      SELECT DATE(completed_at) AS day, COUNT(*) AS count
+      FROM tasks WHERE board_id = ANY($1) AND completed_at >= NOW() - INTERVAL '7 days'
+      GROUP BY DATE(completed_at) ORDER BY day
+    `, [boardIds]),
+    pool.query(`
+      SELECT priority, COUNT(*) AS count FROM tasks
+      WHERE board_id = ANY($1) AND (archived IS NULL OR archived = false) AND stage != 'done'
+      GROUP BY priority ORDER BY count DESC
+    `, [boardIds]),
+    pool.query(`
+      SELECT c.name, c.color, COUNT(t.id) AS count FROM tasks t
+      JOIN categories c ON c.id = t.category_id
+      WHERE t.board_id = ANY($1) AND (t.archived IS NULL OR t.archived = false) AND t.stage != 'done'
+      GROUP BY c.id, c.name, c.color ORDER BY count DESC LIMIT 6
+    `, [boardIds]),
+  ]);
+  res.json({ stats: statsRes.rows[0], trend: trendRes.rows, priorities: priorityRes.rows, categories: categoryRes.rows });
+}));
+
+/* ── Global search ── */
+app.get('/api/search', requireAuth, searchLimiter, wrap(async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 2) return res.json([]);
+  const { rows } = await pool.query(`
+    SELECT t.id, t.text, t.stage, t.due_date, t.priority, t.board_id,
+           b.name AS board_name, b.owner_user_id AS board_owner_id,
+           c.name AS cat_name, c.color AS cat_color
+    FROM tasks t
+    JOIN boards b ON b.id = t.board_id
+    LEFT JOIN categories c ON c.id = t.category_id
+    WHERE (b.owner_user_id = $1 OR EXISTS (
+      SELECT 1 FROM board_members bm WHERE bm.board_id = b.id AND bm.member_user_id = $1
+    ))
+    AND (t.archived IS NULL OR t.archived = false)
+    AND (LOWER(t.text) LIKE LOWER($2) OR LOWER(COALESCE(t.status,'')) LIKE LOWER($2))
+    ORDER BY t.created_at DESC LIMIT 20
+  `, [req.user.id, `%${q}%`]);
+  res.json(rows);
 }));
 
 /* ── User search (for assign/share) ── */
