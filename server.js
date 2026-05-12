@@ -561,8 +561,17 @@ app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
      ORDER BY t.position ASC, t.created_at ASC`,
     [boardId, showArchived]
   );
-  rows.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
   res.json(rows);
+}));
+
+app.get('/api/tasks/count', requireAuth, wrap(async (req, res) => {
+  const { boardId } = await getBoardContext(req);
+  const showArchived = req.query.archived === 'true';
+  const { rows } = await pool.query(
+    'SELECT COUNT(*)::int AS count FROM tasks WHERE board_id = $1 AND archived = $2',
+    [boardId, showArchived]
+  );
+  res.json({ count: rows[0].count });
 }));
 
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
@@ -599,8 +608,6 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
      stage, category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id]
   );
   const task = rows[0];
-  task.owners = JSON.parse(task.owners || '[]');
-  task.subtasks = JSON.parse(task.subtasks || '[]');
 
   if (assigned_to_user_id && assigned_to_user_id !== req.user.id) {
     await pool.query(
@@ -687,7 +694,7 @@ app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
   await pool.query(
     `INSERT INTO tasks (user_id, board_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'backlog',$9,$10,$11,$12)`,
-    [recipient_user_id, recipientBoard.id, t.text, t.status, t.owners, t.cal_start, t.cal_end, position, t.due_date, t.priority, t.recurrence, t.subtasks]
+    [recipient_user_id, recipientBoard.id, t.text, t.status, JSON.stringify(t.owners ?? []), t.cal_start, t.cal_end, position, t.due_date, t.priority, t.recurrence, JSON.stringify(t.subtasks ?? [])]
   );
   const sharer = req.user.name || req.user.username || req.user.email;
   await pool.query(
@@ -731,7 +738,6 @@ app.get('/api/export', requireAuth, wrap(async (req, res) => {
   const { rows: categories } = await pool.query(
     `SELECT c.* FROM categories c JOIN boards b ON b.id = c.board_id WHERE b.owner_user_id = $1`, [req.user.id]
   );
-  tasks.forEach(t => { t.owners = JSON.parse(t.owners || '[]'); t.subtasks = JSON.parse(t.subtasks || '[]'); });
   const filename = `tasks-backup-${new Date().toISOString().split('T')[0]}.json`;
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
   res.json({ exportedAt: new Date().toISOString(), boards, tasks, categories });
