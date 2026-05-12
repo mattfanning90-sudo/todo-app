@@ -2549,8 +2549,9 @@
 
   async function loadArchivedCount() {
     try {
-      const tasks = await (await fetch('/api/tasks' + boardParam() + (boardParam() ? '&' : '?') + 'archived=true')).json();
-      document.getElementById('nav-count-archived').textContent = tasks.length;
+      const sep = boardParam() ? '&' : '?';
+      const { count } = await fetch('/api/tasks/count' + boardParam() + sep + 'archived=true').then(r => r.json());
+      document.getElementById('nav-count-archived').textContent = count;
     } catch(e) {}
   }
 
