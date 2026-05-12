@@ -73,6 +73,7 @@ app.get('/healthz', async (req, res) => {
     await pool.query('SELECT 1');
     res.json({ ok: true });
   } catch (e) {
+    if (process.env.NODE_ENV !== 'production') console.error('/healthz failed:', e.message);
     res.status(503).json({ ok: false, error: 'db_unreachable' });
   }
 });
@@ -220,7 +221,8 @@ async function seedCategories(userId, boardId) {
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 /* ── Auth strategies ── */
-passport.use(new GoogleStrategy({
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
   clientID: process.env.GOOGLE_CLIENT_ID,
   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
   callbackURL: process.env.CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
@@ -247,6 +249,7 @@ passport.use(new GoogleStrategy({
     return done(null, user);
   } catch (e) { return done(e); }
 }));
+}
 
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
   try {
@@ -1009,36 +1012,40 @@ async function cleanupOldNotifications() {
   } catch (e) { console.error('Notification cleanup error:', e.message); }
 }
 
-const PORT = process.env.PORT || 3000;
-init()
-  .then(async () => {
-    await initBackup();
-    // Boot-time backup is best-effort and racey across instances; the daily
-    // schedule below is the authoritative one (advisory-locked).
-    await withLeaderLock(pool, 73810420, () => runBackup(pool)).catch(() => {});
-    scheduleDailyBackup(pool);
+module.exports = { app, runDigests, cleanupOldNotifications, escapeHtml, isStrongPassword };
 
-    // Hourly digest + daily notification cleanup, both guarded by advisory locks
-    // so they run on exactly one instance even in a horizontally scaled deploy.
-    cron.schedule('0 * * * *', () =>
-      withLeaderLock(pool, LOCK_KEY_DIGEST, runDigests).catch(e => console.error('Digest lock error:', e.message))
-    );
-    cron.schedule('0 3 * * *', () =>
-      withLeaderLock(pool, 73810423, cleanupOldNotifications).catch(e => console.error('Cleanup lock error:', e.message))
-    );
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  init()
+    .then(async () => {
+      await initBackup();
+      // Boot-time backup is best-effort and racey across instances; the daily
+      // schedule below is the authoritative one (advisory-locked).
+      await withLeaderLock(pool, 73810420, () => runBackup(pool)).catch(() => {});
+      scheduleDailyBackup(pool);
 
-    const server = app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
+      // Hourly digest + daily notification cleanup, both guarded by advisory locks
+      // so they run on exactly one instance even in a horizontally scaled deploy.
+      cron.schedule('0 * * * *', () =>
+        withLeaderLock(pool, LOCK_KEY_DIGEST, runDigests).catch(e => console.error('Digest lock error:', e.message))
+      );
+      cron.schedule('0 3 * * *', () =>
+        withLeaderLock(pool, 73810423, cleanupOldNotifications).catch(e => console.error('Cleanup lock error:', e.message))
+      );
 
-    const shutdown = signal => {
-      console.log(`${signal} received — shutting down…`);
-      server.close(async () => {
-        try { await pool.end(); } catch {}
-        try { await closeBackupPool(); } catch {}
-        process.exit(0);
-      });
-      setTimeout(() => process.exit(1), 10_000).unref();
-    };
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-  })
-  .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+      const server = app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
+
+      const shutdown = signal => {
+        console.log(`${signal} received — shutting down…`);
+        server.close(async () => {
+          try { await pool.end(); } catch {}
+          try { await closeBackupPool(); } catch {}
+          process.exit(0);
+        });
+        setTimeout(() => process.exit(1), 10_000).unref();
+      };
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      process.on('SIGINT', () => shutdown('SIGINT'));
+    })
+    .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+}
