@@ -1159,6 +1159,23 @@
   function boardParam() { return currentBoard ? `?board=${currentBoard.id}` : ''; }
   function boardBody()  { return currentBoard ? { boardId: currentBoard.id } : {}; }
 
+  /* ── Boot cache: paints last-seen tasks instantly while the network refresh runs ── */
+  const BOOT_CACHE_KEY = 'boot_cache_v1';
+  function readBootCache(boardKey) {
+    try {
+      const raw = localStorage.getItem(BOOT_CACHE_KEY);
+      if (!raw) return null;
+      const c = JSON.parse(raw);
+      return c && c.boardKey === boardKey ? c : null;
+    } catch { return null; }
+  }
+  function writeBootCache(payload) {
+    try { localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ ...payload, ts: Date.now() })); } catch {}
+  }
+  function clearTaskColumns() {
+    STAGES.forEach(s => { getList(s).innerHTML = '<li class="col-empty">No tasks yet</li>'; });
+  }
+
   /* ── Theme ── */
   function initTheme() {
     const saved = localStorage.getItem('theme') || 'light';
@@ -1211,6 +1228,9 @@
       ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
     });
     if (!res.ok && method === 'POST') throw new Error(`Request failed: ${res.status}`);
+    if (method !== 'GET' && (url.startsWith('/api/tasks') || url.startsWith('/api/categories'))) {
+      try { localStorage.removeItem(BOOT_CACHE_KEY); } catch {}
+    }
     return (method === 'POST') ? res.json() : null;
   }
 
@@ -1445,31 +1465,72 @@
   /* ── Init ── */
   async function init() {
     initTheme();
+
+    // Paint last-seen tasks synchronously so the board appears instantly,
+    // then refresh from the network in the background.
+    const boardKey = '';
+    const cached = readBootCache(boardKey);
+    let cachedRendered = false;
+    if (cached && Array.isArray(cached.tasks) && Array.isArray(cached.categories)) {
+      categories = cached.categories;
+      renderFilterBar();
+      cached.tasks.forEach(t => createTaskCard(t));
+      updateCounts();
+      cachedRendered = true;
+    }
+
     try {
-      const user = await (await fetch('/api/user')).json();
-      if (!user) { location.href = '/login'; return; }
+      // Fire every bootstrap request in parallel — previously this was a
+      // four-step waterfall (user → boards → categories → tasks).
+      const [user, boards, memberships_, members, cats, tasks, notifs] = await Promise.all([
+        fetch('/api/user').then(r => r.json()),
+        fetch('/api/boards').then(r => r.json()).catch(() => []),
+        fetch('/api/boards/memberships').then(r => r.json()).catch(() => []),
+        fetch('/api/boards/members').then(r => r.json()).catch(() => []),
+        fetch('/api/categories').then(r => r.json()).catch(() => []),
+        fetch('/api/tasks').then(r => r.json()).catch(() => []),
+        fetch('/api/notifications').then(r => r.json()).catch(() => []),
+      ]);
+
+      if (!user) {
+        localStorage.removeItem(BOOT_CACHE_KEY);
+        location.href = '/login';
+        return;
+      }
+
+      // If the cache belonged to a different account, wipe the optimistic render.
+      if (cachedRendered && cached.userId !== user.id) {
+        clearTaskColumns();
+        cachedRendered = false;
+      }
+
       myId = user.id;
       myName = user.name || user.email;
       const displayName = user.username ? `@${user.username}` : myName;
       document.getElementById('user-name').textContent = displayName;
       document.getElementById('user-avatar').textContent = (user.username || myName)[0].toUpperCase();
 
-      [myBoards, memberships, boardMembers] = await Promise.all([
-        fetch('/api/boards').then(r => r.json()),
-        fetch('/api/boards/memberships').then(r => r.json()),
-        fetch('/api/boards/members').then(r => r.json()),
-      ]);
+      myBoards = boards;
+      memberships = memberships_;
+      boardMembers = members;
       renderBoardMenu();
       renderSidebarBoards();
-      await loadNotifications();
+      loadNotifications(notifs);
 
-      categories = await (await fetch('/api/categories' + boardParam())).json();
+      categories = cats;
       renderColorPalette();
       renderFilterBar();
 
-      const tasks = await (await fetch('/api/tasks' + boardParam())).json();
-      tasks.forEach(t => createTaskCard(t));
-      updateCounts();
+      // Only repaint the board if the server data differs from what we already painted.
+      const newJson = JSON.stringify(tasks);
+      const cachedJson = cachedRendered ? JSON.stringify(cached.tasks) : null;
+      if (newJson !== cachedJson) {
+        clearTaskColumns();
+        tasks.forEach(t => createTaskCard(t));
+        updateCounts();
+      }
+      writeBootCache({ userId: user.id, boardKey, categories: cats, tasks });
+
       setupColumnDrop();
       loadArchivedCount();
 
@@ -1650,8 +1711,8 @@
   }
 
   /* ── Notifications ── */
-  async function loadNotifications() {
-    const notifs = await fetch('/api/notifications').then(r => r.json());
+  async function loadNotifications(preloaded) {
+    const notifs = preloaded || await fetch('/api/notifications').then(r => r.json());
     const unread = notifs.filter(n => !n.read).length;
     const badge = document.getElementById('notif-badge');
     badge.textContent = unread;
