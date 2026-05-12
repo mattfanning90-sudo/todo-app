@@ -12,25 +12,54 @@ const pgSession = require('connect-pg-simple')(session);
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { pool, init } = require('./database');
-const { initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup } = require('./backup');
+const {
+  initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup,
+  withLeaderLock, LOCK_KEY_DIGEST, closeBackupPool,
+} = require('./backup');
 const cron = require('node-cron');
 const path = require('path');
 
 const isProd = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test';
+
+if (isProd) {
+  const required = ['SESSION_SECRET', 'APP_URL', 'DATABASE_URL'];
+  const missing = required.filter(k => !process.env[k]);
+  if (missing.length) {
+    console.error(`FATAL: missing required env vars in production: ${missing.join(', ')}`);
+    process.exit(1);
+  }
+  if (process.env.SESSION_SECRET.length < 32) {
+    console.error('FATAL: SESSION_SECRET must be at least 32 characters in production.');
+    process.exit(1);
+  }
+}
+
+const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
 
 const app = express();
 app.set('trust proxy', 1);
+
+app.use((req, res, next) => {
+  req.id = crypto.randomBytes(8).toString('hex');
+  res.setHeader('X-Request-Id', req.id);
+  next();
+});
 
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrcAttr: ["'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      scriptSrcAttr: ["'none'"],
+      // Inline styles are a much smaller XSS surface than inline scripts and
+      // login.html / local.html still ship inline <style> blocks.
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
     },
   },
 }));
@@ -38,6 +67,16 @@ app.use(helmet({
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(express.static('public'));
+
+app.get('/healthz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ ok: true });
+  } catch (e) {
+    if (!isProd) console.error('/healthz failed:', e.message);
+    res.status(503).json({ ok: false, error: 'db_unreachable' });
+  }
+});
 
 app.use(session({
   store: new pgSession({ pool, createTableIfMissing: true, ttl: 30 * 24 * 60 * 60 }),
@@ -52,13 +91,23 @@ app.use(session({
 }));
 
 /* ── Rate limiters ── */
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
-const searchLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
-const usernameLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
+const passthroughLimiter = (req, res, next) => next();
+const authLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const searchLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+const usernameLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
 
 app.use(passport.initialize());
 app.use(passport.session());
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function isStrongPassword(p) {
+  if (typeof p !== 'string' || p.length < 12 || p.length > 200) return false;
+  return /[a-z]/.test(p) && /[A-Z]/.test(p) && /\d/.test(p);
+}
 
 /* ── Email ── */
 const mailer = (process.env.SMTP_USER && process.env.SMTP_PASS)
@@ -173,33 +222,35 @@ async function seedCategories(userId, boardId) {
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
 /* ── Auth strategies ── */
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: process.env.CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
-}, async (accessToken, refreshToken, profile, done) => {
-  try {
-    const email = profile.emails?.[0]?.value || '';
-    const name = profile.displayName || '';
-    let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
-    let user = rows[0];
-    if (!user) {
-      const username = await generateUsername();
-      const result = await pool.query(
-        'INSERT INTO users (google_id, email, name, username) VALUES ($1, $2, $3, $4) RETURNING *',
-        [profile.id, email, name, username]
-      );
-      user = result.rows[0];
-    } else if (!user.username) {
-      const username = await generateUsername();
-      await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
-      user.username = username;
-    }
-    const board = await ensureDefaultBoard(user.id);
-    await seedCategories(user.id, board.id);
-    return done(null, user);
-  } catch (e) { return done(e); }
-}));
+if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+  passport.use(new GoogleStrategy({
+    clientID: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL: process.env.CALLBACK_URL || 'http://localhost:3000/auth/google/callback'
+  }, async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value || '';
+      const name = profile.displayName || '';
+      let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
+      let user = rows[0];
+      if (!user) {
+        const username = await generateUsername();
+        const result = await pool.query(
+          'INSERT INTO users (google_id, email, name, username) VALUES ($1, $2, $3, $4) RETURNING *',
+          [profile.id, email, name, username]
+        );
+        user = result.rows[0];
+      } else if (!user.username) {
+        const username = await generateUsername();
+        await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
+        user.username = username;
+      }
+      const board = await ensureDefaultBoard(user.id);
+      await seedCategories(user.id, board.id);
+      return done(null, user);
+    } catch (e) { return done(e); }
+  }));
+}
 
 passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, password, done) => {
   try {
@@ -260,7 +311,7 @@ app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.redirect('/login?error=missing&mode=signup');
   if (typeof email !== 'string' || email.length > 254) return res.redirect('/login?error=missing&mode=signup');
-  if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
+  if (!isStrongPassword(password)) return res.redirect('/login?error=weak&mode=signup');
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
   if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
 
@@ -554,11 +605,15 @@ app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
 app.get('/api/tasks', requireAuth, wrap(async (req, res) => {
   const { boardId } = await getBoardContext(req);
   const showArchived = req.query.archived === 'true';
+  const limit = showArchived ? Math.min(Number(req.query.limit) || 200, 500) : null;
+  const offset = showArchived ? Math.max(Number(req.query.offset) || 0, 0) : 0;
+  const limitClause = limit !== null ? `LIMIT ${limit} OFFSET ${offset}` : '';
   const { rows } = await pool.query(
     `SELECT t.*, u.name as assigned_to_name, u.email as assigned_to_email, u.username as assigned_to_username
      FROM tasks t LEFT JOIN users u ON u.id = t.assigned_to_user_id
      WHERE t.board_id = $1 AND (t.archived = $2)
-     ORDER BY t.position ASC, t.created_at ASC`,
+     ORDER BY t.position ASC, t.created_at ASC
+     ${limitClause}`,
     [boardId, showArchived]
   );
   res.json(rows);
@@ -855,10 +910,10 @@ app.get('/api/users/search', requireAuth, searchLimiter, wrap(async (req, res) =
 }));
 
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error(`[${req.id}] ${req.method} ${req.path}`, err);
   const status = err.status || 500;
   const message = status < 500 ? (err.message || 'Bad request') : 'Internal server error';
-  res.status(status).json({ error: message });
+  res.status(status).json({ error: message, requestId: req.id });
 });
 
 /* ── Email digest ── */
@@ -867,12 +922,11 @@ function buildDigestEmail(user, tasks, date) {
   const overdue = tasks.filter(t => t.due_date && t.due_date < today);
   const dueToday = tasks.filter(t => t.due_date === today);
   const other = tasks.filter(t => !t.due_date || (t.due_date > today));
-  const appUrl = process.env.APP_URL || 'https://todo-app-production-a338.up.railway.app';
 
   const row = t => `<tr>
-    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#0F172A;font-size:0.88rem;">${t.text.slice(0, 80)}</td>
-    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;white-space:nowrap;padding-left:12px;">${t.due_date || '—'}</td>
-    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;padding-left:12px;">${t.stage.replace('_', ' ')}</td>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#0F172A;font-size:0.88rem;">${escapeHtml(t.text.slice(0, 80))}</td>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;white-space:nowrap;padding-left:12px;">${escapeHtml(t.due_date || '—')}</td>
+    <td style="padding:8px 0;border-bottom:1px solid #E2E8F0;color:#64748B;font-size:0.8rem;padding-left:12px;">${escapeHtml(String(t.stage || '').replace('_', ' '))}</td>
   </tr>`;
 
   const section = (title, color, items) => !items.length ? '' : `
@@ -886,8 +940,8 @@ function buildDigestEmail(user, tasks, date) {
     ${section('📅 Due today', '#F59E0B', dueToday)}
     ${section('📋 Open tasks', '#3B82F6', other)}
     <p style="color:#94A3B8;font-size:0.75rem;margin-top:24px;border-top:1px solid #E2E8F0;padding-top:16px;">
-      You're receiving this as your ${user.digest_frequency} digest.
-      <a href="${appUrl}" style="color:#3B82F6;">View your board →</a>
+      You're receiving this as your ${escapeHtml(user.digest_frequency)} digest.
+      <a href="${escapeHtml(APP_URL)}" style="color:#3B82F6;">View your board →</a>
     </p>
   </div>`;
 }
@@ -895,27 +949,50 @@ function buildDigestEmail(user, tasks, date) {
 async function runDigests() {
   try {
     const now = new Date();
-    const { rows: users } = await pool.query(
-      `SELECT id, email, name, username, digest_frequency, digest_last_sent
-       FROM users WHERE digest_frequency != 'none' AND email IS NOT NULL`
-    );
-    for (const user of users) {
-      const hoursSince = user.digest_last_sent
-        ? (now - new Date(user.digest_last_sent)) / 3600000 : Infinity;
-      const due = (user.digest_frequency === 'daily' && hoursSince >= 23) ||
-                  (user.digest_frequency === 'weekly' && hoursSince >= 167) ||
-                  (user.digest_frequency === 'fortnightly' && hoursSince >= 335);
-      if (!due) continue;
-      const { rows: boards } = await pool.query(
-        'SELECT id FROM boards WHERE owner_user_id = $1 ORDER BY id ASC LIMIT 1', [user.id]
-      );
-      if (!boards[0]) continue;
-      const { rows: tasks } = await pool.query(
-        `SELECT text, stage, due_date, priority FROM tasks
-         WHERE board_id = $1 AND (archived IS NULL OR archived = false) AND stage != 'done'
-         ORDER BY due_date ASC NULLS LAST LIMIT 50`,
-        [boards[0].id]
-      );
+    // One query joins each digest-enabled user to their oldest board and their
+    // top 50 open tasks, eliminating the previous per-user N+1.
+    const { rows } = await pool.query(`
+      WITH user_boards AS (
+        SELECT DISTINCT ON (u.id)
+          u.id AS user_id, u.email, u.name, u.username,
+          u.digest_frequency, u.digest_last_sent,
+          b.id AS board_id
+        FROM users u
+        JOIN boards b ON b.owner_user_id = u.id
+        WHERE u.digest_frequency != 'none' AND u.email IS NOT NULL
+        ORDER BY u.id, b.id ASC
+      ),
+      eligible AS (
+        SELECT * FROM user_boards
+        WHERE digest_last_sent IS NULL
+           OR (digest_frequency = 'daily' AND digest_last_sent < NOW() - INTERVAL '23 hours')
+           OR (digest_frequency = 'weekly' AND digest_last_sent < NOW() - INTERVAL '167 hours')
+           OR (digest_frequency = 'fortnightly' AND digest_last_sent < NOW() - INTERVAL '335 hours')
+      )
+      SELECT e.user_id, e.email, e.name, e.username, e.digest_frequency, e.board_id,
+             t.text, t.stage, t.due_date, t.priority
+      FROM eligible e
+      LEFT JOIN LATERAL (
+        SELECT text, stage, due_date, priority FROM tasks
+        WHERE board_id = e.board_id
+          AND (archived IS NULL OR archived = false)
+          AND stage != 'done'
+        ORDER BY due_date ASC NULLS LAST
+        LIMIT 50
+      ) t ON true
+    `);
+
+    const byUser = new Map();
+    for (const r of rows) {
+      let entry = byUser.get(r.user_id);
+      if (!entry) {
+        entry = { user: { id: r.user_id, email: r.email, name: r.name, username: r.username, digest_frequency: r.digest_frequency }, tasks: [] };
+        byUser.set(r.user_id, entry);
+      }
+      if (r.text) entry.tasks.push({ text: r.text, stage: r.stage, due_date: r.due_date, priority: r.priority });
+    }
+
+    for (const { user, tasks } of byUser.values()) {
       if (!tasks.length) continue;
       const sent = await sendEmail({
         to: user.email,
@@ -927,13 +1004,49 @@ async function runDigests() {
   } catch (e) { console.error('Digest error:', e.message); }
 }
 
-const PORT = process.env.PORT || 3000;
-init()
-  .then(async () => {
-    await initBackup();
-    await runBackup(pool);
-    scheduleDailyBackup(pool);
-    cron.schedule('0 * * * *', runDigests); // digest check every hour
-    app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
-  })
-  .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+async function cleanupOldNotifications() {
+  try {
+    const { rowCount } = await pool.query(
+      "DELETE FROM notifications WHERE created_at < NOW() - INTERVAL '90 days'"
+    );
+    if (rowCount) console.log(`Cleanup: pruned ${rowCount} old notifications`);
+  } catch (e) { console.error('Notification cleanup error:', e.message); }
+}
+
+module.exports = { app, runDigests, cleanupOldNotifications, escapeHtml, isStrongPassword };
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  init()
+    .then(async () => {
+      await initBackup();
+      // Boot-time backup is best-effort and racey across instances; the daily
+      // schedule below is the authoritative one (advisory-locked).
+      await withLeaderLock(pool, 73810420, () => runBackup(pool)).catch(() => {});
+      scheduleDailyBackup(pool);
+
+      // Hourly digest + daily notification cleanup, both guarded by advisory
+      // locks so they run on exactly one instance in horizontally scaled deploys.
+      cron.schedule('0 * * * *', () =>
+        withLeaderLock(pool, LOCK_KEY_DIGEST, runDigests).catch(e => console.error('Digest lock error:', e.message))
+      );
+      cron.schedule('0 3 * * *', () =>
+        withLeaderLock(pool, 73810423, cleanupOldNotifications).catch(e => console.error('Cleanup lock error:', e.message))
+      );
+
+      const server = app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));
+
+      const shutdown = signal => {
+        console.log(`${signal} received — shutting down…`);
+        server.close(async () => {
+          try { await pool.end(); } catch {}
+          try { await closeBackupPool(); } catch {}
+          process.exit(0);
+        });
+        setTimeout(() => process.exit(1), 10_000).unref();
+      };
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+      process.on('SIGINT', () => shutdown('SIGINT'));
+    })
+    .catch(err => { console.error('DB init failed:', err); process.exit(1); });
+}
