@@ -129,9 +129,9 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
           text = EXCLUDED.text, status = EXCLUDED.status, stage = EXCLUDED.stage,
           due_date = EXCLUDED.due_date, priority = EXCLUDED.priority,
           category_id = EXCLUDED.category_id, subtasks = EXCLUDED.subtasks
-      `, [t.id, t.user_id, t.board_id, t.text, t.status, t.owners,
+      `, [t.id, t.user_id, t.board_id, t.text, t.status, JSON.stringify(t.owners ?? []),
           t.cal_start, t.cal_end, t.position, t.stage, t.category_id,
-          t.due_date, t.priority, t.recurrence, t.subtasks, t.assigned_to_user_id, t.created_at]);
+          t.due_date, t.priority, t.recurrence, JSON.stringify(t.subtasks ?? []), t.assigned_to_user_id, t.created_at]);
     }
 
     // Reset sequences so new inserts don't collide with restored IDs
