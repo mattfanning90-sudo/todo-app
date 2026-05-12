@@ -158,6 +158,8 @@
     .toggle { margin-top: 18px; font-size: 0.82rem; color: var(--text-muted); text-align: center; }
     .toggle a { color: var(--primary); font-weight: 600; text-decoration: none; cursor: pointer; }
     .toggle a:hover { text-decoration: underline; }
+    .try-local-link { font-size: 0.78rem; color: var(--text-light); text-decoration: none; transition: color 0.15s; }
+    .try-local-link:hover { color: var(--primary); }
   </style>
 </head>
 <body>
@@ -202,13 +204,13 @@
     <div class="input-group" id="username-group" style="display:none">
       <label>Username</label>
       <div class="username-tabs">
-        <button type="button" class="username-tab active" id="tab-random" onclick="setUsernameMode('random')">🎲 Random</button>
-        <button type="button" class="username-tab" id="tab-custom" onclick="setUsernameMode('custom')">✏️ Custom</button>
+        <button type="button" class="username-tab active" id="tab-random" data-username-mode="random">🎲 Random</button>
+        <button type="button" class="username-tab" id="tab-custom" data-username-mode="custom">✏️ Custom</button>
       </div>
       <div class="username-row" id="username-row">
         <span class="at-prefix">@</span>
         <input type="text" id="username-input" name="username" placeholder="FluffyNarwhal" autocomplete="off" readonly />
-        <button type="button" class="gen-btn" id="gen-btn" onclick="refreshUsername()" title="Generate new username">
+        <button type="button" class="gen-btn" id="gen-btn" data-action="refreshUsername" title="Generate new username">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
       </div>
@@ -235,189 +237,16 @@
 
   <div class="toggle">
     <span id="toggle-text">Don't have an account?</span>
-    <a id="toggle-link" onclick="toggleMode()">Create one</a>
+    <a id="toggle-link" data-action="toggleMode">Create one</a>
   </div>
 
   <div style="margin-top:14px;text-align:center;">
-    <a href="/local.html" style="font-size:0.78rem;color:var(--text-light);text-decoration:none;transition:color 0.15s;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-light)'">
+    <a href="/local.html" class="try-local-link">
       Try without signing up →
     </a>
   </div>
 </div>
 
-<script>
-  const ADJECTIVES = ['Fluffy','Bouncy','Sleepy','Sparkly','Dizzy','Fuzzy','Wiggly','Wobbly','Zippy','Bubbly','Giggly','Squishy','Crunchy','Goofy','Wacky','Zany','Loopy','Nutty','Snappy','Perky','Peppy','Clumsy','Grumpy','Jumpy','Funky','Chunky','Spunky','Quirky','Ditzy','Kooky','Daffy','Blobby','Noodly','Bonkers','Swirly','Twirly','Pudgy','Floppy','Droopy','Squirmy'];
-  const NOUNS = ['Penguin','Waffle','Noodle','Biscuit','Pickle','Muffin','Panda','Narwhal','Platypus','Hedgehog','Capybara','Quokka','Axolotl','Sloth','Lemur','Meerkat','Puffin','Wombat','Dumpling','Crumpet','Bagel','Pretzel','Donut','Brownie','Pudding','Sprinkle','Marshmallow','Jellybean','Cookie','Cupcake','Taco','Burrito','Blobfish','Salamander','Armadillo','Croissant','Scone','Churro','Macaron','Turnip'];
-
-  function randomUsername() {
-    const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-    const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-    return `${a}${n}`;
-  }
-
-  const errors = {
-    invalid: 'Invalid email or password.',
-    taken: 'An account with that email already exists.',
-    username_taken: 'That username is already taken — try another or generate a random one.',
-    username_invalid: 'Username must be 3–30 characters: letters, numbers and underscores only.',
-    short: 'Password must be at least 8 characters.',
-    missing: 'Email and password are required.',
-    server: 'Something went wrong. Please try again.',
-  };
-
-  const params = new URLSearchParams(location.search);
-  let isSignup = params.get('mode') === 'signup';
-  let usernameMode = 'random';
-  let checkTimer = null;
-  let currentStatus = 'available';
-
-  function setUsernameMode(mode) {
-    usernameMode = mode;
-    const input = document.getElementById('username-input');
-    const genBtn = document.getElementById('gen-btn');
-    const row = document.getElementById('username-row');
-
-    document.getElementById('tab-random').classList.toggle('active', mode === 'random');
-    document.getElementById('tab-custom').classList.toggle('active', mode === 'custom');
-
-    if (mode === 'random') {
-      input.readOnly = true;
-      genBtn.style.display = '';
-      input.style.color = '';
-      refreshUsername();
-    } else {
-      input.readOnly = false;
-      genBtn.style.display = 'none';
-      input.value = '';
-      input.placeholder = 'cooluser42';
-      input.focus();
-      setStatus('hint', '✨ Choose your @handle');
-      row.className = 'username-row';
-      currentStatus = null;
-    }
-  }
-
-  function refreshUsername() {
-    const input = document.getElementById('username-input');
-    const btn = document.getElementById('gen-btn');
-    const candidate = randomUsername();
-    input.value = candidate;
-    btn.querySelector('svg').style.transform = 'rotate(360deg)';
-    setTimeout(() => btn.querySelector('svg').style.transform = '', 300);
-    checkAvailability(candidate, true);
-  }
-
-  function setStatus(type, msg) {
-    const el = document.getElementById('username-status');
-    el.className = 'username-status ' + type;
-    el.textContent = msg;
-    const row = document.getElementById('username-row');
-    row.classList.remove('valid', 'invalid');
-    if (type === 'available') { row.classList.add('valid'); currentStatus = 'available'; }
-    else if (type === 'taken') { row.classList.add('invalid'); currentStatus = 'taken'; }
-    else { currentStatus = null; }
-    updateSubmitState();
-  }
-
-  function updateSubmitState() {
-    const btn = document.getElementById('submit-btn');
-    if (isSignup) {
-      btn.disabled = currentStatus !== 'available';
-    } else {
-      btn.disabled = false;
-    }
-  }
-
-  async function checkAvailability(username, silent = false) {
-    if (!username) { setStatus('hint', '✨ Your unique @handle'); return; }
-    if (!/^[a-zA-Z0-9_]{3,30}$/.test(username)) {
-      setStatus('taken', '✗ 3–30 chars, letters/numbers/underscores only');
-      return;
-    }
-    if (!silent) setStatus('checking', 'Checking…');
-    try {
-      const res = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`);
-      const data = await res.json();
-      if (data.available) setStatus('available', '✓ Available');
-      else setStatus('taken', '✗ Already taken');
-    } catch {
-      setStatus('hint', '✨ Your unique @handle');
-    }
-  }
-
-  function updateGoogleBtn() {
-    const remember = document.getElementById('remember');
-    document.getElementById('google-btn').href = remember.checked ? '/auth/google?remember=1' : '/auth/google';
-  }
-
-  function applyMode() {
-    const form = document.getElementById('auth-form');
-    form.action = isSignup ? '/auth/signup' : '/auth/login';
-    document.getElementById('form-title').textContent = isSignup ? 'Create account' : 'Welcome back';
-    document.getElementById('submit-btn').textContent = isSignup ? 'Create Account' : 'Sign In';
-    document.getElementById('subtitle').textContent = isSignup ? 'Get started for free.' : 'Sign in to access your tasks.';
-    document.getElementById('toggle-text').textContent = isSignup ? 'Already have an account?' : "Don't have an account?";
-    document.getElementById('toggle-link').textContent = isSignup ? 'Sign in' : 'Create one';
-    document.getElementById('remember-row').style.display = isSignup ? 'none' : 'flex';
-    document.getElementById('name-group').style.display = isSignup ? 'block' : 'none';
-    document.getElementById('username-group').style.display = isSignup ? 'block' : 'none';
-    if (isSignup) {
-      setUsernameMode('random');
-    } else {
-      updateSubmitState();
-    }
-  }
-
-  function toggleMode() {
-    isSignup = !isSignup;
-    document.getElementById('error-box').style.display = 'none';
-    applyMode();
-  }
-
-  // Live validation for custom username
-  document.getElementById('username-input').addEventListener('input', e => {
-    if (usernameMode !== 'custom') return;
-    const val = e.target.value.trim();
-    clearTimeout(checkTimer);
-    if (!val) { setStatus('hint', '✨ Your unique @handle'); return; }
-    setStatus('checking', 'Checking…');
-    checkTimer = setTimeout(() => checkAvailability(val), 450);
-  });
-
-  const error = params.get('error');
-  if (error && errors[error]) {
-    const box = document.getElementById('error-box');
-    box.textContent = errors[error];
-    box.style.display = 'block';
-  }
-
-  document.getElementById('remember').addEventListener('change', updateGoogleBtn);
-
-  // Handle invite link
-  const inviteToken = params.get('invite');
-  const inviteEmail = params.get('email');
-  if (inviteToken) {
-    isSignup = true;
-    document.getElementById('invite-token').value = inviteToken;
-    if (inviteEmail) {
-      document.getElementById('email').value = inviteEmail;
-      document.getElementById('email').readOnly = true;
-      document.getElementById('email').style.opacity = '0.7';
-    }
-    fetch(`/api/invite/${inviteToken}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.inviterName) {
-          const banner = document.getElementById('invite-banner');
-          document.getElementById('invite-banner-text').textContent =
-            `${data.inviterName} invited you to collaborate on their board. Create an account to join.`;
-          banner.style.display = 'block';
-        }
-      })
-      .catch(() => {});
-  }
-
-  applyMode();
-</script>
+<script src="/login.js" defer></script>
 </body>
 </html>
