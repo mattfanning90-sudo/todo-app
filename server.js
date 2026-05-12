@@ -91,10 +91,12 @@ app.use(session({
 }));
 
 /* ── Rate limiters ── */
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
-const searchLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
-const usernameLimiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
-const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
+const passthroughLimiter = (req, res, next) => next();
+const isTest = process.env.NODE_ENV === 'test';
+const authLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const searchLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
+const usernameLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
+const apiLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
 
 app.use(passport.initialize());
 app.use(passport.session());

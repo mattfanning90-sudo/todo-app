@@ -8,6 +8,6 @@ export default defineConfig({
     pool: 'forks',
     fileParallelism: false,
     testTimeout: 10000,
-    silent: 'passed-only',
+    silent: false,
   },
 });
