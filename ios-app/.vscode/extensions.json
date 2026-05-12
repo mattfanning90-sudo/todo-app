@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "anthropic.claude-code",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "msjsdiag.vscode-react-native",
+    "expo.vscode-expo-tools",
+    "eamodio.gitlens",
+    "christian-kohler.path-intellisense",
+    "sswg.swift-lang",
+    "sweetpad.sweetpad",
+    "vadimcn.vscode-lldb"
+  ]
+}
