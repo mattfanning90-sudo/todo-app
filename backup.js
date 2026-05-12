@@ -1,7 +1,25 @@
 const { Pool } = require('pg');
 const cron = require('node-cron');
+const { buildSsl } = require('./database');
 
 let backupPool = null;
+
+// pg_advisory_lock keys — arbitrary but stable. Different keys for different jobs
+// so the digest and backup don't block each other.
+const LOCK_KEY_BACKUP = 73810421;
+const LOCK_KEY_DIGEST = 73810422;
+
+async function withLeaderLock(primaryPool, key, fn) {
+  const client = await primaryPool.connect();
+  try {
+    const { rows } = await client.query('SELECT pg_try_advisory_lock($1) AS got', [key]);
+    if (!rows[0].got) return false;
+    try { await fn(); } finally { await client.query('SELECT pg_advisory_unlock($1)', [key]); }
+    return true;
+  } finally {
+    client.release();
+  }
+}
 
 async function initBackup() {
   if (!process.env.BACKUP_DATABASE_URL) {
@@ -10,7 +28,10 @@ async function initBackup() {
   }
   backupPool = new Pool({
     connectionString: process.env.BACKUP_DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    ssl: buildSsl('BACKUP_'),
+    max: Number(process.env.BACKUP_PG_POOL_MAX) || 4,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
   });
   await backupPool.query(`
     CREATE TABLE IF NOT EXISTS snapshots (
@@ -149,8 +170,19 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
 }
 
 function scheduleDailyBackup(primaryPool) {
-  // Run at 2am every day
-  cron.schedule('0 2 * * *', () => runBackup(primaryPool));
+  // Run at 2am every day. Wrapped in an advisory lock so multi-instance deploys
+  // only produce one snapshot per night.
+  cron.schedule('0 2 * * *', () =>
+    withLeaderLock(primaryPool, LOCK_KEY_BACKUP, () => runBackup(primaryPool))
+      .catch(e => console.error('Backup lock error:', e.message))
+  );
 }
 
-module.exports = { initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup };
+async function closeBackupPool() {
+  if (backupPool) await backupPool.end();
+}
+
+module.exports = {
+  initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup,
+  withLeaderLock, LOCK_KEY_BACKUP, LOCK_KEY_DIGEST, closeBackupPool,
+};

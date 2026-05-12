@@ -2,9 +2,22 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
+function buildSsl(prefix = '') {
+  if (!process.env[`${prefix}DATABASE_URL`]) return false;
+  const ca = process.env[`${prefix}DB_CA_CERT`];
+  if (ca) return { ca, rejectUnauthorized: true };
+  if (process.env.NODE_ENV === 'production') {
+    console.warn(`WARN: ${prefix || ''}DATABASE_URL is set but ${prefix}DB_CA_CERT is missing — TLS verification is disabled.`);
+  }
+  return { rejectUnauthorized: false };
+}
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  ssl: buildSsl(),
+  max: Number(process.env.PG_POOL_MAX) || 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000,
 });
 
 async function init() {
@@ -40,4 +53,4 @@ async function init() {
   }
 }
 
-module.exports = { pool, init };
+module.exports = { pool, init, buildSsl };
