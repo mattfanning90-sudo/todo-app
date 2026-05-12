@@ -247,6 +247,79 @@ app.get('/auth/google/callback', passport.authenticate('google', { failureRedire
 });
 app.get('/auth/logout', (req, res) => req.logout(() => res.redirect('/login')));
 
+app.post('/auth/google/mobile', authLimiter, wrap(async (req, res) => {
+  const idToken = req.body?.id_token;
+  if (!idToken || typeof idToken !== 'string') {
+    return res.status(400).json({ error: 'id_token required' });
+  }
+  const allowedAuds = [
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_IOS_CLIENT_ID,
+    process.env.GOOGLE_ANDROID_CLIENT_ID,
+  ].filter(Boolean);
+  if (allowedAuds.length === 0) {
+    return res.status(500).json({ error: 'Google client not configured' });
+  }
+
+  let payload;
+  try {
+    const r = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+    if (!r.ok) throw new Error(`tokeninfo ${r.status}`);
+    payload = await r.json();
+  } catch (e) {
+    return res.status(401).json({ error: 'Invalid id_token' });
+  }
+
+  if (!allowedAuds.includes(payload.aud)) {
+    return res.status(401).json({ error: 'Audience mismatch' });
+  }
+  if (payload.email_verified !== 'true' && payload.email_verified !== true) {
+    return res.status(401).json({ error: 'Email not verified' });
+  }
+  const now = Math.floor(Date.now() / 1000);
+  if (payload.exp && Number(payload.exp) < now) {
+    return res.status(401).json({ error: 'Token expired' });
+  }
+
+  const googleId = payload.sub;
+  const email = payload.email || '';
+  const name = payload.name || '';
+
+  let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [googleId]);
+  let user = rows[0];
+  if (!user) {
+    const username = await generateUsername();
+    const result = await pool.query(
+      'INSERT INTO users (google_id, email, name, username) VALUES ($1, $2, $3, $4) RETURNING *',
+      [googleId, email, name, username]
+    );
+    user = result.rows[0];
+  } else if (!user.username) {
+    const username = await generateUsername();
+    await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, user.id]);
+    user.username = username;
+  }
+  const board = await ensureDefaultBoard(user.id);
+  await seedCategories(user.id, board.id);
+
+  req.session.regenerate(sesErr => {
+    if (sesErr) return res.status(500).json({ error: 'Session error' });
+    req.login(user, loginErr => {
+      if (loginErr) return res.status(500).json({ error: 'Login error' });
+      req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+      res.json({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        username: user.username,
+        digest_frequency: user.digest_frequency,
+      });
+    });
+  });
+}));
+
 app.get('/', (req, res) => {
   if (!req.isAuthenticated()) return res.redirect('/login');
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -258,11 +331,14 @@ app.get('/login', (req, res) => {
 
 app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.redirect('/login?error=missing&mode=signup');
-  if (typeof email !== 'string' || email.length > 254) return res.redirect('/login?error=missing&mode=signup');
-  if (password.length < 8) return res.redirect('/login?error=short&mode=signup');
+  const json = req.is('application/json') || (req.get('accept') || '').includes('application/json');
+  const fail = (code, msg) =>
+    json ? res.status(400).json({ error: msg }) : res.redirect(`/login?error=${code}&mode=signup`);
+  if (!email || !password) return fail('missing', 'Email and password required');
+  if (typeof email !== 'string' || email.length > 254) return fail('missing', 'Invalid email');
+  if (password.length < 8) return fail('short', 'Password too short');
   const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-  if (existing.rows[0]) return res.redirect('/login?error=taken&mode=signup');
+  if (existing.rows[0]) return fail('taken', 'Email already in use');
 
   const displayName = (req.body.name || '').trim() || email.split('@')[0];
   const requestedUsername = (req.body.username || '').trim();
@@ -307,23 +383,48 @@ app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
   }
 
   req.session.regenerate(sesErr => {
-    if (sesErr) return res.redirect('/login?error=server&mode=signup');
+    if (sesErr) return json ? res.status(500).json({ error: 'Session error' }) : res.redirect('/login?error=server&mode=signup');
     req.login(newUser, err => {
-      if (err) return res.redirect('/login?error=server&mode=signup');
+      if (err) return json ? res.status(500).json({ error: 'Login error' }) : res.redirect('/login?error=server&mode=signup');
+      if (json) {
+        return res.json({
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+          username: newUser.username,
+          digest_frequency: newUser.digest_frequency,
+        });
+      }
       res.redirect('/');
     });
   });
 }));
 
+function wantsJson(req) {
+  return req.is('application/json') || (req.get('accept') || '').includes('application/json');
+}
+
 app.post('/auth/login', authLimiter, (req, res, next) => {
   passport.authenticate('local', (err, user) => {
     if (err) return next(err);
-    if (!user) return res.redirect('/login?error=invalid');
+    if (!user) {
+      if (wantsJson(req)) return res.status(401).json({ error: 'Invalid credentials' });
+      return res.redirect('/login?error=invalid');
+    }
     req.session.regenerate(sesErr => {
       if (sesErr) return next(sesErr);
       req.login(user, loginErr => {
         if (loginErr) return next(loginErr);
         if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+        if (wantsJson(req)) {
+          return res.json({
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            username: user.username,
+            digest_frequency: user.digest_frequency,
+          });
+        }
         res.redirect('/');
       });
     });

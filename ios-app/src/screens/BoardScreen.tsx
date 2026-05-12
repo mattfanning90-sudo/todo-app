@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
-  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,6 +8,10 @@ import {
   Text,
   View,
 } from 'react-native';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
@@ -96,6 +99,47 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     }
   };
 
+  const onDragEnd = async ({ data }: { data: Task[] }) => {
+    const orderedIds = data.map((task) => task.id);
+    setTasks((prev) => {
+      const newPosition = new Map(data.map((task, idx) => [task.id, idx]));
+      return prev.map((task) =>
+        newPosition.has(task.id)
+          ? { ...task, position: newPosition.get(task.id)! }
+          : task
+      );
+    });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    try {
+      await api.reorder(orderedIds);
+    } catch (err) {
+      Alert.alert('Could not reorder', String(err));
+      load();
+    }
+  };
+
+  const renderTask = useCallback(
+    ({ item, drag, isActive }: RenderItemParams<Task>) => (
+      <ScaleDecorator>
+        <Pressable
+          onLongPress={drag}
+          disabled={isActive}
+          delayLongPress={150}
+        >
+          <TaskCard
+            task={item}
+            category={
+              item.category_id ? categoriesById.get(item.category_id) : undefined
+            }
+            onPress={() => onOpenTask(item)}
+            onToggleDone={() => toggleDone(item)}
+          />
+        </Pressable>
+      </ScaleDecorator>
+    ),
+    [categoriesById, onOpenTask]
+  );
+
   return (
     <Screen padded={false}>
       <View style={[styles.topBar, { paddingHorizontal: spacing.lg }]}>
@@ -149,9 +193,11 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         })}
       </ScrollView>
 
-      <FlatList
+      <DraggableFlatList
         data={stageTasks}
         keyExtractor={(task) => String(task.id)}
+        onDragEnd={onDragEnd}
+        activationDistance={10}
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
           paddingBottom: spacing.xxl * 2,
@@ -174,16 +220,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
             </Text>
           ) : null
         }
-        renderItem={({ item }) => (
-          <TaskCard
-            task={item}
-            category={
-              item.category_id ? categoriesById.get(item.category_id) : undefined
-            }
-            onPress={() => onOpenTask(item)}
-            onToggleDone={() => toggleDone(item)}
-          />
-        )}
+        renderItem={renderTask}
       />
 
       <View style={[styles.fabWrap, { paddingHorizontal: spacing.lg }]}>

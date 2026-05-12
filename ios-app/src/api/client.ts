@@ -13,6 +13,8 @@ const API_BASE: string =
   process.env.EXPO_PUBLIC_API_BASE ||
   'http://localhost:3000';
 
+const ACCEPT_JSON = 'application/json';
+
 const SESSION_KEY = 'todoapp.session';
 
 let cachedCookie: string | null = null;
@@ -44,8 +46,8 @@ interface RequestOptions {
 async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const cookie = await getCookie();
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
+    'Content-Type': ACCEPT_JSON,
+    Accept: ACCEPT_JSON,
   };
   if (cookie) headers.Cookie = cookie;
 
@@ -82,15 +84,22 @@ export const api = {
   baseUrl: API_BASE,
 
   async login(email: string, password: string): Promise<User> {
-    await request('/auth/login', { method: 'POST', body: { email, password } });
-    return request<User>('/api/user');
+    return request<User>('/auth/login', {
+      method: 'POST',
+      body: { email, password },
+    });
   },
   async signup(email: string, password: string, name?: string): Promise<User> {
-    await request('/auth/signup', {
+    return request<User>('/auth/signup', {
       method: 'POST',
       body: { email, password, name },
     });
-    return request<User>('/api/user');
+  },
+  async googleLogin(idToken: string): Promise<User> {
+    return request<User>('/auth/google/mobile', {
+      method: 'POST',
+      body: { id_token: idToken },
+    });
   },
   async logout(): Promise<void> {
     try {
@@ -124,8 +133,11 @@ export const api = {
     request<Task>(`/api/tasks/${id}`, { method: 'PUT', body }),
   deleteTask: (id: number) =>
     request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
-  reorder: (updates: { id: number; stage: string; position: number }[]) =>
-    request<void>('/api/reorder', { method: 'POST', body: { updates } }),
+  reorder: (orderedTaskIds: number[]) =>
+    request<{ ok: true }>('/api/reorder', {
+      method: 'POST',
+      body: { order: orderedTaskIds },
+    }),
 
   dashboard: () => request<DashboardData>('/api/dashboard'),
   search: (q: string) =>
