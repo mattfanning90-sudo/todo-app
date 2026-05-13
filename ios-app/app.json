@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Todo",
+    "slug": "todo-app",
+    "scheme": "todoapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.todoapp.ios"
+    },
+    "android": {
+      "package": "com.todoapp.android",
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0B0F"
+      }
+    },
+    "plugins": ["expo-secure-store"],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
