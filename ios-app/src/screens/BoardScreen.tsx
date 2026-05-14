@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Pressable,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import DraggableFlatList, {
@@ -23,13 +24,13 @@ import type { Board, Category, Stage, Task } from '@/api/types';
 
 const STAGES: { key: Stage; label: string }[] = [
   { key: 'backlog', label: 'Backlog' },
-  { key: 'progress', label: 'In Progress' },
+  { key: 'in_progress', label: 'In Progress' },
   { key: 'done', label: 'Done' },
 ];
 
 const STAGE_EMPTY: Record<Stage, string> = {
   backlog: 'Nothing here yet. Tap + Add task below.',
-  progress: 'Drag a backlog task here when you start it.',
+  in_progress: 'Drag a backlog task here when you start it.',
   done: 'Tasks you complete will land here.',
 };
 
@@ -46,12 +47,15 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
   const [stage, setStage] = useState<Stage>('backlog');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [quickText, setQuickText] = useState('');
+  const [quickSaving, setQuickSaving] = useState(false);
+  const quickInputRef = useRef<TextInput | null>(null);
 
   const load = useCallback(async () => {
     try {
       const [ts, cs] = await Promise.all([
         api.tasks(board.id),
-        api.categories(),
+        api.categories(board.id),
       ]);
       setTasks(ts);
       setCategories(cs);
@@ -84,12 +88,33 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
   );
 
   const counts = useMemo(() => {
-    const c: Record<Stage, number> = { backlog: 0, progress: 0, done: 0 };
+    const c: Record<Stage, number> = { backlog: 0, in_progress: 0, done: 0 };
     tasks.forEach((task) => {
       if (!task.archived_at) c[task.stage] = (c[task.stage] ?? 0) + 1;
     });
     return c;
   }, [tasks]);
+
+  const submitQuickAdd = async () => {
+    const text = quickText.trim();
+    if (!text || quickSaving) return;
+    setQuickSaving(true);
+    try {
+      const created = await api.createTask({
+        board_id: board.id,
+        text,
+        stage,
+      });
+      setTasks((prev) => [...prev, created]);
+      setQuickText('');
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Could not add task', String(err));
+    } finally {
+      setQuickSaving(false);
+    }
+  };
 
   const toggleDone = async (task: Task) => {
     const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
@@ -98,7 +123,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     );
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
     try {
-      await api.updateTask(task.id, { stage: newStage });
+      await api.updateTask(task.id, { board_id: board.id, stage: newStage });
     } catch (err) {
       Alert.alert('Could not update task', String(err));
       load();
@@ -117,7 +142,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     });
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     try {
-      await api.reorder(orderedIds);
+      await api.reorder(orderedIds, board.id);
     } catch (err) {
       Alert.alert('Could not reorder', String(err));
       load();
@@ -199,6 +224,46 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         })}
       </ScrollView>
 
+      <View style={[styles.quickAddWrap, { paddingHorizontal: spacing.lg }]}>
+        <View
+          style={[
+            styles.quickAddRow,
+            { backgroundColor: t.surface, borderColor: t.border },
+          ]}
+        >
+          <TextInput
+            ref={quickInputRef}
+            value={quickText}
+            onChangeText={setQuickText}
+            onSubmitEditing={submitQuickAdd}
+            placeholder={`Quick add to ${STAGES.find((s) => s.key === stage)?.label ?? ''}`}
+            placeholderTextColor={t.textMuted}
+            returnKeyType="done"
+            blurOnSubmit={false}
+            editable={!quickSaving}
+            style={[styles.quickAddInput, { color: t.text }]}
+          />
+          <Pressable
+            onPress={submitQuickAdd}
+            disabled={!quickText.trim() || quickSaving}
+            hitSlop={10}
+            style={({ pressed }) => ({
+              opacity: !quickText.trim() || quickSaving ? 0.4 : pressed ? 0.6 : 1,
+            })}
+          >
+            <Text
+              style={{
+                color: t.accent,
+                fontSize: font.size.lg,
+                fontWeight: font.weight.bold,
+              }}
+            >
+              +
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
       <DraggableFlatList
         data={stageTasks}
         keyExtractor={(task) => String(task.id)}
@@ -260,5 +325,18 @@ const styles = StyleSheet.create({
     bottom: spacing.lg,
     left: 0,
     right: 0,
+  },
+  quickAddWrap: { marginBottom: spacing.sm },
+  quickAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+  },
+  quickAddInput: {
+    flex: 1,
+    height: 40,
+    fontSize: font.size.md,
   },
 });

@@ -74,7 +74,7 @@ export function DashboardScreen({ onBack }: Props) {
           <Stat
             label="In progress"
             value={data?.counts.inProgress ?? 0}
-            color={t.stage.progress}
+            color={t.stage.in_progress}
           />
           <Stat
             label="Overdue"

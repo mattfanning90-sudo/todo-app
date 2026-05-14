@@ -17,8 +17,12 @@ import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { Board, Category, Priority, Stage, Task } from '@/api/types';
 
-const STAGES: Stage[] = ['backlog', 'progress', 'done'];
+const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 const PRIORITIES: Priority[] = ['none', 'low', 'medium', 'high'];
+const CATEGORY_COLORS = [
+  '#4285F4', '#34A853', '#EA4335', '#FBBC05',
+  '#8B5CF6', '#F59E0B', '#10B981', '#EC4899',
+];
 
 interface Props {
   board: Board;
@@ -38,10 +42,14 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   const [dueDate, setDueDate] = useState<string>(task?.due_date ?? '');
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
+  const [creatingCategory, setCreatingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState(CATEGORY_COLORS[0]);
+  const [savingCategory, setSavingCategory] = useState(false);
 
   useEffect(() => {
-    api.categories().then(setCategories).catch(() => {});
-  }, []);
+    api.categories(board.id).then(setCategories).catch(() => {});
+  }, [board.id]);
 
   const canSave = useMemo(() => text.trim().length > 0, [text]);
 
@@ -72,6 +80,24 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
     }
   };
 
+  const submitNewCategory = async () => {
+    const name = newCatName.trim();
+    if (!name || savingCategory) return;
+    setSavingCategory(true);
+    try {
+      const created = await api.createCategory(name, newCatColor, board.id);
+      setCategories((prev) => [...prev, created]);
+      setCategoryId(created.id);
+      setNewCatName('');
+      setNewCatColor(CATEGORY_COLORS[0]);
+      setCreatingCategory(false);
+    } catch (err) {
+      Alert.alert('Could not create category', String(err));
+    } finally {
+      setSavingCategory(false);
+    }
+  };
+
   const remove = () => {
     if (!task) return;
     Alert.alert('Delete task?', 'This cannot be undone.', [
@@ -81,7 +107,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         style: 'destructive',
         onPress: async () => {
           try {
-            await api.deleteTask(task.id);
+            await api.deleteTask(task.id, board.id);
             onClose(true);
           } catch (err) {
             Alert.alert('Could not delete', String(err));
@@ -171,7 +197,76 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
                   onPress={() => setCategoryId(c.id)}
                 />
               ))}
+              <Pressable
+                onPress={() => setCreatingCategory((v) => !v)}
+                style={[
+                  styles.chip,
+                  {
+                    backgroundColor: t.surface,
+                    borderColor: t.border,
+                    borderStyle: 'dashed',
+                  },
+                ]}
+              >
+                <Text style={{ color: t.accent, fontWeight: font.weight.medium }}>
+                  {creatingCategory ? '× Cancel' : '+ New'}
+                </Text>
+              </Pressable>
             </View>
+
+            {creatingCategory && (
+              <View
+                style={[
+                  styles.newCatForm,
+                  { backgroundColor: t.surface, borderColor: t.border },
+                ]}
+              >
+                <TextField
+                  label="Name"
+                  value={newCatName}
+                  onChangeText={setNewCatName}
+                  placeholder="e.g. Home"
+                  maxLength={30}
+                  autoCapitalize="words"
+                />
+                <Text
+                  style={{
+                    color: t.textMuted,
+                    fontSize: font.size.sm,
+                    fontWeight: font.weight.medium,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.5,
+                    marginBottom: spacing.xs,
+                  }}
+                >
+                  Color
+                </Text>
+                <View style={styles.palette}>
+                  {CATEGORY_COLORS.map((color) => {
+                    const selected = color === newCatColor;
+                    return (
+                      <Pressable
+                        key={color}
+                        onPress={() => setNewCatColor(color)}
+                        style={[
+                          styles.swatch,
+                          {
+                            backgroundColor: color,
+                            borderColor: selected ? t.text : 'transparent',
+                          },
+                        ]}
+                      />
+                    );
+                  })}
+                </View>
+                <Button
+                  label={savingCategory ? 'Adding…' : 'Add category'}
+                  onPress={submitNewCategory}
+                  disabled={!newCatName.trim() || savingCategory}
+                  style={{ marginTop: spacing.md }}
+                />
+              </View>
+            )}
           </Section>
 
           <TextField
@@ -274,5 +369,18 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.xl,
     borderWidth: 1,
+  },
+  newCatForm: {
+    marginTop: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  palette: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  swatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
   },
 });

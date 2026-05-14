@@ -21,7 +21,7 @@ export interface Category {
   color: string;
 }
 
-export type Stage = 'backlog' | 'progress' | 'done';
+export type Stage = 'backlog' | 'in_progress' | 'done';
 export type Priority = 'high' | 'medium' | 'low' | 'none';
 
 export interface Task {
@@ -48,4 +48,17 @@ export interface DashboardData {
   byPriority: Record<Priority, number>;
   byCategory: { name: string; color: string; count: number }[];
   counts: { open: number; inProgress: number; overdue: number };
+}
+
+export interface SearchHit {
+  id: number;
+  text: string;
+  stage: Stage;
+  due_date: string | null;
+  priority: Priority;
+  board_id: number;
+  board_name: string;
+  board_owner_id: number;
+  cat_name: string | null;
+  cat_color: string | null;
 }

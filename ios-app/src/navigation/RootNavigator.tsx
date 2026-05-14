@@ -19,6 +19,7 @@ import { BoardScreen } from '@/screens/BoardScreen';
 import { TaskDetailScreen } from '@/screens/TaskDetailScreen';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { SearchScreen } from '@/screens/SearchScreen';
 import { useTheme } from '@/theme';
 import type { Board, Task } from '@/api/types';
 
@@ -29,6 +30,7 @@ export type RootStackParamList = {
   TaskDetail: { board: Board; task: Task | null };
   Dashboard: undefined;
   Settings: undefined;
+  Search: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,6 +43,7 @@ function BoardListWrapper() {
       onOpenBoard={(board) => nav.navigate('Board', { board })}
       onOpenDashboard={() => nav.navigate('Dashboard')}
       onOpenSettings={() => nav.navigate('Settings')}
+      onOpenSearch={() => nav.navigate('Search')}
     />
   );
 }
@@ -48,6 +51,20 @@ function BoardListWrapper() {
 function SettingsWrapper() {
   const nav = useNavigation<Nav>();
   return <SettingsScreen onBack={() => nav.goBack()} />;
+}
+
+function SearchWrapper() {
+  const nav = useNavigation<Nav>();
+  return (
+    <SearchScreen
+      onBack={() => nav.goBack()}
+      onOpenBoard={(board) => {
+        // Replace Search in the stack with the Board so back goes to the list.
+        nav.goBack();
+        setTimeout(() => nav.navigate('Board', { board }), 0);
+      }}
+    />
+  );
 }
 
 function BoardWrapper({ route }: { route: { params: { board: Board } } }) {
@@ -131,6 +148,7 @@ export function RootNavigator() {
             <Stack.Screen name="Board" component={BoardWrapper} />
             <Stack.Screen name="Dashboard" component={DashboardWrapper} />
             <Stack.Screen name="Settings" component={SettingsWrapper} />
+            <Stack.Screen name="Search" component={SearchWrapper} />
             <Stack.Screen
               name="TaskDetail"
               component={TaskDetailWrapper}
