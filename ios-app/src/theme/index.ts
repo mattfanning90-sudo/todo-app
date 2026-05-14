@@ -17,7 +17,7 @@ export interface Theme {
   warning: string;
   stage: {
     backlog: string;
-    progress: string;
+    in_progress: string;
     done: string;
   };
   priority: {
@@ -43,7 +43,7 @@ const dark: Theme = {
   warning: '#F5B85C',
   stage: {
     backlog: '#8B8B9A',
-    progress: '#6E6BF5',
+    in_progress: '#6E6BF5',
     done: '#3DD68C',
   },
   priority: {
@@ -69,7 +69,7 @@ const light: Theme = {
   warning: '#E59A2B',
   stage: {
     backlog: '#6B6B7A',
-    progress: '#5856F5',
+    in_progress: '#5856F5',
     done: '#22B670',
   },
   priority: {

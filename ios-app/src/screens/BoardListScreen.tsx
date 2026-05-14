@@ -20,9 +20,15 @@ interface Props {
   onOpenBoard: (board: Board) => void;
   onOpenDashboard: () => void;
   onOpenSettings: () => void;
+  onOpenSearch: () => void;
 }
 
-export function BoardListScreen({ onOpenBoard, onOpenDashboard, onOpenSettings }: Props) {
+export function BoardListScreen({
+  onOpenBoard,
+  onOpenDashboard,
+  onOpenSettings,
+  onOpenSearch,
+}: Props) {
   const t = useTheme();
   const { user, logout } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
@@ -69,6 +75,11 @@ export function BoardListScreen({ onOpenBoard, onOpenDashboard, onOpenSettings }
           <Text style={[styles.title, { color: t.text }]}>Your boards</Text>
         </View>
         <View style={styles.headerActions}>
+          <Pressable onPress={onOpenSearch} hitSlop={10}>
+            <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
+              Search
+            </Text>
+          </Pressable>
           <Pressable onPress={onOpenSettings} hitSlop={10}>
             <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
               Settings

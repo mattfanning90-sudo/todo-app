@@ -5,6 +5,7 @@ import type {
   Category,
   DashboardData,
   DigestFrequency,
+  SearchHit,
   Task,
   User,
 } from './types';
@@ -124,30 +125,37 @@ export const api = {
   deleteBoard: (id: number) =>
     request<void>(`/api/boards/${id}`, { method: 'DELETE' }),
 
-  categories: () => request<Category[]>('/api/categories'),
-  createCategory: (name: string, color: string) =>
-    request<Category>('/api/categories', {
+  categories: (boardId: number) =>
+    request<Category[]>(`/api/categories?board=${boardId}`),
+  createCategory: (name: string, color: string, boardId: number) =>
+    request<Category>(`/api/categories?board=${boardId}`, {
       method: 'POST',
       body: { name, color },
     }),
 
+  // The server resolves which board a task lives on via `?board=` (with
+  // `body.boardId` as fallback). We always pass it explicitly so multi-board
+  // users don't silently fall through to the default board.
   tasks: (boardId: number) =>
-    request<Task[]>(`/api/tasks?board_id=${boardId}`),
+    request<Task[]>(`/api/tasks?board=${boardId}`),
   createTask: (body: Partial<Task> & { board_id: number; text: string }) =>
-    request<Task>('/api/tasks', { method: 'POST', body }),
-  updateTask: (id: number, body: Partial<Task>) =>
-    request<Task>(`/api/tasks/${id}`, { method: 'PUT', body }),
-  deleteTask: (id: number) =>
-    request<void>(`/api/tasks/${id}`, { method: 'DELETE' }),
-  reorder: (orderedTaskIds: number[]) =>
-    request<{ ok: true }>('/api/reorder', {
+    request<Task>(`/api/tasks?board=${body.board_id}`, { method: 'POST', body }),
+  updateTask: (id: number, body: Partial<Task> & { board_id: number }) =>
+    request<Task>(`/api/tasks/${id}?board=${body.board_id}`, {
+      method: 'PUT',
+      body,
+    }),
+  deleteTask: (id: number, boardId: number) =>
+    request<void>(`/api/tasks/${id}?board=${boardId}`, { method: 'DELETE' }),
+  reorder: (orderedTaskIds: number[], boardId: number) =>
+    request<{ ok: true }>(`/api/reorder?board=${boardId}`, {
       method: 'POST',
       body: { order: orderedTaskIds },
     }),
 
   dashboard: () => request<DashboardData>('/api/dashboard'),
-  search: (q: string) =>
-    request<{ tasks: Task[] }>(`/api/search?q=${encodeURIComponent(q)}`),
+  search: (q: string, signal?: AbortSignal) =>
+    request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
 };
 
 export { setCookie as setSessionCookie };
