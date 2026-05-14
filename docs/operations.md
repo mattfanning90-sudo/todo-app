@@ -42,14 +42,17 @@ Every request gets an 8-byte hex ID via the first middleware. Echoed via `X-Requ
 
 ## Distributed cron
 
-Three scheduled jobs, each wrapped in `pg_advisory_lock` (via `backup.js#withLeaderLock`) so they run on exactly one instance in horizontally-scaled deploys:
+Four scheduled jobs, each wrapped in `pg_advisory_lock` (via `backup.js#withLeaderLock`) so they run on exactly one instance in horizontally-scaled deploys:
 
 | Cron | Schedule | Lock key |
 |---|---|---|
 | Backup snapshot | `0 2 * * *` (2 am) | `73810421` |
 | Email digest | `0 * * * *` (hourly) | `73810422` |
 | Notification TTL cleanup | `0 3 * * *` (3 am) | `73810423` |
+| Auto-archive done tasks | `0 4 * * *` (4 am) | `73810424` |
 | Boot-time backup | once on startup, best-effort | `73810420` |
+
+Auto-archive flips `archived = true` on any task with `stage = 'done'` whose `completed_at` is older than `server.js#AUTO_ARCHIVE_AFTER_MS` (24 h). Re-opening a task clears `completed_at`, so the timer resets naturally if a user moves it out of done.
 
 ## Migrations
 

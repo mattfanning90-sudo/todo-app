@@ -14,7 +14,7 @@ const rateLimit = require('express-rate-limit');
 const { pool, init } = require('./database');
 const {
   initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup,
-  withLeaderLock, LOCK_KEY_DIGEST, closeBackupPool,
+  withLeaderLock, LOCK_KEY_DIGEST, LOCK_KEY_AUTO_ARCHIVE, closeBackupPool,
 } = require('./backup');
 const cron = require('node-cron');
 const path = require('path');
@@ -1090,6 +1090,30 @@ async function runDigests() {
   } catch (e) { console.error('Digest error:', e.message); }
 }
 
+/* ── Auto-archive ── */
+const AUTO_ARCHIVE_AFTER_MS = 24 * 60 * 60 * 1000;
+
+// Archive any task that has been in stage='done' for more than AUTO_ARCHIVE_AFTER_MS.
+// We key off completed_at (set when stage flips to 'done', cleared when it flips
+// back) so re-opening a task naturally cancels the timer. Already-archived rows
+// are excluded so we don't churn archived_at on repeated runs.
+async function runAutoArchive() {
+  try {
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - AUTO_ARCHIVE_AFTER_MS);
+    const { rowCount } = await pool.query(
+      `UPDATE tasks
+         SET archived = true, archived_at = $1
+       WHERE stage = 'done'
+         AND (archived IS NULL OR archived = false)
+         AND completed_at IS NOT NULL
+         AND completed_at < $2`,
+      [now, cutoff]
+    );
+    if (rowCount) console.log(`Auto-archive: archived ${rowCount} completed task(s)`);
+  } catch (e) { console.error('Auto-archive error:', e.message); }
+}
+
 async function cleanupOldNotifications() {
   try {
     const { rowCount } = await pool.query(
@@ -1099,7 +1123,7 @@ async function cleanupOldNotifications() {
   } catch (e) { console.error('Notification cleanup error:', e.message); }
 }
 
-module.exports = { app, runDigests, cleanupOldNotifications, escapeHtml, isStrongPassword };
+module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, escapeHtml, isStrongPassword };
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
@@ -1118,6 +1142,9 @@ if (require.main === module) {
       );
       cron.schedule('0 3 * * *', () =>
         withLeaderLock(pool, 73810423, cleanupOldNotifications).catch(e => console.error('Cleanup lock error:', e.message))
+      );
+      cron.schedule('0 4 * * *', () =>
+        withLeaderLock(pool, LOCK_KEY_AUTO_ARCHIVE, runAutoArchive).catch(e => console.error('Auto-archive lock error:', e.message))
       );
 
       const server = app.listen(PORT, () => console.log(`Running at http://localhost:${PORT}`));

@@ -18,6 +18,7 @@ import { BoardListScreen } from '@/screens/BoardListScreen';
 import { BoardScreen } from '@/screens/BoardScreen';
 import { TaskDetailScreen } from '@/screens/TaskDetailScreen';
 import { DashboardScreen } from '@/screens/DashboardScreen';
+import { SettingsScreen } from '@/screens/SettingsScreen';
 import { useTheme } from '@/theme';
 import type { Board, Task } from '@/api/types';
 
@@ -27,6 +28,7 @@ export type RootStackParamList = {
   Board: { board: Board };
   TaskDetail: { board: Board; task: Task | null };
   Dashboard: undefined;
+  Settings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -38,8 +40,14 @@ function BoardListWrapper() {
     <BoardListScreen
       onOpenBoard={(board) => nav.navigate('Board', { board })}
       onOpenDashboard={() => nav.navigate('Dashboard')}
+      onOpenSettings={() => nav.navigate('Settings')}
     />
   );
+}
+
+function SettingsWrapper() {
+  const nav = useNavigation<Nav>();
+  return <SettingsScreen onBack={() => nav.goBack()} />;
 }
 
 function BoardWrapper({ route }: { route: { params: { board: Board } } }) {
@@ -122,6 +130,7 @@ export function RootNavigator() {
             <Stack.Screen name="BoardList" component={BoardListWrapper} />
             <Stack.Screen name="Board" component={BoardWrapper} />
             <Stack.Screen name="Dashboard" component={DashboardWrapper} />
+            <Stack.Screen name="Settings" component={SettingsWrapper} />
             <Stack.Screen
               name="TaskDetail"
               component={TaskDetailWrapper}

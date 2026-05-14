@@ -16,6 +16,7 @@ interface AuthState {
   signup: (email: string, password: string, name?: string) => Promise<void>;
   googleLogin: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  patchUser: (patch: Partial<User>) => void;
 }
 
 const AuthCtx = createContext<AuthState | null>(null);
@@ -61,6 +62,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout: async () => {
         await api.logout();
         setUser(null);
+      },
+      patchUser: (patch) => {
+        setUser((prev) => (prev ? { ...prev, ...patch } : prev));
       },
     }),
     [user, loading]

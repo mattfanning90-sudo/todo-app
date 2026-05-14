@@ -12,6 +12,7 @@ tests/
   auth.test.js          # password policy, login, /api/user shape
   tasks.test.js         # CRUD, /api/tasks/count, archived pagination
   digest.test.js        # escapeHtml, isStrongPassword, runDigests smoke
+  auto-archive.test.js  # runAutoArchive + PUT /api/user/digest validation
   perf.test.js          # latency + payload-size microbench
 vitest.config.js
 ```
