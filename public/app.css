@@ -774,28 +774,76 @@
       .app-body { overflow: visible; height: auto; }
       .main-content { overflow: visible; }
 
-      .sidebar {
-        position: fixed;
-        top: var(--header-h); left: 0; bottom: 0;
-        z-index: 100; width: var(--sidebar-w);
-        transform: translateX(-100%);
-        transition: transform 0.25s ease;
-        height: auto;
-        box-shadow: var(--shadow-lg);
+      /* Keep the add-task input pinned below the header so it's always
+         one tap away while scrolling a long column. */
+      .content-top {
+        position: sticky;
+        top: var(--header-h);
+        z-index: 40;
+        background: var(--bg);
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
       }
-      .sidebar.collapsed { width: var(--sidebar-w); transform: translateX(-100%); }
-      .sidebar.mobile-visible { transform: translateX(0); }
 
-      .sidebar-overlay {
-        display: none; position: fixed; inset: 0;
-        background: rgba(0,0,0,0.45); z-index: 99;
+      /* The Import flow is a paste-JSON-from-Claude workflow that's
+         desktop-oriented; suppress it on phones to reduce clutter. */
+      .import-toggle-btn, .import-panel { display: none !important; }
+
+      /* Stage tabs: replace the three stacked columns with a tabbed,
+         single-column view. The column the user picks is the only one
+         rendered below 768px. */
+      .mobile-stage-tabs {
+        display: flex;
+        gap: 6px;
+        padding: 8px 12px;
+        background: var(--bg);
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
       }
-      .sidebar-overlay.visible { display: block; }
+      .mobile-stage-tab {
+        flex: 1;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        font-family: inherit; font-size: 0.84rem; font-weight: 600;
+        padding: 8px 6px; border-radius: var(--r-md);
+        cursor: pointer; white-space: nowrap;
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+      .mobile-stage-tab.active {
+        background: var(--primary-muted);
+        border-color: var(--primary);
+        color: var(--primary);
+      }
+      .mobile-stage-count {
+        background: var(--bg-hover);
+        color: var(--text-muted);
+        border-radius: 10px;
+        padding: 1px 7px;
+        font-size: 0.7rem; font-weight: 700;
+      }
+      .mobile-stage-tab.active .mobile-stage-count {
+        background: var(--primary); color: #fff;
+      }
 
       .board-scroll { overflow: visible; flex: none; padding: 12px; }
       .board { flex-direction: column; min-width: unset; height: auto; gap: 12px; }
       .column { max-width: 100%; min-width: unset; flex: none; }
       .task-list { overflow: visible; max-height: none; }
+
+      /* Mobile column isolation: only the active stage's column shows. */
+      .board[data-mobile-stage="backlog"] .column[data-stage="in_progress"],
+      .board[data-mobile-stage="backlog"] .column[data-stage="done"],
+      .board[data-mobile-stage="in_progress"] .column[data-stage="backlog"],
+      .board[data-mobile-stage="in_progress"] .column[data-stage="done"],
+      .board[data-mobile-stage="done"] .column[data-stage="backlog"],
+      .board[data-mobile-stage="done"] .column[data-stage="in_progress"] {
+        display: none;
+      }
+      /* The active column already has tab-style header above it; drop
+         the per-column header on mobile to avoid double-labelling. */
+      .column-header { display: none; }
 
       .hdr-btn, .icon-btn { width: 36px; height: 36px; }
       .stage-btn { padding: 6px 12px; font-size: 0.78rem; }
@@ -810,6 +858,8 @@
       .dash-stats { grid-template-columns: 1fr 1fr; }
       .dash-panels { grid-template-columns: 1fr; }
     }
+    /* Default (desktop): the mobile tab strip is hidden. */
+    .mobile-stage-tabs { display: none; }
     /* ── Dashboard ── */
     .dashboard-view { display: none; padding: 20px; overflow-y: auto; }
     .dashboard-view.active { display: block; }
