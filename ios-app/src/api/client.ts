@@ -4,6 +4,7 @@ import type {
   Board,
   Category,
   DashboardData,
+  DigestFrequency,
   Task,
   User,
 } from './types';
@@ -109,6 +110,11 @@ export const api = {
     }
   },
   me: () => request<User>('/api/user'),
+  updateDigestFrequency: (frequency: DigestFrequency) =>
+    request<{ ok: true }>('/api/user/digest', {
+      method: 'PUT',
+      body: { frequency },
+    }),
 
   boards: () => request<Board[]>('/api/boards'),
   createBoard: (name: string) =>

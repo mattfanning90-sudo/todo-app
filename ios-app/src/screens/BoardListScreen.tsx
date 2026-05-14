@@ -19,9 +19,10 @@ import type { Board } from '@/api/types';
 interface Props {
   onOpenBoard: (board: Board) => void;
   onOpenDashboard: () => void;
+  onOpenSettings: () => void;
 }
 
-export function BoardListScreen({ onOpenBoard, onOpenDashboard }: Props) {
+export function BoardListScreen({ onOpenBoard, onOpenDashboard, onOpenSettings }: Props) {
   const t = useTheme();
   const { user, logout } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
@@ -67,11 +68,18 @@ export function BoardListScreen({ onOpenBoard, onOpenDashboard }: Props) {
           </Text>
           <Text style={[styles.title, { color: t.text }]}>Your boards</Text>
         </View>
-        <Pressable onPress={() => logout()} hitSlop={10}>
-          <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
-            Sign out
-          </Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable onPress={onOpenSettings} hitSlop={10}>
+            <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
+              Settings
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => logout()} hitSlop={10}>
+            <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
+              Sign out
+            </Text>
+          </Pressable>
+        </View>
       </View>
 
       <Pressable
@@ -141,7 +149,6 @@ export function BoardListScreen({ onOpenBoard, onOpenDashboard }: Props) {
             label="Board name"
             value={newName}
             onChangeText={setNewName}
-            autoFocus
             placeholder="e.g. Personal"
           />
           <View style={styles.createButtons}>
@@ -181,6 +188,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
+  headerActions: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
   greeting: { fontSize: font.size.sm },
   title: { fontSize: font.size.xxl, fontWeight: font.weight.bold },
   dashboardCard: {

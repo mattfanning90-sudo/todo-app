@@ -3,8 +3,10 @@ export interface User {
   email: string;
   name: string | null;
   username: string;
-  digest_frequency: 'none' | 'daily' | 'weekly' | 'biweekly';
+  digest_frequency: DigestFrequency;
 }
+
+export type DigestFrequency = 'none' | 'daily' | 'weekly' | 'fortnightly';
 
 export interface Board {
   id: number;

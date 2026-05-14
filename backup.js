@@ -6,6 +6,7 @@ let backupPool = null;
 
 const LOCK_KEY_BACKUP = 73810421;
 const LOCK_KEY_DIGEST = 73810422;
+const LOCK_KEY_AUTO_ARCHIVE = 73810424;
 
 async function withLeaderLock(primaryPool, key, fn) {
   const client = await primaryPool.connect();
@@ -180,5 +181,5 @@ async function closeBackupPool() {
 
 module.exports = {
   initBackup, runBackup, listSnapshots, restoreFromSnapshot, scheduleDailyBackup,
-  withLeaderLock, LOCK_KEY_BACKUP, LOCK_KEY_DIGEST, closeBackupPool,
+  withLeaderLock, LOCK_KEY_BACKUP, LOCK_KEY_DIGEST, LOCK_KEY_AUTO_ARCHIVE, closeBackupPool,
 };

@@ -120,7 +120,6 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
             value={text}
             onChangeText={setText}
             placeholder="e.g. Pay rent tomorrow"
-            autoFocus={!editing}
             multiline
           />
 

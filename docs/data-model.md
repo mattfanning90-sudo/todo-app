@@ -28,7 +28,7 @@ Postgres schema. Migrations live in `migrations/NNN_name.sql` and run on boot vi
 - `stage` ∈ `backlog | in_progress | done`
 - `category_id` (nullable), `priority` ∈ `none | low | medium | high`
 - `recurrence` (free-text rule), `assigned_to_user_id`
-- `archived`, `archived_at`, `completed_at`, `created_at`
+- `archived`, `archived_at`, `completed_at`, `created_at` — `completed_at` flips with the stage transition into/out of `done`; the nightly auto-archive cron (`server.js#runAutoArchive`) uses it as the timer for the 24 h window.
 
 ### `invites`
 - `(token, inviter_user_id, invitee_email, board_id, used_at, created_at)`. Tokens are random 32-byte hex.

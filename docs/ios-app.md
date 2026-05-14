@@ -30,6 +30,7 @@ ios-app/
       BoardScreen.tsx              # Kanban with stage filter + drag reorder
       TaskDetailScreen.tsx         # Modal create/edit
       DashboardScreen.tsx          # 7-day trend, priority/category breakdown
+      SettingsScreen.tsx           # Email-digest frequency picker
     theme/index.ts                 # Light/dark palette + spacing/radius/font tokens
 ```
 
@@ -49,7 +50,12 @@ Read-only:
 Mutating:
 - `POST /api/tasks`, `PUT /api/tasks/:id`, `DELETE /api/tasks/:id`
 - `POST /api/boards`
+- `PUT /api/user/digest` — Settings screen writes `digest_frequency` (`none | daily | weekly | fortnightly`).
 - All return JSON (the same shape the web client sees).
+
+## Keyboard behavior
+
+Text fields never auto-focus. The on-screen keyboard appears only when the user taps a field — this matches platform expectations and avoids the keyboard popping over a screen the user might want to scan first.
 
 ## Running locally
 
