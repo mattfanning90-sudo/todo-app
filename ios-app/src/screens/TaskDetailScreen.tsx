@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
@@ -45,7 +46,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   const canSave = useMemo(() => text.trim().length > 0, [text]);
 
   const save = async () => {
-    if (!canSave) return;
+    if (!canSave || saving) return;
     setSaving(true);
     try {
       const payload = {
@@ -61,8 +62,10 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
       } else {
         await api.createTask(payload);
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onClose(true);
     } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Could not save task', String(err));
     } finally {
       setSaving(false);
@@ -104,12 +107,12 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
           <Pressable onPress={save} disabled={!canSave || saving} hitSlop={10}>
             <Text
               style={{
-                color: canSave ? t.accent : t.textMuted,
+                color: canSave && !saving ? t.accent : t.textMuted,
                 fontSize: font.size.md,
                 fontWeight: font.weight.semibold,
               }}
             >
-              Save
+              {saving ? 'Saving…' : 'Save'}
             </Text>
           </Pressable>
         </View>

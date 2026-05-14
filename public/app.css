@@ -333,6 +333,8 @@
     .sidebar-bottom {
       margin-top: auto; padding: 12px 10px;
       border-top: 1px solid var(--border);
+      background: var(--bg-sidebar);
+      position: sticky; bottom: 0; z-index: 1;
     }
     .members-btn {
       display: flex; align-items: center; gap: 8px;
@@ -621,9 +623,12 @@
 
     /* Save button */
     .panel-save-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-top: 12px; margin-top: 8px; border-top: 1px solid var(--border); }
+    .panel-save-row .save-task-btn { margin-left: auto; }
     .save-task-btn { padding: 7px 20px; background: var(--primary); color: #fff; border: none; border-radius: var(--r-sm); font-size: 0.82rem; font-weight: 600; cursor: pointer; font-family: inherit; transition: background 0.2s; }
     .save-task-btn:hover { background: var(--primary-hover); }
     .save-task-btn.saved { background: #22C55E; }
+    .close-panel-btn { padding: 7px 14px; background: none; border: 1px solid var(--border-input); border-radius: var(--r-sm); font-size: 0.82rem; color: var(--text-muted); cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .close-panel-btn:hover { border-color: var(--border-input); background: var(--bg-hover); color: var(--text); }
 
     /* Inline new category */
     .add-cat-inline-btn { font-size: 0.73rem; color: var(--primary); background: none; border: none; cursor: pointer; padding: 4px 0 0; font-family: inherit; font-weight: 600; display: block; }
