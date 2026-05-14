@@ -118,9 +118,15 @@ export function BoardListScreen({ onOpenBoard, onOpenDashboard, onOpenSettings }
         contentContainerStyle={{ paddingBottom: spacing.xxl }}
         ListEmptyComponent={
           !loading ? (
-            <Text style={[styles.empty, { color: t.textMuted }]}>
-              No boards yet. Create your first one below.
-            </Text>
+            <View style={styles.emptyWrap}>
+              <Text style={[styles.empty, { color: t.textMuted }]}>
+                You don't have any boards yet.
+              </Text>
+              <Button
+                label="+ Create your first board"
+                onPress={() => setCreating(true)}
+              />
+            </View>
           ) : null
         }
         renderItem={({ item }) => (
@@ -215,9 +221,10 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: font.size.md, fontWeight: font.weight.semibold },
   empty: {
     textAlign: 'center',
-    paddingVertical: spacing.xxl,
+    paddingVertical: spacing.lg,
     fontSize: font.size.md,
   },
+  emptyWrap: { paddingTop: spacing.xxl },
   createBox: { marginBottom: spacing.lg },
   createButtons: { flexDirection: 'row', gap: spacing.sm },
 });

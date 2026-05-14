@@ -1,5 +1,11 @@
   const STAGES = ['backlog', 'in_progress', 'done'];
   const STAGE_LABELS = { backlog: 'Backlog', in_progress: 'In Progress', done: 'Done' };
+  const STAGE_EMPTY = {
+    backlog: 'Nothing here yet. Add a task above ↑',
+    in_progress: 'Drag a backlog task here when you start it.',
+    done: 'Tasks you complete will land here.',
+  };
+  const emptyMarkup = stage => `<li class="col-empty">${STAGE_EMPTY[stage]}</li>`;
   const COLOR_PALETTE = ['#4285F4','#34A853','#EA4335','#FBBC05','#8B5CF6','#F59E0B','#10B981','#EC4899'];
 
   let categories = [];
@@ -34,7 +40,7 @@
     try { localStorage.setItem(BOOT_CACHE_KEY, JSON.stringify({ ...payload, ts: Date.now() })); } catch {}
   }
   function clearTaskColumns() {
-    STAGES.forEach(s => { getList(s).innerHTML = '<li class="col-empty">No tasks yet</li>'; });
+    STAGES.forEach(s => { getList(s).innerHTML = emptyMarkup(s); });
   }
 
   /* ── Theme ── */
@@ -448,7 +454,7 @@
     if (!isOwn) { banner.textContent = `Viewing shared board`; banner.style.display = 'inline'; }
     else { banner.style.display = 'none'; }
 
-    STAGES.forEach(s => { getList(s).innerHTML = '<li class="col-empty">No tasks yet</li>'; });
+    STAGES.forEach(s => { getList(s).innerHTML = emptyMarkup(s); });
     activeFilter = null; todayFilter = false;
 
     [boardMembers, categories] = await Promise.all([
@@ -843,6 +849,7 @@
 
         <div class="panel-save-row">
           <button type="button" class="archive-btn">Archive</button>
+          <button type="button" class="close-panel-btn">Close</button>
           <button type="button" class="save-task-btn">Save</button>
         </div>
       </div>`;
@@ -965,6 +972,11 @@
         saveBtn.classList.remove('saved');
         panel.classList.remove('open');
       }, 800);
+    });
+
+    card.querySelector('.close-panel-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      panel.classList.remove('open');
     });
 
     const archiveBtn = card.querySelector('.archive-btn');

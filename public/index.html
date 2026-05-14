@@ -38,6 +38,9 @@
   </div>
 
   <div class="header-right">
+    <button class="hdr-btn" id="search-btn" data-action="openSearch" aria-label="Search tasks" title="Search tasks (⌘K)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    </button>
     <button class="hdr-btn" id="theme-toggle" data-action="toggleTheme" aria-label="Toggle theme" title="Toggle theme">
       <svg id="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
     </button>
@@ -202,21 +205,21 @@
             <span class="column-title">Backlog</span>
             <span class="column-count" id="count-backlog">0</span>
           </div>
-          <ul class="task-list" id="list-backlog"><li class="col-empty">No tasks yet</li></ul>
+          <ul class="task-list" id="list-backlog"><li class="col-empty">Nothing here yet. Add a task above ↑</li></ul>
         </div>
         <div class="column" data-stage="in_progress">
           <div class="column-header">
             <span class="column-title">In Progress</span>
             <span class="column-count" id="count-in_progress">0</span>
           </div>
-          <ul class="task-list" id="list-in_progress"><li class="col-empty">No tasks yet</li></ul>
+          <ul class="task-list" id="list-in_progress"><li class="col-empty">Drag a backlog task here when you start it.</li></ul>
         </div>
         <div class="column" data-stage="done">
           <div class="column-header">
             <span class="column-title">Done</span>
             <span class="column-count" id="count-done">0</span>
           </div>
-          <ul class="task-list" id="list-done"><li class="col-empty">No tasks yet</li></ul>
+          <ul class="task-list" id="list-done"><li class="col-empty">Tasks you complete will land here.</li></ul>
         </div>
       </div>
     </div>

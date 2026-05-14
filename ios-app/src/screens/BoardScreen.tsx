@@ -27,6 +27,12 @@ const STAGES: { key: Stage; label: string }[] = [
   { key: 'done', label: 'Done' },
 ];
 
+const STAGE_EMPTY: Record<Stage, string> = {
+  backlog: 'Nothing here yet. Tap + Add task below.',
+  progress: 'Drag a backlog task here when you start it.',
+  done: 'Tasks you complete will land here.',
+};
+
 interface Props {
   board: Board;
   onBack: () => void;
@@ -216,7 +222,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         ListEmptyComponent={
           !loading ? (
             <Text style={[styles.empty, { color: t.textMuted }]}>
-              Nothing here. Tap + to add a task.
+              {STAGE_EMPTY[stage]}
             </Text>
           ) : null
         }
