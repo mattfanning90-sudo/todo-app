@@ -130,6 +130,8 @@
       const list = getList(stage);
       const visible = [...list.querySelectorAll('.task-card')].filter(c => c.style.display !== 'none').length;
       document.getElementById('count-' + stage).textContent = visible;
+      const mtab = document.getElementById('mtab-count-' + stage);
+      if (mtab) mtab.textContent = visible;
     });
     const today = new Date().toISOString().split('T')[0];
     const todayCount = [...document.querySelectorAll('.task-card')].filter(c => c.dataset.dueDate === today).length;
@@ -1818,6 +1820,17 @@
     }
   });
 
+  function setMobileStage(stage) {
+    if (!STAGES.includes(stage)) return;
+    const board = document.querySelector('.board');
+    if (board) board.dataset.mobileStage = stage;
+    document.querySelectorAll('.mobile-stage-tab').forEach(tab => {
+      const active = tab.dataset.stage === stage;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+  }
+
   /* ── Event delegation: replaces inline onclick handlers so CSP can ban inline JS ── */
   const __actions = {
     toggleSidebar, toggleBoardMenu, switchBoard, closeBoardMenu, openMembersModal,
@@ -1828,7 +1841,7 @@
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
-    deleteCategory, clearAssign, restoreTask,
+    deleteCategory, clearAssign, restoreTask, setMobileStage,
     openMembersFromBoardMenu: () => { closeBoardMenu(); openMembersModal(); },
     closeBoardMenuAndCreateBoard: () => { closeBoardMenu(); openCreateBoardModal(); },
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },
