@@ -755,6 +755,7 @@
               ${task.due_date ? `<span class="due-badge ${getDueBadgeClass(task.due_date)}">${formatDueDate(task.due_date)}</span>` : ''}
               ${(task.subtasks && task.subtasks.length) ? `<span class="subtask-count">${task.subtasks.filter(s=>s.done).length}/${task.subtasks.length}</span>` : ''}
               ${task.assigned_to_user_id ? `<span class="assignee-badge">👤 ${escapeHtml(task.assigned_to_name || task.assigned_to_email || '?')}</span>` : ''}
+              <span class="repeat-badge" title="Repeats — a new copy is created when marked Done"${task.recurrence ? '' : ' hidden'}>🔁</span>
               <span class="task-age">${daysOpen(task.created_at)}</span>
             </div>
             <div class="task-meta">
@@ -1044,6 +1045,10 @@
     });
 
     card.querySelector('.recurrence-sel').addEventListener('change', () => {
+      const val = card.querySelector('.recurrence-sel').value;
+      card.dataset.recurrence = val;
+      const badge = card.querySelector('.repeat-badge');
+      if (badge) badge.hidden = !val;
       apiPut(`/api/tasks/${task.id}`, getCardPayload(card));
     });
 

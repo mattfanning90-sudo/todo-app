@@ -504,6 +504,8 @@
     }
 
     .task-age { font-size: 0.68rem; color: var(--text-light); }
+    .repeat-badge { font-size: 0.72rem; line-height: 1; }
+    .repeat-badge[hidden] { display: none; }
 
     .task-status-preview { font-size: 0.7rem; color: var(--text-muted); }
     .task-owner-preview { font-size: 0.7rem; color: var(--text-muted); }
