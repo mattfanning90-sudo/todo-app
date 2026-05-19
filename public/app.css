@@ -769,6 +769,11 @@
     .invite-msg.error { color: #EF4444; }
     .invite-msg.success { color: #22C55E; }
 
+    /* Default (desktop): the mobile tab strip is hidden. Declared BEFORE
+       the @media block so the mobile override at the same specificity
+       wins via source order on phone viewports. */
+    .mobile-stage-tabs { display: none; }
+
     @media (max-width: 768px) {
       html, body { height: auto; overflow: auto; }
 
@@ -881,8 +886,6 @@
       .dash-stats { grid-template-columns: 1fr 1fr; }
       .dash-panels { grid-template-columns: 1fr; }
     }
-    /* Default (desktop): the mobile tab strip is hidden. */
-    .mobile-stage-tabs { display: none; }
     /* ── Dashboard ── */
     .dashboard-view { display: none; padding: 20px; overflow-y: auto; }
     .dashboard-view.active { display: block; }
