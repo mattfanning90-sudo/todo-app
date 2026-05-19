@@ -766,35 +766,62 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   const task = rows[0];
 
-  const { text, status = '', owners = [], cal_start = '', cal_end = '', stage,
-    category_id = null, due_date = '', priority = 'none', recurrence = '',
-    subtasks = [], assigned_to_user_id = null, archived } = req.body;
+  // Partial-update semantics: only fields present in the request body are
+  // written. Previously the destructure-with-defaults pattern overwrote any
+  // omitted field with its default ('', null, [], 'none', etc.), so an iOS
+  // toggleDone sending {stage} silently cleared recurrence, priority,
+  // category, owners, subtasks, etc.
+  const body = req.body;
+  const has = (k) => Object.prototype.hasOwnProperty.call(body, k);
+  const sets = [];
+  const vals = [];
+  const set = (col, val) => { sets.push(`${col} = $${sets.length + 1}`); vals.push(val); };
+  const setKeep = (col, val) => { sets.push(`${col} = COALESCE($${sets.length + 1}, ${col})`); vals.push(val); };
 
-  if (assigned_to_user_id && assigned_to_user_id !== task.assigned_to_user_id && assigned_to_user_id !== req.user.id) {
+  if (has('text'))                 setKeep('text', body.text || null);
+  if (has('stage'))                setKeep('stage', body.stage || null);
+  if (has('status'))               set('status', body.status);
+  if (has('owners'))               set('owners', JSON.stringify(body.owners));
+  if (has('cal_start'))            set('cal_start', body.cal_start);
+  if (has('cal_end'))              set('cal_end', body.cal_end);
+  if (has('category_id'))          set('category_id', body.category_id);
+  if (has('due_date'))             set('due_date', body.due_date);
+  if (has('priority'))             set('priority', body.priority);
+  if (has('recurrence'))           set('recurrence', body.recurrence);
+  if (has('subtasks'))             set('subtasks', JSON.stringify(body.subtasks));
+  if (has('assigned_to_user_id'))  set('assigned_to_user_id', body.assigned_to_user_id);
+
+  if (has('archived')) {
+    const archiveVal = body.archived === true ? true : body.archived === false ? false : task.archived;
+    const archiveAt = body.archived === true && !task.archived_at ? new Date() : task.archived_at;
+    set('archived', archiveVal);
+    set('archived_at', archiveAt);
+  }
+
+  // completed_at is derived from the stage transition.
+  if (has('stage')) {
+    const newStage = body.stage || task.stage;
+    const completedAt = newStage === 'done' && task.stage !== 'done' ? new Date()
+      : newStage !== 'done' && task.stage === 'done' ? null
+      : task.completed_at;
+    set('completed_at', completedAt);
+  }
+
+  if (has('assigned_to_user_id') && body.assigned_to_user_id
+      && body.assigned_to_user_id !== task.assigned_to_user_id
+      && body.assigned_to_user_id !== req.user.id) {
+    const notifText = (body.text || task.text).slice(0, 60);
     await pool.query(
       'INSERT INTO notifications (user_id, type, message, task_id, from_user_id) VALUES ($1,$2,$3,$4,$5)',
-      [assigned_to_user_id, 'task_assigned',
-       `${req.user.name || req.user.username} assigned you: "${(text || task.text).slice(0, 60)}"`, task.id, req.user.id]
+      [body.assigned_to_user_id, 'task_assigned',
+       `${req.user.name || req.user.username} assigned you: "${notifText}"`, task.id, req.user.id]
     );
   }
 
-  const archiveVal = archived === true ? true : archived === false ? false : task.archived;
-  const archiveAt = archived === true && !task.archived_at ? new Date() : task.archived_at;
-
-  const newStage = stage || task.stage;
-  const completedAt = newStage === 'done' && task.stage !== 'done' ? new Date()
-    : newStage !== 'done' && task.stage === 'done' ? null
-    : task.completed_at;
-
-  await pool.query(
-    `UPDATE tasks SET text = COALESCE($1, text), status = $2, owners = $3, cal_start = $4, cal_end = $5,
-     stage = COALESCE($6, stage), category_id = $7, due_date = $8, priority = $9,
-     recurrence = $10, subtasks = $11, assigned_to_user_id = $12,
-     archived = $13, archived_at = $14, completed_at = $15 WHERE id = $16`,
-    [text || null, status, JSON.stringify(owners), cal_start, cal_end, stage || null,
-     category_id, due_date, priority, recurrence, JSON.stringify(subtasks), assigned_to_user_id,
-     archiveVal, archiveAt, completedAt, task.id]
-  );
+  if (sets.length > 0) {
+    vals.push(task.id);
+    await pool.query(`UPDATE tasks SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+  }
   res.json({ ok: true });
 }));
 
