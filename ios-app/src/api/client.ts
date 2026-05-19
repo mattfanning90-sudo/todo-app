@@ -50,6 +50,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': ACCEPT_JSON,
     Accept: ACCEPT_JSON,
+    // Required by the server CSRF middleware on /api/* state-changing
+    // routes; harmless on GET.
+    'X-Requested-With': 'fetch',
   };
   if (cookie) headers.Cookie = cookie;
 

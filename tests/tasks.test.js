@@ -80,6 +80,19 @@ describe('tasks CRUD', () => {
     const task = list.body.find(t => t.id === id);
     expect(task.recurrence).toBe('');
   });
+
+  it('rejects POST /api/tasks without CSRF protection header', async () => {
+    // Build the agent the normal way (which auto-injects X-Requested-With),
+    // then make a raw supertest call that omits the header to simulate a
+    // cross-origin form-based CSRF attack.
+    const agent = await signupAndAgent();
+    const res = await request.agent(app)
+      .post('/api/tasks')
+      .set('Cookie', agent.jar.getCookies('http://127.0.0.1').join('; '))
+      .send({ text: 'csrf attempt' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('csrf_protection');
+  });
 });
 
 describe('GET /api/tasks/count', () => {
