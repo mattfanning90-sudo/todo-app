@@ -209,13 +209,19 @@ async function generateUsername() {
 async function seedCategories(userId, boardId) {
   const { rows } = await pool.query('SELECT COUNT(*) as c FROM categories WHERE user_id = $1', [userId]);
   if (Number(rows[0].c) === 0) {
-    await pool.query('BEGIN');
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       for (const c of DEFAULT_CATEGORIES) {
-        await pool.query('INSERT INTO categories (user_id, board_id, name, color) VALUES ($1, $2, $3, $4)', [userId, boardId, c.name, c.color]);
+        await client.query('INSERT INTO categories (user_id, board_id, name, color) VALUES ($1, $2, $3, $4)', [userId, boardId, c.name, c.color]);
       }
-      await pool.query('COMMIT');
-    } catch (e) { await pool.query('ROLLBACK'); throw e; }
+      await client.query('COMMIT');
+    } catch (e) {
+      try { await client.query('ROLLBACK'); } catch {}
+      throw e;
+    } finally {
+      client.release();
+    }
   }
 }
 
@@ -810,13 +816,19 @@ app.post('/api/reorder', requireAuth, wrap(async (req, res) => {
   const { boardId } = await getBoardContext(req);
   const { order } = req.body;
   if (!Array.isArray(order)) return res.status(400).json({ error: 'Invalid' });
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     for (const [idx, id] of order.entries()) {
-      await pool.query('UPDATE tasks SET position = $1 WHERE id = $2 AND board_id = $3', [idx, id, boardId]);
+      await client.query('UPDATE tasks SET position = $1 WHERE id = $2 AND board_id = $3', [idx, id, boardId]);
     }
-    await pool.query('COMMIT');
-  } catch (e) { await pool.query('ROLLBACK'); throw e; }
+    await client.query('COMMIT');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
   res.json({ ok: true });
 }));
 
@@ -889,25 +901,26 @@ app.post('/api/import', requireAuth, wrap(async (req, res) => {
   const { tasks: importTasks = [], categories: importCategories = [] } = req.body;
   if (!Array.isArray(importTasks)) return res.status(400).json({ error: 'Invalid data' });
   const board = await ensureDefaultBoard(req.user.id);
-  await pool.query('BEGIN');
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const catMap = {};
     for (const c of importCategories) {
       if (!c.name) continue;
       const color = /^#[0-9a-fA-F]{3,6}$/.test(c.color) ? c.color : '#667eea';
-      const { rows } = await pool.query(
+      const { rows } = await client.query(
         'INSERT INTO categories (user_id, board_id, name, color) VALUES ($1,$2,$3,$4) ON CONFLICT DO NOTHING RETURNING id',
         [req.user.id, board.id, String(c.name).slice(0, 100), color]
       );
       if (rows[0]) catMap[c.id] = rows[0].id;
     }
-    const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [board.id]);
+    const maxPos = await client.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [board.id]);
     let pos = (maxPos.rows[0].m ?? -1) + 1;
     for (const t of importTasks) {
       if (!t.text) continue;
       const text = String(t.text).slice(0, 2000);
       const catId = t.category_id && catMap[t.category_id] ? catMap[t.category_id] : null;
-      await pool.query(
+      await client.query(
         `INSERT INTO tasks (user_id, board_id, text, status, owners, cal_start, cal_end, position, stage, due_date, priority, recurrence, subtasks, category_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [req.user.id, board.id, text, t.status || '', JSON.stringify(t.owners || []),
@@ -915,8 +928,13 @@ app.post('/api/import', requireAuth, wrap(async (req, res) => {
          t.due_date || '', t.priority || 'none', t.recurrence || '', JSON.stringify(t.subtasks || []), catId]
       );
     }
-    await pool.query('COMMIT');
-  } catch (e) { await pool.query('ROLLBACK'); throw e; }
+    await client.query('COMMIT');
+  } catch (e) {
+    try { await client.query('ROLLBACK'); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
   res.json({ ok: true });
 }));
 
