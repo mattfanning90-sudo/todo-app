@@ -279,7 +279,7 @@
     document.querySelectorAll('.cat-selector').forEach(sel => renderCatSelector(sel, sel.closest('.task-card')));
   }
 
-  async function deleteCategory(e, catId) {
+  async function deleteCategory(catId, e) {
     e.stopPropagation();
     if (!confirm('Delete this category? Tasks will become uncategorised.')) return;
     await apiDelete(`/api/categories/${catId}` + boardParam());
@@ -634,7 +634,7 @@
       people.map(u => `<option value="${u.id}" ${currentAssigneeId == u.id ? 'selected' : ''}>${escapeHtml(u.name || u.email)}</option>`).join('');
   }
 
-  function clearAssign(e, taskId) {
+  function clearAssign(taskId, e) {
     e.stopPropagation();
     const card = e.target.closest('.task-card');
     card.dataset.assignedToUserId = '';
@@ -923,7 +923,7 @@
 
     function renderAssignChip(card, uid, name, taskId) {
       const row = card.querySelector('.assign-chip-row');
-      row.innerHTML = uid ? `<div class="assign-chip">👤 ${escapeHtml(name)}<button data-action="clearAssign" data-args="[${JSON.stringify(String(taskId))}]">×</button></div>` : '';
+      row.innerHTML = uid ? `<div class="assign-chip">👤 ${escapeHtml(name)}<button data-action="clearAssign" data-args="[${Number(taskId)}]">×</button></div>` : '';
       updateAssigneeBadge(card, uid);
     }
 
