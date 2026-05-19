@@ -93,11 +93,12 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
   const snap = rows[0].data;
   console.log(`Backup: restoring from snapshot ${snapshotId} (taken ${snap.takenAt})`);
 
-  await primaryPool.query('BEGIN');
+  const client = await primaryPool.connect();
   try {
+    await client.query('BEGIN');
     // Restore in FK-safe order: users → boards → categories/members/invites → tasks
     for (const u of snap.users) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO users (id, google_id, email, name, username, password_hash, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (id) DO UPDATE SET
@@ -108,7 +109,7 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
     }
 
     for (const b of snap.boards) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO boards (id, owner_user_id, name, slug, created_at)
         VALUES ($1,$2,$3,$4,$5)
         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, slug = EXCLUDED.slug
@@ -116,7 +117,7 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
     }
 
     for (const c of snap.categories) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO categories (id, user_id, board_id, name, color, created_at)
         VALUES ($1,$2,$3,$4,$5,$6)
         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, color = EXCLUDED.color
@@ -124,7 +125,7 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
     }
 
     for (const m of (snap.board_members || [])) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO board_members (id, board_id, board_owner_id, member_user_id, created_at)
         VALUES ($1,$2,$3,$4,$5)
         ON CONFLICT (id) DO NOTHING
@@ -132,7 +133,7 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
     }
 
     for (const inv of (snap.invites || [])) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO invites (id, token, inviter_user_id, invitee_email, board_id, board_owner_id, used_at, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT (id) DO NOTHING
@@ -140,7 +141,7 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
     }
 
     for (const t of snap.tasks) {
-      await primaryPool.query(`
+      await client.query(`
         INSERT INTO tasks (id, user_id, board_id, text, status, owners, cal_start, cal_end,
           position, stage, category_id, due_date, priority, recurrence, subtasks,
           assigned_to_user_id, created_at)
@@ -156,15 +157,17 @@ async function restoreFromSnapshot(primaryPool, snapshotId) {
 
     // Reset sequences so new inserts don't collide with restored IDs
     for (const table of ['users', 'boards', 'categories', 'tasks', 'board_members', 'invites']) {
-      await primaryPool.query(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1))`);
+      await client.query(`SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1))`);
     }
 
-    await primaryPool.query('COMMIT');
+    await client.query('COMMIT');
     console.log(`Backup: restore complete — ${snap.users.length} users, ${snap.tasks.length} tasks`);
     return { users: snap.users.length, boards: snap.boards.length, tasks: snap.tasks.length };
   } catch (e) {
-    await primaryPool.query('ROLLBACK');
+    try { await client.query('ROLLBACK'); } catch {}
     throw e;
+  } finally {
+    client.release();
   }
 }
 

@@ -40,15 +40,21 @@ async function init() {
   for (const file of files) {
     if (ran.has(file)) continue;
     const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-    await pool.query('BEGIN');
+    // Use a single checked-out client so BEGIN/migration/INSERT/COMMIT all
+    // run on the same connection. pool.query may dispatch to different
+    // clients per call, which would silently break the transaction.
+    const client = await pool.connect();
     try {
-      await pool.query(sql);
-      await pool.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
-      await pool.query('COMMIT');
+      await client.query('BEGIN');
+      await client.query(sql);
+      await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
+      await client.query('COMMIT');
       console.log(`Migration: ran ${file}`);
     } catch (e) {
-      await pool.query('ROLLBACK');
+      try { await client.query('ROLLBACK'); } catch {}
       throw new Error(`Migration ${file} failed: ${e.message}`);
+    } finally {
+      client.release();
     }
   }
 }
