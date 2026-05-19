@@ -496,6 +496,25 @@ app.get('/api/check-username', usernameLimiter, async (req, res) => {
 /* ── Boards CRUD ── */
 app.use('/api/', apiLimiter);
 
+/* ── CSRF protection ──
+   Blocks cross-site state-changing requests by requiring either a same-origin
+   Origin header or a custom X-Requested-With header — browsers won't attach
+   either to simple <form>-based CSRF attacks. SameSite=lax on the session
+   cookie helps but doesn't cover top-level form POSTs. */
+const appOrigin = (() => {
+  try { return new URL(APP_URL).origin; } catch { return null; }
+})();
+function requireCsrfProtection(req, res, next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (req.get('X-Requested-With')) return next();
+  const origin = req.get('Origin');
+  if (origin && appOrigin) {
+    try { if (new URL(origin).origin === appOrigin) return next(); } catch {}
+  }
+  return res.status(403).json({ error: 'csrf_protection' });
+}
+app.use('/api/', requireCsrfProtection);
+
 app.get('/api/boards', requireAuth, wrap(async (req, res) => {
   await ensureDefaultBoard(req.user.id);
   const { rows } = await pool.query(

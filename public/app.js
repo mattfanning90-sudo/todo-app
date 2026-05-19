@@ -90,9 +90,12 @@
   }
 
   async function apiFetch(method, url, body) {
+    const headers = { 'X-Requested-With': 'fetch' };
+    if (body !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(url, {
       method,
-      ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {})
+      headers,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {})
     });
     if (!res.ok && method === 'POST') throw new Error(`Request failed: ${res.status}`);
     if (method !== 'GET' && (url.startsWith('/api/tasks') || url.startsWith('/api/categories'))) {
@@ -485,7 +488,7 @@
     const name = document.getElementById('new-board-name').value.trim();
     const msg = document.getElementById('create-board-msg');
     if (!name) { msg.style.color = '#EF4444'; msg.textContent = 'Please enter a name.'; return; }
-    const res = await fetch('/api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+    const res = await fetch('/api/boards', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }, body: JSON.stringify({ name }) });
     const board = await res.json();
     if (!res.ok) { msg.style.color = '#EF4444'; msg.textContent = board.error || 'Error'; return; }
     myBoards.push(board);
@@ -526,7 +529,7 @@
     msgEl.textContent = ''; msgEl.className = 'invite-msg';
     if (!email) return;
     try {
-      const res = await fetch('/api/boards/invite', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) });
+      const res = await fetch('/api/boards/invite', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }, body: JSON.stringify({ email }) });
       const data = await res.json();
       if (!res.ok) { msgEl.textContent = data.error; msgEl.classList.add('error'); return; }
       document.getElementById('invite-email').value = '';
@@ -575,12 +578,12 @@
   }
 
   async function revokeInvite(id) {
-    await fetch(`/api/boards/invites/${id}`, { method: 'DELETE' });
+    await fetch(`/api/boards/invites/${id}`, { method: 'DELETE', headers: { 'X-Requested-With': 'fetch' } });
     await loadPendingInvites();
   }
 
   async function removeMember(userId) {
-    await fetch(`/api/boards/members/${userId}`, { method: 'DELETE' });
+    await fetch(`/api/boards/members/${userId}`, { method: 'DELETE', headers: { 'X-Requested-With': 'fetch' } });
     boardMembers = boardMembers.filter(m => m.id !== userId);
     renderMembersList();
   }
@@ -607,7 +610,7 @@
     dropdown.style.display = open ? 'block' : 'none';
     if (open) {
       closeAccountMenu();
-      await fetch('/api/notifications/read', { method: 'POST' });
+      await fetch('/api/notifications/read', { method: 'POST', headers: { 'X-Requested-With': 'fetch' } });
       document.getElementById('notif-badge').style.display = 'none';
     }
   }
@@ -954,7 +957,7 @@
             shareResults.style.display = 'none';
             shareSearch.value = `Sharing to ${name}…`;
             shareSearch.disabled = true;
-            await fetch(`/api/tasks/${task.id}/share`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipient_user_id: uid, ...boardBody() }) });
+            await fetch(`/api/tasks/${task.id}/share`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' }, body: JSON.stringify({ recipient_user_id: uid, ...boardBody() }) });
             shareSearch.value = `✓ Shared with ${name}`;
             setTimeout(() => { shareSearch.value = ''; shareSearch.disabled = false; }, 2500);
           });
