@@ -776,6 +776,27 @@
       .app-body { overflow: visible; height: auto; }
       .main-content { overflow: visible; }
 
+      /* Sidebar becomes an off-canvas drawer on phones — toggled via the
+         hamburger button, dimmed by .sidebar-overlay. The default
+         desktop sidebar rules give it width:240px inline, which on a
+         phone eats most of the viewport, so override here. */
+      .sidebar {
+        position: fixed;
+        top: var(--header-h); left: 0; bottom: 0;
+        z-index: 100; width: var(--sidebar-w);
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        height: auto;
+        box-shadow: var(--shadow-lg);
+      }
+      .sidebar.collapsed { width: var(--sidebar-w); transform: translateX(-100%); }
+      .sidebar.mobile-visible { transform: translateX(0); }
+      .sidebar-overlay {
+        display: none; position: fixed; inset: 0;
+        background: rgba(0,0,0,0.45); z-index: 99;
+      }
+      .sidebar-overlay.visible { display: block; }
+
       /* Keep the add-task input pinned below the header so it's always
          one tap away while scrolling a long column. */
       .content-top {
