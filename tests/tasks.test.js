@@ -37,6 +37,49 @@ describe('tasks CRUD', () => {
     const res = await request(app).get('/api/tasks');
     expect(res.status).toBe(401);
   });
+
+  it('PUT preserves unrelated fields when only a subset is sent', async () => {
+    const agent = await signupAndAgent();
+    const create = await agent.post('/api/tasks').send({
+      text: 'Recurring report',
+      stage: 'backlog',
+      priority: 'high',
+      recurrence: 'weekly',
+      due_date: '2026-06-01',
+    });
+    expect(create.status).toBe(200);
+    const id = create.body.id;
+
+    // iOS-style toggleDone: send only stage. Previously this wiped
+    // recurrence, priority, due_date back to defaults.
+    const put = await agent.put(`/api/tasks/${id}`).send({ stage: 'done' });
+    expect(put.status).toBe(200);
+
+    const list = await agent.get('/api/tasks');
+    const task = list.body.find(t => t.id === id);
+    expect(task.stage).toBe('done');
+    expect(task.priority).toBe('high');
+    expect(task.recurrence).toBe('weekly');
+    expect(task.due_date).toBe('2026-06-01');
+  });
+
+  it('PUT honours an explicit empty value to clear a field', async () => {
+    const agent = await signupAndAgent();
+    const create = await agent.post('/api/tasks').send({
+      text: 'Task with recurrence',
+      stage: 'backlog',
+      recurrence: 'daily',
+    });
+    const id = create.body.id;
+
+    // Explicitly clear recurrence by sending ''.
+    const put = await agent.put(`/api/tasks/${id}`).send({ recurrence: '' });
+    expect(put.status).toBe(200);
+
+    const list = await agent.get('/api/tasks');
+    const task = list.body.find(t => t.id === id);
+    expect(task.recurrence).toBe('');
+  });
 });
 
 describe('GET /api/tasks/count', () => {
