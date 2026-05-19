@@ -216,7 +216,7 @@
       const btn = document.createElement('button');
       btn.className = 'sidebar-nav-item filter-btn' + (activeFilter === cat.id ? ' active' : '');
       btn.dataset.id = String(cat.id);
-      btn.innerHTML = `<span class="sidebar-dot" style="background:${cat.color}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cat.name)}</span><button class="sidebar-cat-remove" data-action="deleteCategory" data-args="[${cat.id}]">×</button>`;
+      btn.innerHTML = `<span class="sidebar-dot" style="background:${safeColor(cat.color)}"></span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cat.name)}</span><button class="sidebar-cat-remove" data-action="deleteCategory" data-args="[${cat.id}]">×</button>`;
       btn.addEventListener('click', e => {
         if (!e.target.classList.contains('sidebar-cat-remove')) {
           clearTodayFilter();
@@ -511,7 +511,7 @@
     if (!boardMembers.length) { el.innerHTML = '<p class="no-members">No members yet. Invite someone below.</p>'; return; }
     el.innerHTML = boardMembers.map(m => `
       <div class="member-item">
-        <div class="member-avatar">${(m.name || m.email)[0].toUpperCase()}</div>
+        <div class="member-avatar">${escapeHtml((m.name || m.email)[0].toUpperCase())}</div>
         <div class="member-info">
           <div class="member-name">${escapeHtml(m.name || m.email)}</div>
           <div class="member-email">${escapeHtml(m.email)}</div>
@@ -899,7 +899,7 @@
         if (!users.length) { assignResults.innerHTML = '<div class="user-result-empty">No users found</div>'; assignResults.style.display = 'block'; return; }
         assignResults.innerHTML = users.map(u => `
           <div class="user-result" data-id="${u.id}" data-name="${escapeHtml(u.name || u.username || u.email)}">
-            <div class="user-result-avatar">${(u.name || u.username || u.email)[0].toUpperCase()}</div>
+            <div class="user-result-avatar">${escapeHtml((u.name || u.username || u.email)[0].toUpperCase())}</div>
             <div class="user-result-info">
               <div class="user-result-name">${escapeHtml(u.name || u.username)}</div>
               <div class="user-result-sub">@${escapeHtml(u.username || '')} · ${escapeHtml(u.email)}</div>
@@ -940,7 +940,7 @@
         if (!users.length) { shareResults.innerHTML = '<div class="user-result-empty">No users found</div>'; shareResults.style.display = 'block'; return; }
         shareResults.innerHTML = users.map(u => `
           <div class="user-result" data-id="${u.id}" data-name="${escapeHtml(u.name || u.username || u.email)}">
-            <div class="user-result-avatar">${(u.name || u.username || u.email)[0].toUpperCase()}</div>
+            <div class="user-result-avatar">${escapeHtml((u.name || u.username || u.email)[0].toUpperCase())}</div>
             <div class="user-result-info">
               <div class="user-result-name">${escapeHtml(u.name || u.username)}</div>
               <div class="user-result-sub">@${escapeHtml(u.username || '')} · ${escapeHtml(u.email)}</div>
@@ -1253,6 +1253,12 @@
   function escapeHtml(str) {
     if (!str) return '';
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+  // Validate before interpolating into a style="" attribute. Anything that
+  // isn't a plain hex color falls back to neutral so a malicious value
+  // can't break out of the attribute.
+  function safeColor(c) {
+    return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : '#94A3B8';
   }
 
   function getDueBadgeClass(dueDate) {
@@ -1748,7 +1754,7 @@
       <div class="search-result" data-idx="${i}" data-board-id="${r.board_id}" data-board-name="${escapeHtml(r.board_name)}" data-board-owner="${r.board_owner_id}" data-task-id="${r.id}">
         <div class="search-result-info">
           <div class="search-result-text">${escapeHtml(r.text)}</div>
-          <div class="search-result-meta">${escapeHtml(r.board_name)}${r.cat_name ? ' · <span style="color:' + r.cat_color + '">' + escapeHtml(r.cat_name) + '</span>' : ''}${r.due_date ? ' · ' + r.due_date : ''}</div>
+          <div class="search-result-meta">${escapeHtml(r.board_name)}${r.cat_name ? ' · <span style="color:' + safeColor(r.cat_color) + '">' + escapeHtml(r.cat_name) + '</span>' : ''}${r.due_date ? ' · ' + escapeHtml(r.due_date) : ''}</div>
         </div>
         <span class="search-result-stage ${r.stage}">${r.stage.replace('_', ' ')}</span>
       </div>`).join('');
