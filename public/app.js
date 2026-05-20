@@ -1,3 +1,4 @@
+  console.log('[Tasks] app.js DEPLOY-MARKER-V3 loaded at', new Date().toISOString());
   const STAGES = ['backlog', 'in_progress', 'done'];
   const STAGE_LABELS = { backlog: 'Backlog', in_progress: 'In Progress', done: 'Done' };
   const STAGE_EMPTY = {
