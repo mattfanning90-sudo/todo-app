@@ -133,6 +133,8 @@
       const list = getList(stage);
       const visible = [...list.querySelectorAll('.task-card')].filter(c => c.style.display !== 'none').length;
       document.getElementById('count-' + stage).textContent = visible;
+      const mtab = document.getElementById('mtab-count-' + stage);
+      if (mtab) mtab.textContent = visible;
     });
     const today = new Date().toISOString().split('T')[0];
     const todayCount = [...document.querySelectorAll('.task-card')].filter(c => c.dataset.dueDate === today).length;
@@ -1832,6 +1834,34 @@
     }
   });
 
+  function jumpToStage(stage) {
+    if (!STAGES.includes(stage)) return;
+    const col = document.querySelector(`.column[data-stage="${stage}"]`);
+    if (col) col.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setActiveStageTab(stage);
+  }
+  function setActiveStageTab(stage) {
+    document.querySelectorAll('.mobile-stage-tab').forEach(t => {
+      t.classList.toggle('active', t.dataset.stage === stage);
+    });
+  }
+  // While the user scrolls, keep the active tab in sync with whichever
+  // column is closest to the top of the viewport.
+  if ('IntersectionObserver' in window) {
+    const tabs = document.getElementById('mobile-stage-tabs');
+    if (tabs) {
+      const io = new IntersectionObserver(entries => {
+        const onScreen = entries.filter(e => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (onScreen) setActiveStageTab(onScreen.target.dataset.stage);
+      }, { rootMargin: '-140px 0px -50% 0px' });
+      STAGES.forEach(s => {
+        const col = document.querySelector(`.column[data-stage="${s}"]`);
+        if (col) io.observe(col);
+      });
+    }
+  }
+
   /* ── Event delegation: replaces inline onclick handlers so CSP can ban inline JS ── */
   const __actions = {
     toggleSidebar, toggleBoardMenu, switchBoard, closeBoardMenu, openMembersModal,
@@ -1842,7 +1872,7 @@
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
-    deleteCategory, clearAssign, restoreTask,
+    deleteCategory, clearAssign, restoreTask, jumpToStage,
     openMembersFromBoardMenu: () => { closeBoardMenu(); openMembersModal(); },
     closeBoardMenuAndCreateBoard: () => { closeBoardMenu(); openCreateBoardModal(); },
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },
