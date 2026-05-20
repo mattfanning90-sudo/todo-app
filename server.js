@@ -18,6 +18,7 @@ const {
 } = require('./backup');
 const cron = require('node-cron');
 const path = require('path');
+const fs = require('fs');
 
 const isProd = process.env.NODE_ENV === 'production';
 const isTest = process.env.NODE_ENV === 'test';
@@ -66,6 +67,35 @@ app.use(helmet({
 
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+
+// Cache-bust /app.css and /app.js per deploy. Browsers (especially iOS
+// Safari home-screen PWAs) hold on to stale assets when the HTML and the
+// asset filenames are unchanged across deploys; stamping a ?v= per-deploy
+// invalidates the cache without us having to rename files. HTML itself is
+// served no-cache so the updated query strings reach the client on the
+// next page load.
+const BUILD_VERSION =
+  process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 8) ||
+  process.env.RAILWAY_DEPLOYMENT_ID ||
+  Date.now().toString(36);
+
+const htmlCache = new Map();
+for (const file of ['index.html', 'login.html', 'local.html']) {
+  const raw = fs.readFileSync(path.join(__dirname, 'public', file), 'utf8');
+  const stamped = raw.replace(
+    /(href|src)="\/(app|login|local)\.(css|js)"/g,
+    (_, attr, base, ext) => `${attr}="/${base}.${ext}?v=${BUILD_VERSION}"`
+  );
+  htmlCache.set(file, stamped);
+}
+app.get(['/', '/index.html', '/login', '/login.html', '/local', '/local.html'], (req, res) => {
+  const file = (req.path === '/' || req.path === '/index.html') ? 'index.html'
+    : req.path.includes('login') ? 'login.html'
+    : 'local.html';
+  res.set('Cache-Control', 'no-cache, must-revalidate');
+  res.type('html').send(htmlCache.get(file));
+});
+
 app.use(express.static('public'));
 
 app.get('/healthz', async (req, res) => {
