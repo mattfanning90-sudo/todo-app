@@ -250,6 +250,15 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
       const name = profile.displayName || '';
       let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
       let user = rows[0];
+      if (!user && email) {
+        // Link to existing email/password account rather than creating a duplicate.
+        const emailResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (emailResult.rows[0]) {
+          user = emailResult.rows[0];
+          await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [profile.id, user.id]);
+          user.google_id = profile.id;
+        }
+      }
       if (!user) {
         const username = await generateUsername();
         const result = await pool.query(
@@ -358,6 +367,15 @@ app.post('/auth/google/mobile', authLimiter, wrap(async (req, res) => {
 
   let { rows } = await pool.query('SELECT * FROM users WHERE google_id = $1', [googleId]);
   let user = rows[0];
+  if (!user && email) {
+    // Link to existing email/password account rather than creating a duplicate.
+    const emailResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (emailResult.rows[0]) {
+      user = emailResult.rows[0];
+      await pool.query('UPDATE users SET google_id = $1 WHERE id = $2', [googleId, user.id]);
+      user.google_id = googleId;
+    }
+  }
   if (!user) {
     const username = await generateUsername();
     const result = await pool.query(
