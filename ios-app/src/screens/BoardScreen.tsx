@@ -3,21 +3,17 @@ import {
   Alert,
   Pressable,
   RefreshControl,
+  SectionList,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import DraggableFlatList, {
-  RenderItemParams,
-  ScaleDecorator,
-} from 'react-native-draggable-flatlist';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
-import { Button } from '@/components/Button';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { Board, Category, Stage, Task } from '@/api/types';
@@ -36,12 +32,6 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'overdue', label: 'Overdue' },
   { key: 'nodate', label: 'No date' },
 ];
-
-const STAGE_EMPTY: Record<Stage, string> = {
-  backlog: 'Nothing here yet. Tap + Add task below.',
-  in_progress: 'Drag a backlog task here when you start it.',
-  done: 'Tasks you complete will land here.',
-};
 
 function isToday(dateStr: string | null): boolean {
   if (!dateStr) return false;
@@ -62,6 +52,12 @@ function isOverdue(dateStr: string | null): boolean {
   return d < today;
 }
 
+interface KanbanSection {
+  stage: Stage;
+  label: string;
+  data: Task[];
+}
+
 interface Props {
   board: Board;
   onBack: () => void;
@@ -72,11 +68,11 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
   const t = useTheme();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [stage, setStage] = useState<Stage>('backlog');
   const [filter, setFilter] = useState<Filter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [quickText, setQuickText] = useState('');
+  const [quickStage, setQuickStage] = useState<Stage>('backlog');
   const [quickSaving, setQuickSaving] = useState(false);
   const quickInputRef = useRef<TextInput | null>(null);
 
@@ -108,17 +104,31 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     return m;
   }, [categories]);
 
-  const stageTasks = useMemo(() => {
-    const base = tasks
-      .filter((task) => task.stage === stage && !task.archived_at)
-      .sort((a, b) => a.position - b.position);
+  /** Apply the active filter to a set of stage tasks */
+  const applyFilter = useCallback(
+    (stageTasks: Task[]) => {
+      if (filter === 'all') return stageTasks;
+      if (filter === 'today') return stageTasks.filter((t) => isToday(t.due_date));
+      if (filter === 'overdue') return stageTasks.filter((t) => isOverdue(t.due_date));
+      if (filter === 'nodate') return stageTasks.filter((t) => !t.due_date);
+      return stageTasks;
+    },
+    [filter]
+  );
 
-    if (filter === 'all') return base;
-    if (filter === 'today') return base.filter((t) => isToday(t.due_date));
-    if (filter === 'overdue') return base.filter((t) => isOverdue(t.due_date));
-    if (filter === 'nodate') return base.filter((t) => !t.due_date);
-    return base;
-  }, [tasks, stage, filter]);
+  const sections: KanbanSection[] = useMemo(
+    () =>
+      STAGES.map((s) => ({
+        stage: s.key,
+        label: s.label,
+        data: applyFilter(
+          tasks
+            .filter((task) => task.stage === s.key && !task.archived_at)
+            .sort((a, b) => a.position - b.position)
+        ),
+      })),
+    [tasks, applyFilter]
+  );
 
   const counts = useMemo(() => {
     const c: Record<Stage, number> = { backlog: 0, in_progress: 0, done: 0 };
@@ -128,16 +138,14 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     return c;
   }, [tasks]);
 
+  // ─── Actions ────────────────────────────────────────────────────────────────
+
   const submitQuickAdd = async () => {
     const text = quickText.trim();
     if (!text || quickSaving) return;
     setQuickSaving(true);
     try {
-      const created = await api.createTask({
-        board_id: board.id,
-        text,
-        stage,
-      });
+      const created = await api.createTask({ board_id: board.id, text, stage: quickStage });
       setTasks((prev) => [...prev, created]);
       setQuickText('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -149,65 +157,110 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     }
   };
 
-  const toggleDone = async (task: Task) => {
-    const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
-    setTasks((prev) =>
-      prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u))
-    );
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    try {
-      await api.updateTask(task.id, { board_id: board.id, stage: newStage });
-    } catch (err) {
-      Alert.alert('Could not update task', String(err));
-      load();
-    }
-  };
-
-  const onDragEnd = async ({ data }: { data: Task[] }) => {
-    const orderedIds = data.map((task) => task.id);
-    setTasks((prev) => {
-      const newPosition = new Map(data.map((task, idx) => [task.id, idx]));
-      return prev.map((task) =>
-        newPosition.has(task.id)
-          ? { ...task, position: newPosition.get(task.id)! }
-          : task
+  const toggleDone = useCallback(
+    async (task: Task) => {
+      const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
+      setTasks((prev) =>
+        prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u))
       );
-    });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    try {
-      await api.reorder(orderedIds, board.id);
-    } catch (err) {
-      Alert.alert('Could not reorder', String(err));
-      load();
-    }
-  };
-
-  const renderTask = useCallback(
-    ({ item, drag, isActive }: RenderItemParams<Task>) => (
-      <ScaleDecorator>
-        <Pressable
-          onLongPress={drag}
-          disabled={isActive}
-          delayLongPress={150}
-          style={{ marginBottom: spacing.sm }}
-        >
-          <TaskCard
-            task={item}
-            category={
-              item.category_id ? categoriesById.get(item.category_id) : undefined
-            }
-            onPress={() => onOpenTask(item)}
-            onToggleDone={() => toggleDone(item)}
-          />
-        </Pressable>
-      </ScaleDecorator>
-    ),
-    [categoriesById, onOpenTask]
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      try {
+        await api.updateTask(task.id, { board_id: board.id, stage: newStage });
+      } catch (err) {
+        Alert.alert('Could not update task', String(err));
+        load();
+      }
+    },
+    [board.id, load]
   );
+
+  const moveToStage = useCallback(
+    async (task: Task, newStage: Stage) => {
+      if (task.stage === newStage) return;
+      setTasks((prev) =>
+        prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u))
+      );
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      try {
+        await api.updateTask(task.id, { board_id: board.id, stage: newStage });
+      } catch (err) {
+        Alert.alert('Could not move task', String(err));
+        load();
+      }
+    },
+    [board.id, load]
+  );
+
+  // ─── Render helpers ──────────────────────────────────────────────────────────
+
+  const renderItem = useCallback(
+    ({ item }: { item: Task }) => (
+      <View style={{ marginBottom: spacing.sm }}>
+        <TaskCard
+          task={item}
+          category={item.category_id ? categoriesById.get(item.category_id) : undefined}
+          onPress={() => onOpenTask(item)}
+          onToggleDone={() => toggleDone(item)}
+          onMoveToStage={(stage) => moveToStage(item, stage)}
+        />
+      </View>
+    ),
+    [categoriesById, onOpenTask, toggleDone, moveToStage]
+  );
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: KanbanSection }) => {
+      const stageColor = t.stage[section.stage];
+      return (
+        <View style={[styles.sectionHeader, { backgroundColor: t.bg }]}>
+          <View
+            style={[styles.sectionHeaderInner, { borderLeftColor: stageColor }]}
+          >
+            <View style={styles.sectionTitleRow}>
+              <Text style={[styles.sectionTitle, { color: stageColor }]}>
+                {section.label}
+              </Text>
+              <View
+                style={[
+                  styles.sectionCountBadge,
+                  { backgroundColor: stageColor + '22' },
+                ]}
+              >
+                <Text style={[styles.sectionCountText, { color: stageColor }]}>
+                  {counts[section.stage]}
+                </Text>
+              </View>
+            </View>
+            {/* Tap + to focus the quick-add input and target this stage */}
+            <Pressable
+              onPress={() => {
+                setQuickStage(section.stage);
+                quickInputRef.current?.focus();
+              }}
+              hitSlop={10}
+            >
+              <Text
+                style={{ color: stageColor, fontSize: font.size.lg, fontWeight: '700' }}
+              >
+                +
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    },
+    [t, counts]
+  );
+
+  const renderSectionFooter = () => (
+    <View style={{ height: spacing.lg }} />
+  );
+
+  const keyExtractor = useCallback((item: Task) => String(item.id), []);
 
   return (
     <Screen padded={false}>
-      {/* Header */}
+      {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <View
         style={[
           styles.topBar,
@@ -227,55 +280,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         </Pressable>
       </View>
 
-      {/* Stage tabs */}
-      <View style={[styles.stageBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.stageScroll}
-        >
-          {STAGES.map((s) => {
-            const active = s.key === stage;
-            return (
-              <Pressable
-                key={s.key}
-                onPress={() => { setStage(s.key); setFilter('all'); }}
-                style={[
-                  styles.stageTab,
-                  active && { borderBottomColor: t.stage[s.key], borderBottomWidth: 2 },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.stageTabText,
-                    { color: active ? t.stage[s.key] : t.textMuted, fontWeight: active ? font.weight.semibold : font.weight.regular },
-                  ]}
-                >
-                  {s.label}
-                </Text>
-                <View
-                  style={[
-                    styles.countBadge,
-                    { backgroundColor: active ? t.stage[s.key] + '22' : t.surfaceElevated },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      fontSize: font.size.xs,
-                      color: active ? t.stage[s.key] : t.textMuted,
-                      fontWeight: font.weight.semibold,
-                    }}
-                  >
-                    {counts[s.key]}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Filter pills — matches the web's filter row */}
+      {/* ── Filter pills ────────────────────────────────────────────────── */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -310,8 +315,49 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         })}
       </ScrollView>
 
-      {/* Quick-add input */}
-      <View style={[styles.quickAddWrap, { paddingHorizontal: spacing.lg }]}>
+      {/* ── Quick-add bar ────────────────────────────────────────────────── */}
+      <View
+        style={[
+          styles.quickAddOuter,
+          { backgroundColor: t.bg, borderBottomColor: t.border },
+        ]}
+      >
+        {/* Stage target selector */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickStageRow}
+        >
+          {STAGES.map((s) => {
+            const active = quickStage === s.key;
+            const stageColor = t.stage[s.key];
+            return (
+              <Pressable
+                key={s.key}
+                onPress={() => setQuickStage(s.key)}
+                style={[
+                  styles.quickStagePill,
+                  {
+                    backgroundColor: active ? stageColor + '22' : t.surface,
+                    borderColor: active ? stageColor : t.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontSize: font.size.xs,
+                    fontWeight: font.weight.semibold,
+                    color: active ? stageColor : t.textMuted,
+                  }}
+                >
+                  {s.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+
+        {/* Text input + send */}
         <View
           style={[
             styles.quickAddRow,
@@ -323,7 +369,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
             value={quickText}
             onChangeText={setQuickText}
             onSubmitEditing={submitQuickAdd}
-            placeholder={`Quick-add to ${STAGES.find((s) => s.key === stage)?.label ?? ''}`}
+            placeholder={`Add to ${STAGES.find((s) => s.key === quickStage)?.label ?? ''}…`}
             placeholderTextColor={t.textLight}
             returnKeyType="done"
             blurOnSubmit={false}
@@ -345,15 +391,17 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         </View>
       </View>
 
-      {/* Task list */}
-      <DraggableFlatList
-        data={stageTasks}
-        keyExtractor={(task) => String(task.id)}
-        onDragEnd={onDragEnd}
-        activationDistance={10}
+      {/* ── Kanban SectionList ───────────────────────────────────────────── */}
+      <SectionList
+        sections={sections}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        renderSectionHeader={renderSectionHeader}
+        renderSectionFooter={renderSectionFooter}
+        stickySectionHeadersEnabled
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
-          paddingTop: spacing.sm,
+          paddingTop: spacing.xs,
           paddingBottom: spacing.xxl * 2,
         }}
         refreshControl={
@@ -369,13 +417,11 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         ListEmptyComponent={
           !loading ? (
             <Text style={[styles.empty, { color: t.textMuted }]}>
-              {filter !== 'all'
-                ? 'No tasks match this filter.'
-                : STAGE_EMPTY[stage]}
+              No tasks yet. Tap + to add one.
             </Text>
           ) : null
         }
-        renderItem={renderTask}
+        initialNumToRender={30}
       />
     </Screen>
   );
@@ -397,31 +443,6 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.bold,
     marginHorizontal: spacing.md,
   },
-  stageBar: {
-    borderBottomWidth: 1,
-  },
-  stageScroll: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  stageTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    marginBottom: -1, // sit on the border
-  },
-  stageTabText: {
-    fontSize: font.size.md,
-  },
-  countBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center',
-  },
   filterBar: {
     flexGrow: 0,
     paddingVertical: spacing.sm,
@@ -437,7 +458,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderWidth: 1,
   },
-  quickAddWrap: { marginBottom: spacing.sm },
+  quickAddOuter: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
+    gap: spacing.xs,
+  },
+  quickStageRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingBottom: spacing.xs,
+  },
+  quickStagePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+  },
   quickAddRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,8 +485,42 @@ const styles = StyleSheet.create({
   },
   quickInput: {
     flex: 1,
-    height: 40,
+    height: 38,
     fontSize: font.size.md,
+  },
+  // ── Kanban section headers ─────────────────────────────────────────────────
+  sectionHeader: {
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  sectionHeaderInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderLeftWidth: 3,
+    paddingLeft: spacing.sm,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  sectionTitle: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.bold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  sectionCountBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  sectionCountText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
   },
   empty: {
     textAlign: 'center',

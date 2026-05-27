@@ -1,13 +1,23 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActionSheetIOS, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTheme, radius, spacing, font } from '@/theme';
-import type { Category, Task } from '@/api/types';
+import type { Category, Stage, Task } from '@/api/types';
+
+const STAGE_LABELS: Record<Stage, string> = {
+  backlog: 'Backlog',
+  in_progress: 'In Progress',
+  done: 'Done',
+};
+
+const ALL_STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 
 interface Props {
   task: Task;
   category?: Category;
   onPress: () => void;
   onToggleDone?: () => void;
+  /** When provided, a "Move to…" pill appears on the card */
+  onMoveToStage?: (stage: Stage) => void;
 }
 
 function dueLabel(
@@ -28,16 +38,14 @@ function dueLabel(
   };
 }
 
-export function TaskCard({ task, category, onPress, onToggleDone }: Props) {
+export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage }: Props) {
   const t = useTheme();
   const due = dueLabel(task.due_date);
   const isDone = task.stage === 'done';
 
-  // Priority left-border color (none = transparent so card looks clean)
   const priorityBorder =
     task.priority === 'none' ? 'transparent' : t.priority[task.priority];
 
-  // Due badge colours match the web: overdue=red, today=amber, soon=green, normal=muted
   const dueBg =
     due?.variant === 'overdue'
       ? '#FEE2E2'
@@ -54,6 +62,20 @@ export function TaskCard({ task, category, onPress, onToggleDone }: Props) {
       : due?.variant === 'soon'
       ? '#166534'
       : t.textMuted;
+
+  const handleMovePress = () => {
+    const targets = ALL_STAGES.filter((s) => s !== task.stage);
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: 'Move to…',
+        options: [...targets.map((s) => STAGE_LABELS[s]), 'Cancel'],
+        cancelButtonIndex: targets.length,
+      },
+      (idx) => {
+        if (idx < targets.length) onMoveToStage?.(targets[idx]);
+      }
+    );
+  };
 
   return (
     <Pressable
@@ -108,7 +130,7 @@ export function TaskCard({ task, category, onPress, onToggleDone }: Props) {
         </View>
 
         {/* Badges row */}
-        {(category || due || (task.subtasks?.length ?? 0) > 0) && (
+        {(category || due || (task.subtasks?.length ?? 0) > 0 || onMoveToStage) && (
           <View style={styles.badges}>
             {category && (
               <View style={[styles.catPill, { backgroundColor: category.color }]}>
@@ -124,9 +146,29 @@ export function TaskCard({ task, category, onPress, onToggleDone }: Props) {
             )}
             {task.subtasks && task.subtasks.length > 0 && (
               <Text style={[styles.subtaskText, { color: t.textLight }]}>
-                {task.subtasks.filter((s) => s.done).length}/
-                {task.subtasks.length}
+                {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length}
               </Text>
+            )}
+
+            {/* Move-to-stage pill — only shown when callback is wired */}
+            {onMoveToStage && (
+              <Pressable
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleMovePress();
+                }}
+                hitSlop={6}
+                style={({ pressed }) => [
+                  styles.movePill,
+                  {
+                    backgroundColor: t.surfaceElevated,
+                    borderColor: t.border,
+                    opacity: pressed ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <Text style={[styles.movePillText, { color: t.textMuted }]}>Move →</Text>
+              </Pressable>
             )}
           </View>
         )}
@@ -197,5 +239,15 @@ const styles = StyleSheet.create({
   },
   subtaskText: {
     fontSize: font.size.xs,
+  },
+  movePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  movePillText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.medium,
   },
 });
