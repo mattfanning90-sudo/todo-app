@@ -21,13 +21,13 @@ export function TextField({ label, error, style, ...rest }: Props) {
         <Text style={[styles.label, { color: t.textMuted }]}>{label}</Text>
       ) : null}
       <TextInput
-        placeholderTextColor={t.textMuted}
+        placeholderTextColor={t.textLight}
         {...rest}
         style={[
           styles.input,
           {
-            backgroundColor: t.surface,
-            borderColor: error ? t.danger : t.border,
+            backgroundColor: t.surfaceElevated,
+            borderColor: error ? t.danger : t.borderInput,
             color: t.text,
           },
           style,
@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   input: {
-    height: 48,
+    height: 44,
     borderRadius: radius.md,
     borderWidth: 1,
     paddingHorizontal: spacing.md,

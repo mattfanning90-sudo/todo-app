@@ -8,10 +8,13 @@ export interface Theme {
   surface: string;
   surfaceElevated: string;
   border: string;
+  borderInput: string;
   text: string;
   textMuted: string;
+  textLight: string;
   accent: string;
   accentText: string;
+  accentMuted: string;
   danger: string;
   success: string;
   warning: string;
@@ -28,66 +31,73 @@ export interface Theme {
   };
 }
 
-const dark: Theme = {
-  name: 'dark',
-  bg: '#0B0B0F',
-  surface: '#16161D',
-  surfaceElevated: '#1F1F29',
-  border: '#2A2A38',
-  text: '#F5F5F7',
-  textMuted: '#8B8B9A',
-  accent: '#6E6BF5',
+// Matches the web app's CSS variables exactly.
+const light: Theme = {
+  name: 'light',
+  bg: '#F1F5F9',
+  surface: '#FFFFFF',
+  surfaceElevated: '#F8FAFC',
+  border: '#E2E8F0',
+  borderInput: '#CBD5E1',
+  text: '#0F172A',
+  textMuted: '#64748B',
+  textLight: '#94A3B8',
+  accent: '#3B82F6',
   accentText: '#FFFFFF',
-  danger: '#F5556B',
-  success: '#3DD68C',
-  warning: '#F5B85C',
+  accentMuted: 'rgba(59,130,246,0.10)',
+  danger: '#EF4444',
+  success: '#22C55E',
+  warning: '#F59E0B',
   stage: {
-    backlog: '#8B8B9A',
-    in_progress: '#6E6BF5',
-    done: '#3DD68C',
+    backlog: '#94A3B8',
+    in_progress: '#3B82F6',
+    done: '#22C55E',
   },
   priority: {
-    high: '#F5556B',
-    medium: '#F5B85C',
-    low: '#6BC5F5',
-    none: '#8B8B9A',
+    high: '#EF4444',
+    medium: '#F59E0B',
+    low: '#3B82F6',
+    none: '#94A3B8',
   },
 };
 
-const light: Theme = {
-  name: 'light',
-  bg: '#FAFAFC',
-  surface: '#FFFFFF',
-  surfaceElevated: '#F2F2F6',
-  border: '#E5E5EA',
-  text: '#0B0B0F',
-  textMuted: '#6B6B7A',
-  accent: '#5856F5',
+const dark: Theme = {
+  name: 'dark',
+  bg: '#0F172A',
+  surface: '#1E293B',
+  surfaceElevated: '#334155',
+  border: '#334155',
+  borderInput: '#475569',
+  text: '#F1F5F9',
+  textMuted: '#94A3B8',
+  textLight: '#475569',
+  accent: '#3B82F6',
   accentText: '#FFFFFF',
-  danger: '#E5384D',
-  success: '#22B670',
-  warning: '#E59A2B',
+  accentMuted: 'rgba(59,130,246,0.15)',
+  danger: '#EF4444',
+  success: '#22C55E',
+  warning: '#F59E0B',
   stage: {
-    backlog: '#6B6B7A',
-    in_progress: '#5856F5',
-    done: '#22B670',
+    backlog: '#94A3B8',
+    in_progress: '#3B82F6',
+    done: '#22C55E',
   },
   priority: {
-    high: '#E5384D',
-    medium: '#E59A2B',
-    low: '#3B9DE5',
-    none: '#6B6B7A',
+    high: '#EF4444',
+    medium: '#F59E0B',
+    low: '#3B82F6',
+    none: '#94A3B8',
   },
 };
 
 export function useTheme(): Theme {
   const scheme = useColorScheme();
-  return scheme === 'light' ? light : dark;
+  return scheme === 'dark' ? dark : light;
 }
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 export const radius = { sm: 6, md: 10, lg: 14, xl: 20 };
 export const font = {
-  size: { xs: 11, sm: 13, md: 15, lg: 17, xl: 22, xxl: 28 },
+  size: { xs: 11, sm: 12, md: 14, lg: 17, xl: 22, xxl: 28 },
   weight: { regular: '400', medium: '500', semibold: '600', bold: '700' } as const,
 };

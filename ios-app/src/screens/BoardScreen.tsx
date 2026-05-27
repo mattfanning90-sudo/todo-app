@@ -28,11 +28,39 @@ const STAGES: { key: Stage; label: string }[] = [
   { key: 'done', label: 'Done' },
 ];
 
+type Filter = 'all' | 'today' | 'overdue' | 'nodate';
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'today', label: 'Today' },
+  { key: 'overdue', label: 'Overdue' },
+  { key: 'nodate', label: 'No date' },
+];
+
 const STAGE_EMPTY: Record<Stage, string> = {
   backlog: 'Nothing here yet. Tap + Add task below.',
   in_progress: 'Drag a backlog task here when you start it.',
   done: 'Tasks you complete will land here.',
 };
+
+function isToday(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const t = new Date();
+  return (
+    d.getFullYear() === t.getFullYear() &&
+    d.getMonth() === t.getMonth() &&
+    d.getDate() === t.getDate()
+  );
+}
+
+function isOverdue(dateStr: string | null): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
 
 interface Props {
   board: Board;
@@ -45,6 +73,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [stage, setStage] = useState<Stage>('backlog');
+  const [filter, setFilter] = useState<Filter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [quickText, setQuickText] = useState('');
@@ -79,13 +108,17 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
     return m;
   }, [categories]);
 
-  const stageTasks = useMemo(
-    () =>
-      tasks
-        .filter((task) => task.stage === stage && !task.archived_at)
-        .sort((a, b) => a.position - b.position),
-    [tasks, stage]
-  );
+  const stageTasks = useMemo(() => {
+    const base = tasks
+      .filter((task) => task.stage === stage && !task.archived_at)
+      .sort((a, b) => a.position - b.position);
+
+    if (filter === 'all') return base;
+    if (filter === 'today') return base.filter((t) => isToday(t.due_date));
+    if (filter === 'overdue') return base.filter((t) => isOverdue(t.due_date));
+    if (filter === 'nodate') return base.filter((t) => !t.due_date);
+    return base;
+  }, [tasks, stage, filter]);
 
   const counts = useMemo(() => {
     const c: Record<Stage, number> = { backlog: 0, in_progress: 0, done: 0 };
@@ -156,6 +189,7 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
           onLongPress={drag}
           disabled={isActive}
           delayLongPress={150}
+          style={{ marginBottom: spacing.sm }}
         >
           <TaskCard
             task={item}
@@ -173,57 +207,110 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
 
   return (
     <Screen padded={false}>
-      <View style={[styles.topBar, { paddingHorizontal: spacing.lg }]}>
+      {/* Header */}
+      <View
+        style={[
+          styles.topBar,
+          { backgroundColor: t.surface, borderBottomColor: t.border },
+        ]}
+      >
         <Pressable onPress={onBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md, fontWeight: font.weight.semibold }}>
-            ‹ Boards
+          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Boards</Text>
+        </Pressable>
+        <Text style={[styles.boardName, { color: t.text }]} numberOfLines={1}>
+          {board.name}
+        </Text>
+        <Pressable onPress={() => onOpenTask(null)} hitSlop={10}>
+          <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '600' }}>
+            +
           </Text>
         </Pressable>
-        <Text style={[styles.boardName, { color: t.text }]}>{board.name}</Text>
-        <View style={{ width: 60 }} />
       </View>
 
+      {/* Stage tabs */}
+      <View style={[styles.stageBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.stageScroll}
+        >
+          {STAGES.map((s) => {
+            const active = s.key === stage;
+            return (
+              <Pressable
+                key={s.key}
+                onPress={() => { setStage(s.key); setFilter('all'); }}
+                style={[
+                  styles.stageTab,
+                  active && { borderBottomColor: t.stage[s.key], borderBottomWidth: 2 },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stageTabText,
+                    { color: active ? t.stage[s.key] : t.textMuted, fontWeight: active ? font.weight.semibold : font.weight.regular },
+                  ]}
+                >
+                  {s.label}
+                </Text>
+                <View
+                  style={[
+                    styles.countBadge,
+                    { backgroundColor: active ? t.stage[s.key] + '22' : t.surfaceElevated },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontSize: font.size.xs,
+                      color: active ? t.stage[s.key] : t.textMuted,
+                      fontWeight: font.weight.semibold,
+                    }}
+                  >
+                    {counts[s.key]}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Filter pills — matches the web's filter row */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.stageStripContent}
-        style={styles.stageStrip}
+        style={[styles.filterBar, { backgroundColor: t.bg }]}
+        contentContainerStyle={styles.filterScroll}
       >
-        {STAGES.map((s) => {
-          const active = s.key === stage;
+        {FILTERS.map((f) => {
+          const active = filter === f.key;
           return (
             <Pressable
-              key={s.key}
-              onPress={() => setStage(s.key)}
+              key={f.key}
+              onPress={() => setFilter(f.key)}
               style={[
-                styles.stagePill,
+                styles.filterPill,
                 {
-                  backgroundColor: active ? t.stage[s.key] : t.surface,
-                  borderColor: active ? t.stage[s.key] : t.border,
+                  backgroundColor: active ? t.accent : t.surface,
+                  borderColor: active ? t.accent : t.border,
                 },
               ]}
             >
               <Text
                 style={{
-                  color: active ? '#fff' : t.text,
-                  fontWeight: font.weight.semibold,
-                }}
-              >
-                {s.label}
-              </Text>
-              <Text
-                style={{
+                  fontSize: font.size.sm,
+                  fontWeight: font.weight.medium,
                   color: active ? '#fff' : t.textMuted,
-                  marginLeft: spacing.xs,
                 }}
               >
-                {counts[s.key]}
+                {f.label}
               </Text>
             </Pressable>
           );
         })}
       </ScrollView>
 
+      {/* Quick-add input */}
       <View style={[styles.quickAddWrap, { paddingHorizontal: spacing.lg }]}>
         <View
           style={[
@@ -236,34 +323,29 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
             value={quickText}
             onChangeText={setQuickText}
             onSubmitEditing={submitQuickAdd}
-            placeholder={`Quick add to ${STAGES.find((s) => s.key === stage)?.label ?? ''}`}
-            placeholderTextColor={t.textMuted}
+            placeholder={`Quick-add to ${STAGES.find((s) => s.key === stage)?.label ?? ''}`}
+            placeholderTextColor={t.textLight}
             returnKeyType="done"
             blurOnSubmit={false}
             editable={!quickSaving}
-            style={[styles.quickAddInput, { color: t.text }]}
+            style={[styles.quickInput, { color: t.text }]}
           />
           <Pressable
             onPress={submitQuickAdd}
             disabled={!quickText.trim() || quickSaving}
             hitSlop={10}
             style={({ pressed }) => ({
-              opacity: !quickText.trim() || quickSaving ? 0.4 : pressed ? 0.6 : 1,
+              opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1,
             })}
           >
-            <Text
-              style={{
-                color: t.accent,
-                fontSize: font.size.lg,
-                fontWeight: font.weight.bold,
-              }}
-            >
+            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>
               +
             </Text>
           </Pressable>
         </View>
       </View>
 
+      {/* Task list */}
       <DraggableFlatList
         data={stageTasks}
         keyExtractor={(task) => String(task.id)}
@@ -271,9 +353,9 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         activationDistance={10}
         contentContainerStyle={{
           paddingHorizontal: spacing.lg,
+          paddingTop: spacing.sm,
           paddingBottom: spacing.xxl * 2,
         }}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -287,44 +369,73 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         ListEmptyComponent={
           !loading ? (
             <Text style={[styles.empty, { color: t.textMuted }]}>
-              {STAGE_EMPTY[stage]}
+              {filter !== 'all'
+                ? 'No tasks match this filter.'
+                : STAGE_EMPTY[stage]}
             </Text>
           ) : null
         }
         renderItem={renderTask}
       />
-
-      <View style={[styles.fabWrap, { paddingHorizontal: spacing.lg }]}>
-        <Button label="+ Add task" onPress={() => onOpenTask(null)} />
-      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   topBar: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderBottomWidth: 1,
   },
-  boardName: { fontSize: font.size.lg, fontWeight: font.weight.bold },
-  stageStrip: { flexGrow: 0, marginBottom: spacing.md },
-  stageStripContent: { paddingHorizontal: spacing.lg, gap: spacing.sm },
-  stagePill: {
+  boardName: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: font.size.md,
+    fontWeight: font.weight.bold,
+    marginHorizontal: spacing.md,
+  },
+  stageBar: {
+    borderBottomWidth: 1,
+  },
+  stageScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+  },
+  stageTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    marginBottom: -1, // sit on the border
+  },
+  stageTabText: {
+    fontSize: font.size.md,
+  },
+  countBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 20,
+    alignItems: 'center',
+  },
+  filterBar: {
+    flexGrow: 0,
     paddingVertical: spacing.sm,
+  },
+  filterScroll: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+    alignItems: 'center',
+  },
+  filterPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
     borderRadius: radius.xl,
     borderWidth: 1,
-  },
-  empty: { textAlign: 'center', paddingVertical: spacing.xxl },
-  fabWrap: {
-    position: 'absolute',
-    bottom: spacing.lg,
-    left: 0,
-    right: 0,
   },
   quickAddWrap: { marginBottom: spacing.sm },
   quickAddRow: {
@@ -334,9 +445,14 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
   },
-  quickAddInput: {
+  quickInput: {
     flex: 1,
     height: 40,
+    fontSize: font.size.md,
+  },
+  empty: {
+    textAlign: 'center',
+    paddingTop: spacing.xxl,
     fontSize: font.size.md,
   },
 });
