@@ -1049,13 +1049,14 @@ app.get('/api/dashboard', requireAuth, wrap(async (req, res) => {
         COUNT(*) FILTER (WHERE stage = 'in_progress' AND (archived IS NULL OR archived = false)) AS in_progress,
         COUNT(*) FILTER (WHERE stage = 'done' AND (archived IS NULL OR archived = false)) AS done_total,
         COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND stage != 'done' AND (archived IS NULL OR archived = false)) AS overdue,
-        COUNT(*) FILTER (WHERE completed_at >= NOW() - INTERVAL '7 days') AS completed_week,
+        COUNT(*) FILTER (WHERE completed_at IS NOT NULL AND completed_at >= NOW() - INTERVAL '7 days') AS completed_week,
         COUNT(*) FILTER (WHERE archived = true) AS archived_count
       FROM tasks WHERE board_id = ANY($1)
     `, [boardIds]),
     pool.query(`
       SELECT DATE(completed_at) AS day, COUNT(*) AS count
-      FROM tasks WHERE board_id = ANY($1) AND completed_at >= NOW() - INTERVAL '7 days'
+      FROM tasks WHERE board_id = ANY($1)
+        AND completed_at IS NOT NULL AND completed_at >= NOW() - INTERVAL '7 days'
       GROUP BY DATE(completed_at) ORDER BY day
     `, [boardIds]),
     pool.query(`
@@ -1070,7 +1071,32 @@ app.get('/api/dashboard', requireAuth, wrap(async (req, res) => {
       GROUP BY c.id, c.name, c.color ORDER BY count DESC LIMIT 6
     `, [boardIds]),
   ]);
-  res.json({ stats: statsRes.rows[0], trend: trendRes.rows, priorities: priorityRes.rows, categories: categoryRes.rows });
+  const s = statsRes.rows[0];
+  res.json({
+    // Legacy web format (stats/priorities/categories) kept for compatibility.
+    stats: s,
+    priorities: priorityRes.rows,
+    categories: categoryRes.rows,
+    // Mobile-friendly format matching the iOS DashboardData type.
+    counts: {
+      open: parseInt(s.open) || 0,
+      inProgress: parseInt(s.in_progress) || 0,
+      overdue: parseInt(s.overdue) || 0,
+    },
+    trend: trendRes.rows.map(r => ({
+      date: r.day instanceof Date ? r.day.toISOString().slice(0, 10) : String(r.day).slice(0, 10),
+      completed: parseInt(r.count) || 0,
+    })),
+    byPriority: {
+      high:   parseInt(priorityRes.rows.find(r => r.priority === 'high')?.count)   || 0,
+      medium: parseInt(priorityRes.rows.find(r => r.priority === 'medium')?.count) || 0,
+      low:    parseInt(priorityRes.rows.find(r => r.priority === 'low')?.count)    || 0,
+      none:   parseInt(priorityRes.rows.find(r => r.priority === 'none')?.count)   || 0,
+    },
+    byCategory: categoryRes.rows.map(r => ({
+      name: r.name, color: r.color, count: parseInt(r.count) || 0,
+    })),
+  });
 }));
 
 /* ── Global search ── */
