@@ -415,7 +415,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               keyExtractor={keyExtractor}
               renderItem={renderDraggableItem(s.key)}
               onDragEnd={({ data }) => handleDragEnd(s.key, data)}
-              activationDistance={10}
+              activationDistance={20}
             />
           </View>
         ))}

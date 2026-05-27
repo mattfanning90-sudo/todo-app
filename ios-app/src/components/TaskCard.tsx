@@ -1,8 +1,12 @@
 import React from 'react';
 import { ActionSheetIOS, Pressable, StyleSheet, Text, View } from 'react-native';
-// Use RNGH's Pressable for the outer card so touches aren't swallowed by
-// GestureHandlerRootView when react-native-gesture-handler is active.
-import { Pressable as GHPressable } from 'react-native-gesture-handler';
+// Use React Native's core Pressable throughout.
+// Previously we used RNGH's Pressable to avoid being swallowed by
+// GestureHandlerRootView, but that was specific to the old non-nestable
+// DraggableFlatList. With NestableDraggableFlatList, RNGH coordinates
+// child touches correctly and using RNGH Pressable inside another RNGH
+// gesture causes competition that cancels taps. RN's native Pressable
+// (using iOS's native responder system) works correctly inside RNGH.
 import { useTheme, radius, spacing, font } from '@/theme';
 import type { Category, Stage, Task } from '@/api/types';
 
@@ -87,7 +91,7 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
   };
 
   return (
-    <GHPressable
+    <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
       delayLongPress={delayLongPress}
@@ -109,8 +113,8 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
     >
       <View style={styles.inner}>
         <View style={styles.topRow}>
-          {/* Checkbox — inner GHPressable wins the responder automatically */}
-          <GHPressable
+          {/* Checkbox — inner Pressable wins the responder automatically */}
+          <Pressable
             onPress={() => onToggleDone?.()}
             hitSlop={8}
             style={[
@@ -122,7 +126,7 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
             ]}
           >
             {isDone && <Text style={styles.checkmark}>✓</Text>}
-          </GHPressable>
+          </Pressable>
 
           {/* Task text */}
           <Text
@@ -162,7 +166,7 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
 
             {/* Move-to-stage pill — only shown when callback is wired */}
             {onMoveToStage && (
-              <GHPressable
+              <Pressable
                 onPress={handleMovePress}
                 hitSlop={6}
                 style={({ pressed }) => [
@@ -175,12 +179,12 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
                 ]}
               >
                 <Text style={[styles.movePillText, { color: t.textMuted }]}>Move →</Text>
-              </GHPressable>
+              </Pressable>
             )}
           </View>
         )}
       </View>
-    </GHPressable>
+    </Pressable>
   );
 }
 
