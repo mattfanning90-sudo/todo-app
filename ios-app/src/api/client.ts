@@ -2,6 +2,8 @@ import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import type {
   Board,
+  BoardInvite,
+  BoardMember,
   Category,
   DashboardData,
   DigestFrequency,
@@ -128,6 +130,23 @@ export const api = {
 
   boards: () => request<Board[]>('/api/boards'),
   memberships: () => request<MemberBoard[]>('/api/boards/memberships'),
+  boardMembers: (boardId: number) =>
+    request<BoardMember[]>(`/api/boards/members?board=${boardId}`),
+  boardInvites: (boardId: number) =>
+    request<BoardInvite[]>(`/api/boards/invites?board=${boardId}`),
+  inviteMember: (boardId: number, email: string) =>
+    request<{ joined?: boolean; pending?: boolean; email?: string; inviteLink?: string }>(
+      `/api/boards/invite?board=${boardId}`,
+      { method: 'POST', body: { email } }
+    ),
+  removeMember: (boardId: number, userId: number) =>
+    request<{ ok: true }>(`/api/boards/members/${userId}?board=${boardId}`, {
+      method: 'DELETE',
+    }),
+  revokeInvite: (boardId: number, inviteId: number) =>
+    request<{ ok: true }>(`/api/boards/invites/${inviteId}?board=${boardId}`, {
+      method: 'DELETE',
+    }),
   createBoard: (name: string) =>
     request<Board>('/api/boards', { method: 'POST', body: { name } }),
   renameBoard: (id: number, name: string) =>
@@ -148,6 +167,8 @@ export const api = {
   // users don't silently fall through to the default board.
   tasks: (boardId: number) =>
     request<Task[]>(`/api/tasks?board=${boardId}`),
+  archivedTasks: (boardId: number) =>
+    request<Task[]>(`/api/tasks?board=${boardId}&archived=true`),
   createTask: (body: Partial<Task> & { board_id: number; text: string }) =>
     request<Task>(`/api/tasks?board=${body.board_id}`, { method: 'POST', body }),
   updateTask: (id: number, body: Partial<Task> & { board_id: number }) =>

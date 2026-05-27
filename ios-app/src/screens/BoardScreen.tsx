@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  ActionSheetIOS,
   Alert,
   Pressable,
   RefreshControl,
@@ -15,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
 import { useTheme, radius, spacing, font } from '@/theme';
+import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
 import type { Board, Category, Stage, Task } from '@/api/types';
 
@@ -62,10 +64,14 @@ interface Props {
   board: Board;
   onBack: () => void;
   onOpenTask: (task: Task | null) => void;
+  onOpenArchived: () => void;
+  onOpenMembers: () => void;
 }
 
-export function BoardScreen({ board, onBack, onOpenTask }: Props) {
+export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenMembers }: Props) {
   const t = useTheme();
+  const { user } = useAuth();
+  const isOwner = user?.id === board.owner_user_id;
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -273,11 +279,27 @@ export function BoardScreen({ board, onBack, onOpenTask }: Props) {
         <Text style={[styles.boardName, { color: t.text }]} numberOfLines={1}>
           {board.name}
         </Text>
-        <Pressable onPress={() => onOpenTask(null)} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '600' }}>
-            +
-          </Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+          <Pressable onPress={() => onOpenTask(null)} hitSlop={10}>
+            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '600' }}>+</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              const options = ['Archived tasks', ...(isOwner ? ['Members'] : []), 'Cancel'];
+              const cancelIdx = options.length - 1;
+              ActionSheetIOS.showActionSheetWithOptions(
+                { options, cancelButtonIndex: cancelIdx, title: board.name },
+                (idx) => {
+                  if (options[idx] === 'Archived tasks') onOpenArchived();
+                  else if (options[idx] === 'Members') onOpenMembers();
+                }
+              );
+            }}
+            hitSlop={10}
+          >
+            <Text style={{ color: t.textMuted, fontSize: 20, lineHeight: 24 }}>•••</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* ── Filter pills ────────────────────────────────────────────────── */}

@@ -44,10 +44,25 @@ export interface Task {
   assigned_to_user_id: number | null;
   cal_start: string | null;
   cal_end: string | null;
+  archived?: boolean;
   archived_at: string | null;
   completed_at: string | null;
   position: number;
   board_id: number;
+}
+
+export interface BoardMember {
+  id: number;
+  name: string | null;
+  email: string;
+  username: string;
+}
+
+export interface BoardInvite {
+  id: number;
+  invitee_email: string;
+  created_at: string;
+  token: string;
 }
 
 export interface DashboardData {

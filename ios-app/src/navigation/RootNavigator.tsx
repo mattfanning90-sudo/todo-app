@@ -20,6 +20,8 @@ import { TaskDetailScreen } from '@/screens/TaskDetailScreen';
 import { DashboardScreen } from '@/screens/DashboardScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { SearchScreen } from '@/screens/SearchScreen';
+import { ArchivedScreen } from '@/screens/ArchivedScreen';
+import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
 import { useTheme } from '@/theme';
 import type { Board, Task } from '@/api/types';
 
@@ -31,6 +33,8 @@ export type RootStackParamList = {
   Dashboard: undefined;
   Settings: undefined;
   Search: undefined;
+  Archived: { board: Board };
+  BoardMembers: { board: Board };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,7 +63,6 @@ function SearchWrapper() {
     <SearchScreen
       onBack={() => nav.goBack()}
       onOpenBoard={(board) => {
-        // Replace Search in the stack with the Board so back goes to the list.
         nav.goBack();
         setTimeout(() => nav.navigate('Board', { board }), 0);
       }}
@@ -69,13 +72,14 @@ function SearchWrapper() {
 
 function BoardWrapper({ route }: { route: { params: { board: Board } } }) {
   const nav = useNavigation<Nav>();
+  const { board } = route.params;
   return (
     <BoardScreen
-      board={route.params.board}
+      board={board}
       onBack={() => nav.goBack()}
-      onOpenTask={(task) =>
-        nav.navigate('TaskDetail', { board: route.params.board, task })
-      }
+      onOpenTask={(task) => nav.navigate('TaskDetail', { board, task })}
+      onOpenArchived={() => nav.navigate('Archived', { board })}
+      onOpenMembers={() => nav.navigate('BoardMembers', { board })}
     />
   );
 }
@@ -100,6 +104,16 @@ function DashboardWrapper() {
   return <DashboardScreen onBack={() => nav.goBack()} />;
 }
 
+function ArchivedWrapper({ route }: { route: { params: { board: Board } } }) {
+  const nav = useNavigation<Nav>();
+  return <ArchivedScreen board={route.params.board} onBack={() => nav.goBack()} />;
+}
+
+function BoardMembersWrapper({ route }: { route: { params: { board: Board } } }) {
+  const nav = useNavigation<Nav>();
+  return <BoardMembersScreen board={route.params.board} onBack={() => nav.goBack()} />;
+}
+
 export function RootNavigator() {
   const { user, loading } = useAuth();
   const scheme = useColorScheme();
@@ -107,14 +121,7 @@ export function RootNavigator() {
 
   if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: t.bg,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
+      <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator color={t.accent} />
       </View>
     );
@@ -149,6 +156,8 @@ export function RootNavigator() {
             <Stack.Screen name="Dashboard" component={DashboardWrapper} />
             <Stack.Screen name="Settings" component={SettingsWrapper} />
             <Stack.Screen name="Search" component={SearchWrapper} />
+            <Stack.Screen name="Archived" component={ArchivedWrapper} />
+            <Stack.Screen name="BoardMembers" component={BoardMembersWrapper} />
             <Stack.Screen
               name="TaskDetail"
               component={TaskDetailWrapper}

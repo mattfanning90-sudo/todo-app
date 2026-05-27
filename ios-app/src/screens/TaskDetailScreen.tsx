@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -36,10 +37,13 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   const [text, setText] = useState(task?.text ?? '');
   const [stage, setStage] = useState<Stage>(task?.stage ?? 'backlog');
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'none');
-  const [categoryId, setCategoryId] = useState<number | null>(
-    task?.category_id ?? null
-  );
+  const [categoryId, setCategoryId] = useState<number | null>(task?.category_id ?? null);
   const [dueDate, setDueDate] = useState<string>(task?.due_date ?? '');
+  const [subtasks, setSubtasks] = useState<{ text: string; done: boolean }[]>(
+    task?.subtasks ?? []
+  );
+  const [newSubtaskText, setNewSubtaskText] = useState('');
+  const subtaskInputRef = useRef<TextInput>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -64,6 +68,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         priority,
         category_id: categoryId,
         due_date: dueDate ? dueDate : null,
+        subtasks,
       };
       if (editing && task) {
         await api.updateTask(task.id, payload);
@@ -79,6 +84,28 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
       setSaving(false);
     }
   };
+
+  // ── Subtask actions ──────────────────────────────────────────────────────
+
+  const addSubtask = () => {
+    const t = newSubtaskText.trim();
+    if (!t) return;
+    setSubtasks((prev) => [...prev, { text: t, done: false }]);
+    setNewSubtaskText('');
+    subtaskInputRef.current?.focus();
+  };
+
+  const toggleSubtask = (idx: number) => {
+    setSubtasks((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, done: !s.done } : s))
+    );
+  };
+
+  const removeSubtask = (idx: number) => {
+    setSubtasks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // ── Category ─────────────────────────────────────────────────────────────
 
   const submitNewCategory = async () => {
     const name = newCatName.trim();
@@ -96,6 +123,27 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
     } finally {
       setSavingCategory(false);
     }
+  };
+
+  // ── Destructive actions ───────────────────────────────────────────────────
+
+  const archive = () => {
+    if (!task) return;
+    Alert.alert('Archive task?', 'You can restore it from the Archived view on the board.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Archive',
+        onPress: async () => {
+          try {
+            await api.updateTask(task.id, { board_id: board.id, archived: true });
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            onClose(true);
+          } catch (err) {
+            Alert.alert('Could not archive', String(err));
+          }
+        },
+      },
+    ]);
   };
 
   const remove = () => {
@@ -155,13 +203,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
           <Section label="Stage">
             <View style={styles.row}>
               {STAGES.map((s) => (
-                <Chip
-                  key={s}
-                  label={s}
-                  active={stage === s}
-                  color={t.stage[s]}
-                  onPress={() => setStage(s)}
-                />
+                <Chip key={s} label={s} active={stage === s} color={t.stage[s]} onPress={() => setStage(s)} />
               ))}
             </View>
           </Section>
@@ -169,44 +211,20 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
           <Section label="Priority">
             <View style={styles.row}>
               {PRIORITIES.map((p) => (
-                <Chip
-                  key={p}
-                  label={p}
-                  active={priority === p}
-                  color={t.priority[p]}
-                  onPress={() => setPriority(p)}
-                />
+                <Chip key={p} label={p} active={priority === p} color={t.priority[p]} onPress={() => setPriority(p)} />
               ))}
             </View>
           </Section>
 
           <Section label="Category">
             <View style={styles.row}>
-              <Chip
-                label="None"
-                active={categoryId === null}
-                color={t.textMuted}
-                onPress={() => setCategoryId(null)}
-              />
+              <Chip label="None" active={categoryId === null} color={t.textMuted} onPress={() => setCategoryId(null)} />
               {categories.map((c) => (
-                <Chip
-                  key={c.id}
-                  label={c.name}
-                  active={categoryId === c.id}
-                  color={c.color}
-                  onPress={() => setCategoryId(c.id)}
-                />
+                <Chip key={c.id} label={c.name} active={categoryId === c.id} color={c.color} onPress={() => setCategoryId(c.id)} />
               ))}
               <Pressable
                 onPress={() => setCreatingCategory((v) => !v)}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: t.surface,
-                    borderColor: t.border,
-                    borderStyle: 'dashed',
-                  },
-                ]}
+                style={[styles.chip, { backgroundColor: t.surface, borderColor: t.border, borderStyle: 'dashed' }]}
               >
                 <Text style={{ color: t.accent, fontWeight: font.weight.medium }}>
                   {creatingCategory ? '× Cancel' : '+ New'}
@@ -215,12 +233,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
             </View>
 
             {creatingCategory && (
-              <View
-                style={[
-                  styles.newCatForm,
-                  { backgroundColor: t.surface, borderColor: t.border },
-                ]}
-              >
+              <View style={[styles.newCatForm, { backgroundColor: t.surface, borderColor: t.border }]}>
                 <TextField
                   label="Name"
                   value={newCatName}
@@ -229,35 +242,15 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
                   maxLength={30}
                   autoCapitalize="words"
                 />
-                <Text
-                  style={{
-                    color: t.textMuted,
-                    fontSize: font.size.sm,
-                    fontWeight: font.weight.medium,
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5,
-                    marginBottom: spacing.xs,
-                  }}
-                >
-                  Color
-                </Text>
+                <Text style={[styles.sectionLabel, { color: t.textMuted }]}>Color</Text>
                 <View style={styles.palette}>
-                  {CATEGORY_COLORS.map((color) => {
-                    const selected = color === newCatColor;
-                    return (
-                      <Pressable
-                        key={color}
-                        onPress={() => setNewCatColor(color)}
-                        style={[
-                          styles.swatch,
-                          {
-                            backgroundColor: color,
-                            borderColor: selected ? t.text : 'transparent',
-                          },
-                        ]}
-                      />
-                    );
-                  })}
+                  {CATEGORY_COLORS.map((color) => (
+                    <Pressable
+                      key={color}
+                      onPress={() => setNewCatColor(color)}
+                      style={[styles.swatch, { backgroundColor: color, borderColor: color === newCatColor ? t.text : 'transparent' }]}
+                    />
+                  ))}
                 </View>
                 <Button
                   label={savingCategory ? 'Adding…' : 'Add category'}
@@ -278,13 +271,73 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
             autoCorrect={false}
           />
 
+          {/* ── Subtasks ─────────────────────────────────────────────────── */}
+          <Section label={`Subtasks${subtasks.length > 0 ? ` (${subtasks.filter((s) => s.done).length}/${subtasks.length})` : ''}`}>
+            {subtasks.map((st, idx) => (
+              <View
+                key={idx}
+                style={[styles.subtaskRow, { borderBottomColor: t.border }]}
+              >
+                <Pressable
+                  onPress={() => toggleSubtask(idx)}
+                  style={[
+                    styles.subtaskCheck,
+                    {
+                      borderColor: st.done ? t.success : t.borderInput,
+                      backgroundColor: st.done ? t.success : 'transparent',
+                    },
+                  ]}
+                >
+                  {st.done && <Text style={styles.subtaskCheckmark}>✓</Text>}
+                </Pressable>
+                <Text
+                  style={[
+                    styles.subtaskText,
+                    {
+                      color: st.done ? t.textMuted : t.text,
+                      textDecorationLine: st.done ? 'line-through' : 'none',
+                    },
+                  ]}
+                >
+                  {st.text}
+                </Text>
+                <Pressable onPress={() => removeSubtask(idx)} hitSlop={10}>
+                  <Text style={[styles.subtaskRemove, { color: t.textLight }]}>×</Text>
+                </Pressable>
+              </View>
+            ))}
+
+            <View style={[styles.subtaskAddRow, { borderColor: t.border }]}>
+              <TextInput
+                ref={subtaskInputRef}
+                value={newSubtaskText}
+                onChangeText={setNewSubtaskText}
+                onSubmitEditing={addSubtask}
+                placeholder="Add subtask…"
+                placeholderTextColor={t.textLight}
+                returnKeyType="done"
+                blurOnSubmit={false}
+                style={[styles.subtaskInput, { color: t.text }]}
+              />
+              <Pressable
+                onPress={addSubtask}
+                disabled={!newSubtaskText.trim()}
+                hitSlop={8}
+                style={({ pressed }) => ({
+                  opacity: !newSubtaskText.trim() ? 0.3 : pressed ? 0.6 : 1,
+                })}
+              >
+                <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
+              </Pressable>
+            </View>
+          </Section>
+
+          {/* ── Destructive actions ──────────────────────────────────────── */}
           {editing && (
-            <Button
-              label="Delete task"
-              variant="ghost"
-              onPress={remove}
-              style={{ marginTop: spacing.lg }}
-            />
+            <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
+              <Button label="Archive task" variant="ghost" onPress={archive} />
+              <Button label="Delete task" variant="ghost" onPress={remove} />
+            </View>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -292,63 +345,26 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   );
 }
 
-function Section({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+// ── Shared sub-components ────────────────────────────────────────────────────
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
   const t = useTheme();
   return (
     <View style={{ marginBottom: spacing.lg }}>
-      <Text
-        style={{
-          color: t.textMuted,
-          fontSize: font.size.sm,
-          fontWeight: font.weight.medium,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-          marginBottom: spacing.sm,
-        }}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.sectionLabel, { color: t.textMuted }]}>{label}</Text>
       {children}
     </View>
   );
 }
 
-function Chip({
-  label,
-  active,
-  color,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  color: string;
-  onPress: () => void;
-}) {
+function Chip({ label, active, color, onPress }: { label: string; active: boolean; color: string; onPress: () => void }) {
   const t = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: active ? color : t.surface,
-          borderColor: active ? color : t.border,
-        },
-      ]}
+      style={[styles.chip, { backgroundColor: active ? color : t.surface, borderColor: active ? color : t.border }]}
     >
-      <Text
-        style={{
-          color: active ? '#fff' : t.text,
-          textTransform: 'capitalize',
-          fontWeight: font.weight.medium,
-        }}
-      >
+      <Text style={{ color: active ? '#fff' : t.text, textTransform: 'capitalize', fontWeight: font.weight.medium }}>
         {label}
       </Text>
     </Pressable>
@@ -363,6 +379,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   title: { fontSize: font.size.lg, fontWeight: font.weight.bold },
+  sectionLabel: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: spacing.sm,
+  },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.md,
@@ -377,10 +400,34 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   palette: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  swatch: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 2,
+  swatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2 },
+  // Subtask styles
+  subtaskRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
+  subtaskCheck: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  subtaskCheckmark: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  subtaskText: { flex: 1, fontSize: font.size.md, lineHeight: 20 },
+  subtaskRemove: { fontSize: 20, lineHeight: 22 },
+  subtaskAddRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.sm,
+  },
+  subtaskInput: { flex: 1, height: 38, fontSize: font.size.md },
 });
