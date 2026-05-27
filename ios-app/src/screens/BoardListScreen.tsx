@@ -14,7 +14,7 @@ import { TextField } from '@/components/TextField';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
-import type { Board } from '@/api/types';
+import type { Board, MemberBoard } from '@/api/types';
 
 interface Props {
   onOpenBoard: (board: Board) => void;
@@ -32,6 +32,7 @@ export function BoardListScreen({
   const t = useTheme();
   const { user, logout } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
+  const [memberships, setMemberships] = useState<MemberBoard[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -39,8 +40,12 @@ export function BoardListScreen({
 
   const load = useCallback(async () => {
     try {
-      const list = await api.boards();
-      setBoards(list);
+      const [owned, shared] = await Promise.all([
+        api.boards(),
+        api.memberships().catch(() => [] as MemberBoard[]),
+      ]);
+      setBoards(owned);
+      setMemberships(shared);
     } catch (err) {
       Alert.alert('Could not load boards', String(err));
     } finally {
@@ -65,9 +70,41 @@ export function BoardListScreen({
     }
   };
 
+  const renderBoardRow = (item: Board, shared?: MemberBoard) => (
+    <Pressable
+      key={item.id}
+      onPress={() => onOpenBoard(item)}
+      style={({ pressed }) => [
+        styles.boardRow,
+        {
+          backgroundColor: t.surface,
+          borderColor: t.border,
+          shadowColor: '#000',
+          shadowOpacity: pressed ? 0.08 : 0.04,
+          shadowRadius: pressed ? 6 : 2,
+          shadowOffset: { width: 0, height: 1 },
+          elevation: pressed ? 3 : 1,
+        },
+      ]}
+    >
+      <View style={[styles.boardDot, { backgroundColor: t.accent }]} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.boardName, { color: t.text }]}>{item.name}</Text>
+        {shared && (
+          <Text style={[styles.boardOwner, { color: t.textMuted }]}>
+            {shared.owner_username || shared.owner_email}
+          </Text>
+        )}
+      </View>
+      <Text style={[styles.boardChevron, { color: t.textLight }]}>›</Text>
+    </Pressable>
+  );
+
+  const hasShared = memberships.length > 0;
+
   return (
     <Screen padded={false}>
-      {/* Header — matches the web app-header */}
+      {/* Header */}
       <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <View style={styles.logoRow}>
           <View style={[styles.logoIcon, { backgroundColor: t.accent }]}>
@@ -85,116 +122,120 @@ export function BoardListScreen({
         </View>
       </View>
 
-      <View style={{ flex: 1, paddingHorizontal: spacing.lg }}>
-        {/* User greeting */}
-        <View style={styles.greeting}>
-          <Text style={[styles.greetingSub, { color: t.textMuted }]}>
-            Hi {user?.name ?? user?.username ?? 'there'} 👋
-          </Text>
-        </View>
+      <FlatList
+        data={[]}
+        keyExtractor={() => '__placeholder__'}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            tintColor={t.textMuted}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingBottom: spacing.xxl,
+        }}
+        ListHeaderComponent={
+          <>
+            {/* User greeting */}
+            <View style={styles.greeting}>
+              <Text style={[styles.greetingSub, { color: t.textMuted }]}>
+                Hi {user?.name ?? user?.username ?? 'there'} 👋
+              </Text>
+            </View>
 
-        {/* Dashboard card */}
-        <Pressable
-          onPress={onOpenDashboard}
-          style={({ pressed }) => [
-            styles.dashCard,
-            {
-              backgroundColor: t.accentMuted,
-              borderColor: t.accent + '33',
-              opacity: pressed ? 0.8 : 1,
-            },
-          ]}
-        >
-          <Text style={[styles.dashLabel, { color: t.accent }]}>Overview</Text>
-          <Text style={[styles.dashTitle, { color: t.accent }]}>Dashboard →</Text>
-        </Pressable>
+            {/* Dashboard card */}
+            <Pressable
+              onPress={onOpenDashboard}
+              style={({ pressed }) => [
+                styles.dashCard,
+                {
+                  backgroundColor: t.accentMuted,
+                  borderColor: t.accent + '33',
+                  opacity: pressed ? 0.8 : 1,
+                },
+              ]}
+            >
+              <Text style={[styles.dashLabel, { color: t.accent }]}>Overview</Text>
+              <Text style={[styles.dashTitle, { color: t.accent }]}>Dashboard →</Text>
+            </Pressable>
 
-        {/* Boards section label */}
-        <Text style={[styles.sectionLabel, { color: t.textMuted }]}>Boards</Text>
+            {/* My Boards */}
+            <Text style={[styles.sectionLabel, { color: t.textMuted }]}>
+              {hasShared ? 'My Boards' : 'Boards'}
+            </Text>
 
-        <FlatList
-          data={boards}
-          keyExtractor={(b) => String(b.id)}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
-              tintColor={t.textMuted}
-            />
-          }
-          ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-          contentContainerStyle={{ paddingBottom: spacing.xxl }}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            !loading ? (
+            {boards.length === 0 && !loading && (
               <View style={styles.emptyWrap}>
                 <Text style={[styles.emptyText, { color: t.textMuted }]}>
                   No boards yet. Create one below.
                 </Text>
               </View>
-            ) : null
-          }
-          renderItem={({ item }) => (
-            <Pressable
-              onPress={() => onOpenBoard(item)}
-              style={({ pressed }) => [
-                styles.boardRow,
-                {
-                  backgroundColor: t.surface,
-                  borderColor: t.border,
-                  shadowColor: '#000',
-                  shadowOpacity: pressed ? 0.08 : 0.04,
-                  shadowRadius: pressed ? 6 : 2,
-                  shadowOffset: { width: 0, height: 1 },
-                  elevation: pressed ? 3 : 1,
-                },
-              ]}
-            >
-              <View style={[styles.boardDot, { backgroundColor: t.accent }]} />
-              <Text style={[styles.boardName, { color: t.text }]}>{item.name}</Text>
-              <Text style={[styles.boardChevron, { color: t.textLight }]}>›</Text>
-            </Pressable>
-          )}
-        />
+            )}
 
-        {creating ? (
-          <View style={[styles.createBox, { backgroundColor: t.surface, borderColor: t.border }]}>
-            <TextField
-              label="Board name"
-              value={newName}
-              onChangeText={setNewName}
-              placeholder="e.g. Personal"
-              autoFocus
-              onSubmitEditing={createBoard}
-            />
-            <View style={styles.createButtons}>
-              <Button
-                label="Cancel"
-                variant="ghost"
-                onPress={() => { setCreating(false); setNewName(''); }}
-                style={{ flex: 1 }}
-              />
-              <Button
-                label="Create"
-                onPress={createBoard}
-                disabled={!newName.trim()}
-                style={{ flex: 1 }}
-              />
-            </View>
-          </View>
-        ) : (
-          <Button
-            label="+ New board"
-            onPress={() => setCreating(true)}
-            style={{ marginBottom: spacing.lg }}
-          />
-        )}
-      </View>
+            {boards.map((b) => (
+              <View key={b.id} style={{ marginBottom: spacing.sm }}>
+                {renderBoardRow(b)}
+              </View>
+            ))}
 
-      {/* Sign out link at very bottom */}
+            {/* Create board form / button */}
+            {creating ? (
+              <View style={[styles.createBox, { backgroundColor: t.surface, borderColor: t.border }]}>
+                <TextField
+                  label="Board name"
+                  value={newName}
+                  onChangeText={setNewName}
+                  placeholder="e.g. Personal"
+                  autoFocus
+                  onSubmitEditing={createBoard}
+                />
+                <View style={styles.createButtons}>
+                  <Button
+                    label="Cancel"
+                    variant="ghost"
+                    onPress={() => { setCreating(false); setNewName(''); }}
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    label="Create"
+                    onPress={createBoard}
+                    disabled={!newName.trim()}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Button
+                label="+ New board"
+                onPress={() => setCreating(true)}
+                style={{ marginBottom: spacing.lg }}
+              />
+            )}
+
+            {/* Shared with me section */}
+            {hasShared && (
+              <>
+                <View style={[styles.sectionDivider, { borderTopColor: t.border }]} />
+                <Text style={[styles.sectionLabel, { color: t.textMuted }]}>Shared with me</Text>
+                {memberships.map((b) => (
+                  <View key={b.id} style={{ marginBottom: spacing.sm }}>
+                    {renderBoardRow(b, b)}
+                  </View>
+                ))}
+              </>
+            )}
+          </>
+        }
+        renderItem={() => null}
+      />
+
+      {/* Sign out */}
       <Pressable onPress={() => logout()} style={styles.signOut}>
         <Text style={[styles.signOutText, { color: t.textMuted }]}>Sign out</Text>
       </Pressable>
@@ -253,6 +294,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     marginBottom: spacing.sm,
   },
+  sectionDivider: {
+    borderTopWidth: 1,
+    marginVertical: spacing.lg,
+  },
   boardRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -262,9 +307,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   boardDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  boardName: { flex: 1, fontSize: font.size.md, fontWeight: font.weight.semibold },
+  boardName: { fontSize: font.size.md, fontWeight: font.weight.semibold },
+  boardOwner: { fontSize: font.size.xs, marginTop: 2 },
   boardChevron: { fontSize: 20 },
-  emptyWrap: { paddingTop: spacing.xxl, alignItems: 'center' },
+  emptyWrap: { paddingTop: spacing.lg, paddingBottom: spacing.lg, alignItems: 'center' },
   emptyText: { fontSize: font.size.md, textAlign: 'center' },
   createBox: {
     padding: spacing.md,

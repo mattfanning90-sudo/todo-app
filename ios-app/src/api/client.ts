@@ -5,6 +5,7 @@ import type {
   Category,
   DashboardData,
   DigestFrequency,
+  MemberBoard,
   SearchHit,
   Task,
   User,
@@ -126,6 +127,7 @@ export const api = {
     }),
 
   boards: () => request<Board[]>('/api/boards'),
+  memberships: () => request<MemberBoard[]>('/api/boards/memberships'),
   createBoard: (name: string) =>
     request<Board>('/api/boards', { method: 'POST', body: { name } }),
   renameBoard: (id: number, name: string) =>

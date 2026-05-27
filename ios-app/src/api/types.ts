@@ -15,6 +15,13 @@ export interface Board {
   slug: string;
 }
 
+/** Board returned by /api/boards/memberships — owned by someone else */
+export interface MemberBoard extends Board {
+  owner_name: string | null;
+  owner_email: string;
+  owner_username: string;
+}
+
 export interface Category {
   id: number;
   name: string;

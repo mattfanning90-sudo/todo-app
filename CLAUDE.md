@@ -10,6 +10,11 @@ Short index. Detailed feature docs live in `docs/` — load only what you need f
 | Railway deploy, env vars, /healthz, cron, migration runner | `docs/operations.md` |
 | Vitest + pg-mem harness, what it covers and doesn't | `docs/testing.md` |
 | Expo client under `ios-app/` | `docs/ios-app.md` |
+| **Web + iOS feature parity, API contract, design tokens** | `docs/cross-platform.md` |
+
+## Cross-platform skill
+
+A personal skill covering this project's cross-platform workflow lives at `~/.claude/skills/cross-platform/SKILL.md`. Before writing any feature that touches `server.js`, `public/app.js`, or `ios-app/`, read that skill and apply its checklist. The short version: every feature must land on both clients; see the checklist in that file.
 
 A public-facing overview lives in `README.md`.
 
