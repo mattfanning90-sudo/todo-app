@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
+const cookieSignature = require('cookie-signature');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const LocalStrategy = require('passport-local').Strategy;
 const bcrypt = require('bcrypt');
@@ -308,6 +309,17 @@ function requireAuth(req, res, next) {
   res.status(401).json({ error: 'Not authenticated' });
 }
 
+// iOS/Android clients cannot read Set-Cookie response headers — the native
+// networking layer intercepts them before they reach JS.  We echo the signed
+// session cookie in X-Session-Cookie so the mobile client can capture it and
+// replay it on every subsequent request.
+function setMobileSessionHeader(req, res) {
+  if (!req.sessionID) return;
+  const secret = process.env.SESSION_SECRET || 'dev-secret-change-me';
+  const sig = cookieSignature.sign(req.sessionID, secret);
+  res.setHeader('X-Session-Cookie', 'connect.sid=' + encodeURIComponent('s:' + sig));
+}
+
 /* ── Auth routes ── */
 app.get('/auth/google', (req, res, next) => {
   if (req.query.remember) req.session.rememberMe = true;
@@ -396,6 +408,7 @@ app.post('/auth/google/mobile', authLimiter, wrap(async (req, res) => {
     req.login(user, loginErr => {
       if (loginErr) return res.status(500).json({ error: 'Login error' });
       req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
+      setMobileSessionHeader(req, res);
       res.json({
         id: user.id, email: user.email, name: user.name,
         username: user.username, digest_frequency: user.digest_frequency,
@@ -470,10 +483,13 @@ app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
     if (sesErr) return fail('server', 'Session error', 500);
     req.login(newUser, err => {
       if (err) return fail('server', 'Login error', 500);
-      if (json) return res.json({
-        id: newUser.id, email: newUser.email, name: newUser.name,
-        username: newUser.username, digest_frequency: newUser.digest_frequency,
-      });
+      if (json) {
+        setMobileSessionHeader(req, res);
+        return res.json({
+          id: newUser.id, email: newUser.email, name: newUser.name,
+          username: newUser.username, digest_frequency: newUser.digest_frequency,
+        });
+      }
       res.redirect('/');
     });
   });
@@ -492,10 +508,13 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
       req.login(user, loginErr => {
         if (loginErr) return next(loginErr);
         if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-        if (json) return res.json({
-          id: user.id, email: user.email, name: user.name,
-          username: user.username, digest_frequency: user.digest_frequency,
-        });
+        if (json) {
+          setMobileSessionHeader(req, res);
+          return res.json({
+            id: user.id, email: user.email, name: user.name,
+            username: user.username, digest_frequency: user.digest_frequency,
+          });
+        }
         res.redirect('/');
       });
     });

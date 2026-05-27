@@ -65,8 +65,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     signal: opts.signal,
   });
 
-  const setCookieHeader = res.headers.get('set-cookie');
-  const newCookie = extractSessionCookie(setCookieHeader);
+  // iOS native networking intercepts Set-Cookie before it reaches JS, so the
+  // server also echoes the signed session value in X-Session-Cookie.
+  const newCookie =
+    extractSessionCookie(res.headers.get('x-session-cookie')) ||
+    extractSessionCookie(res.headers.get('set-cookie'));
   if (newCookie) await setCookie(newCookie);
 
   if (res.status === 401) {
