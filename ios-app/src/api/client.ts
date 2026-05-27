@@ -10,9 +10,11 @@ import type {
   User,
 } from './types';
 
+// EXPO_PUBLIC_* vars are inlined by Metro at bundle time from .env
+// Fall back to localhost only in bare local dev (never on device).
 const API_BASE: string =
-  (Constants.expoConfig?.extra?.apiBase as string) ||
   process.env.EXPO_PUBLIC_API_BASE ||
+  (Constants.expoConfig?.extra?.apiBase as string | undefined) ||
   'http://localhost:3000';
 
 const ACCEPT_JSON = 'application/json';

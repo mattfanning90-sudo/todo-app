@@ -18,17 +18,15 @@ const googleConfigured = Boolean(
   GOOGLE_IOS_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID || GOOGLE_WEB_CLIENT_ID
 );
 
-export function LoginScreen() {
-  const t = useTheme();
-  const { login, signup, googleLogin } = useAuth();
-  const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [loading, setLoading] = useState(false);
+// Isolated component so useIdTokenAuthRequest only runs when credentials exist.
+// React hooks must not be called conditionally, so we gate at the component level.
+function GoogleLoginButton({
+  onError,
+}: {
+  onError: (msg: string) => void;
+}) {
+  const { googleLogin } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
   const [, googleResponse, promptAsync] = Google.useIdTokenAuthRequest({
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
@@ -38,37 +36,59 @@ export function LoginScreen() {
   useEffect(() => {
     if (googleResponse?.type !== 'success') {
       if (googleResponse?.type === 'error') {
-        setError('Google sign-in failed');
+        onError('Google sign-in failed');
         setGoogleLoading(false);
-      } else if (googleResponse?.type === 'dismiss' || googleResponse?.type === 'cancel') {
+      } else if (
+        googleResponse?.type === 'dismiss' ||
+        googleResponse?.type === 'cancel'
+      ) {
         setGoogleLoading(false);
       }
       return;
     }
     const idToken = googleResponse.params?.id_token;
     if (!idToken) {
-      setError('No id_token returned from Google');
+      onError('No id_token returned from Google');
       setGoogleLoading(false);
       return;
     }
     googleLogin(idToken)
       .catch((err) => {
         const msg = err instanceof ApiError ? err.message : 'Network error';
-        setError(msg || 'Could not sign in');
+        onError(msg || 'Could not sign in');
       })
       .finally(() => setGoogleLoading(false));
-  }, [googleResponse, googleLogin]);
+  }, [googleResponse, googleLogin, onError]);
 
-  const startGoogle = async () => {
-    setError(null);
+  const start = async () => {
     setGoogleLoading(true);
     try {
       await promptAsync();
     } catch {
-      setError('Could not open Google sign-in');
+      onError('Could not open Google sign-in');
       setGoogleLoading(false);
     }
   };
+
+  return (
+    <Button
+      label="Continue with Google"
+      variant="secondary"
+      onPress={start}
+      loading={googleLoading}
+    />
+  );
+}
+
+export function LoginScreen() {
+  const t = useTheme();
+  const { login, signup } = useAuth();
+  const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const submit = async () => {
     setError(null);
@@ -148,12 +168,7 @@ export function LoginScreen() {
                   <Text style={[styles.dividerText, { color: t.textMuted }]}>or</Text>
                   <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
                 </View>
-                <Button
-                  label="Continue with Google"
-                  variant="secondary"
-                  onPress={startGoogle}
-                  loading={googleLoading}
-                />
+                <GoogleLoginButton onError={(msg) => setError(msg)} />
               </>
             )}
 
