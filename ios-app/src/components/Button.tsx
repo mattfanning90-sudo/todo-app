@@ -1,11 +1,6 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  ViewStyle,
-} from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { useTheme, radius, spacing, font } from '@/theme';
 
 interface Props {

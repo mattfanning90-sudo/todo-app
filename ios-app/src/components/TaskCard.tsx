@@ -1,5 +1,8 @@
 import React from 'react';
 import { ActionSheetIOS, Pressable, StyleSheet, Text, View } from 'react-native';
+// Use RNGH's Pressable for the outer card so touches aren't swallowed by
+// GestureHandlerRootView when react-native-gesture-handler is active.
+import { Pressable as GHPressable } from 'react-native-gesture-handler';
 import { useTheme, radius, spacing, font } from '@/theme';
 import type { Category, Stage, Task } from '@/api/types';
 
@@ -78,7 +81,7 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
   };
 
   return (
-    <Pressable
+    <GHPressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
@@ -87,21 +90,19 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
           borderColor: t.border,
           borderLeftColor: priorityBorder,
           shadowColor: '#000',
-          shadowOpacity: pressed ? 0.08 : 0.05,
-          shadowRadius: pressed ? 8 : 3,
+          shadowOpacity: pressed ? 0.12 : 0.05,
+          shadowRadius: pressed ? 6 : 3,
           shadowOffset: { width: 0, height: 1 },
           elevation: pressed ? 4 : 1,
+          opacity: pressed ? 0.82 : 1,
         },
       ]}
     >
       <View style={styles.inner}>
         <View style={styles.topRow}>
-          {/* Checkbox */}
-          <Pressable
-            onPress={(e) => {
-              e.stopPropagation();
-              onToggleDone?.();
-            }}
+          {/* Checkbox — inner GHPressable wins the responder automatically */}
+          <GHPressable
+            onPress={() => onToggleDone?.()}
             hitSlop={8}
             style={[
               styles.checkbox,
@@ -112,7 +113,7 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
             ]}
           >
             {isDone && <Text style={styles.checkmark}>✓</Text>}
-          </Pressable>
+          </GHPressable>
 
           {/* Task text */}
           <Text
@@ -152,11 +153,8 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
 
             {/* Move-to-stage pill — only shown when callback is wired */}
             {onMoveToStage && (
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleMovePress();
-                }}
+              <GHPressable
+                onPress={handleMovePress}
                 hitSlop={6}
                 style={({ pressed }) => [
                   styles.movePill,
@@ -168,12 +166,12 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
                 ]}
               >
                 <Text style={[styles.movePillText, { color: t.textMuted }]}>Move →</Text>
-              </Pressable>
+              </GHPressable>
             )}
           </View>
         )}
       </View>
-    </Pressable>
+    </GHPressable>
   );
 }
 
