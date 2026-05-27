@@ -84,3 +84,25 @@ export interface SearchHit {
   cat_name: string | null;
   cat_color: string | null;
 }
+
+export interface Notification {
+  id: number;
+  user_id: number;
+  type: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+  task_id: number | null;
+  from_user_id: number | null;
+  from_name: string | null;
+  from_email: string | null;
+  from_username: string | null;
+}
+
+/** Minimal user shape returned by /api/users/search */
+export interface UserSearchResult {
+  id: number;
+  name: string | null;
+  email: string;
+  username: string;
+}

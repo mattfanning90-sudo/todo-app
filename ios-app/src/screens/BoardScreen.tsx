@@ -4,7 +4,6 @@ import {
   Alert,
   Pressable,
   RefreshControl,
-  SectionList,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +12,12 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
+import DraggableFlatList, {
+  NestableScrollContainer,
+  NestableDraggableFlatList,
+  ScaleDecorator,
+  RenderItemParams,
+} from 'react-native-draggable-flatlist';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
 import { useTheme, radius, spacing, font } from '@/theme';
@@ -38,11 +43,11 @@ const FILTERS: { key: Filter; label: string }[] = [
 function isToday(dateStr: string | null): boolean {
   if (!dateStr) return false;
   const d = new Date(dateStr);
-  const t = new Date();
+  const now = new Date();
   return (
-    d.getFullYear() === t.getFullYear() &&
-    d.getMonth() === t.getMonth() &&
-    d.getDate() === t.getDate()
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
   );
 }
 
@@ -52,12 +57,6 @@ function isOverdue(dateStr: string | null): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d < today;
-}
-
-interface KanbanSection {
-  stage: Stage;
-  label: string;
-  data: Task[];
 }
 
 interface Props {
@@ -110,36 +109,37 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     return m;
   }, [categories]);
 
-  /** Apply the active filter to a set of stage tasks */
   const applyFilter = useCallback(
     (stageTasks: Task[]) => {
       if (filter === 'all') return stageTasks;
-      if (filter === 'today') return stageTasks.filter((t) => isToday(t.due_date));
-      if (filter === 'overdue') return stageTasks.filter((t) => isOverdue(t.due_date));
-      if (filter === 'nodate') return stageTasks.filter((t) => !t.due_date);
+      if (filter === 'today') return stageTasks.filter((tk) => isToday(tk.due_date));
+      if (filter === 'overdue') return stageTasks.filter((tk) => isOverdue(tk.due_date));
+      if (filter === 'nodate') return stageTasks.filter((tk) => !tk.due_date);
       return stageTasks;
     },
     [filter]
   );
 
-  const sections: KanbanSection[] = useMemo(
-    () =>
-      STAGES.map((s) => ({
-        stage: s.key,
-        label: s.label,
-        data: applyFilter(
-          tasks
-            .filter((task) => task.stage === s.key && !task.archived_at)
-            .sort((a, b) => a.position - b.position)
-        ),
-      })),
+  /** Ordered tasks per stage, with filter applied */
+  const stageData = useMemo(
+    () => ({
+      backlog: applyFilter(
+        tasks.filter((tk) => tk.stage === 'backlog' && !tk.archived_at).sort((a, b) => a.position - b.position)
+      ),
+      in_progress: applyFilter(
+        tasks.filter((tk) => tk.stage === 'in_progress' && !tk.archived_at).sort((a, b) => a.position - b.position)
+      ),
+      done: applyFilter(
+        tasks.filter((tk) => tk.stage === 'done' && !tk.archived_at).sort((a, b) => a.position - b.position)
+      ),
+    }),
     [tasks, applyFilter]
   );
 
   const counts = useMemo(() => {
     const c: Record<Stage, number> = { backlog: 0, in_progress: 0, done: 0 };
-    tasks.forEach((task) => {
-      if (!task.archived_at) c[task.stage] = (c[task.stage] ?? 0) + 1;
+    tasks.forEach((tk) => {
+      if (!tk.archived_at) c[tk.stage] = (c[tk.stage] ?? 0) + 1;
     });
     return c;
   }, [tasks]);
@@ -166,9 +166,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const toggleDone = useCallback(
     async (task: Task) => {
       const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
-      setTasks((prev) =>
-        prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u))
-      );
+      setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       try {
         await api.updateTask(task.id, { board_id: board.id, stage: newStage });
@@ -183,9 +181,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const moveToStage = useCallback(
     async (task: Task, newStage: Stage) => {
       if (task.stage === newStage) return;
-      setTasks((prev) =>
-        prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u))
-      );
+      setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       try {
         await api.updateTask(task.id, { board_id: board.id, stage: newStage });
@@ -197,82 +193,81 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     [board.id, load]
   );
 
-  // ─── Render helpers ──────────────────────────────────────────────────────────
+  const handleDragEnd = useCallback(
+    async (stage: Stage, data: Task[]) => {
+      setTasks((prev) => {
+        const rest = prev.filter((tk) => tk.stage !== stage || !!tk.archived_at);
+        return [...rest, ...data.map((tk, idx) => ({ ...tk, position: idx }))];
+      });
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      try {
+        await api.reorder(data.map((tk) => tk.id), board.id);
+      } catch {
+        // best-effort — reload on failure
+        load();
+      }
+    },
+    [board.id, load]
+  );
 
-  const renderItem = useCallback(
-    ({ item }: { item: Task }) => (
-      <View style={{ marginBottom: spacing.sm }}>
-        <TaskCard
-          task={item}
-          category={item.category_id ? categoriesById.get(item.category_id) : undefined}
-          onPress={() => onOpenTask(item)}
-          onToggleDone={() => toggleDone(item)}
-          onMoveToStage={(stage) => moveToStage(item, stage)}
-        />
-      </View>
-    ),
+  // ─── Draggable item renderer ─────────────────────────────────────────────────
+
+  const renderDraggableItem = useCallback(
+    (stage: Stage) =>
+      ({ item, drag, isActive }: RenderItemParams<Task>) =>
+        (
+          <ScaleDecorator>
+            <View style={[{ marginBottom: spacing.sm }, isActive && styles.dragging]}>
+              <TaskCard
+                task={item}
+                category={item.category_id ? categoriesById.get(item.category_id) : undefined}
+                onPress={() => !isActive && onOpenTask(item)}
+                onToggleDone={() => toggleDone(item)}
+                onMoveToStage={(s) => moveToStage(item, s)}
+                onLongPress={drag}
+                delayLongPress={180}
+              />
+            </View>
+          </ScaleDecorator>
+        ),
     [categoriesById, onOpenTask, toggleDone, moveToStage]
   );
 
-  const renderSectionHeader = useCallback(
-    ({ section }: { section: KanbanSection }) => {
-      const stageColor = t.stage[section.stage];
-      return (
-        <View style={[styles.sectionHeader, { backgroundColor: t.bg }]}>
-          <View
-            style={[styles.sectionHeaderInner, { borderLeftColor: stageColor }]}
-          >
-            <View style={styles.sectionTitleRow}>
-              <Text style={[styles.sectionTitle, { color: stageColor }]}>
-                {section.label}
+  // ─── Stage section header ────────────────────────────────────────────────────
+
+  const StageHeader = ({ stage, label }: { stage: Stage; label: string }) => {
+    const stageColor = t.stage[stage];
+    return (
+      <View style={[styles.stageHeader, { backgroundColor: t.bg }]}>
+        <View style={[styles.stageHeaderInner, { borderLeftColor: stageColor }]}>
+          <View style={styles.stageTitleRow}>
+            <Text style={[styles.stageTitle, { color: stageColor }]}>{label}</Text>
+            <View style={[styles.stageCountBadge, { backgroundColor: stageColor + '22' }]}>
+              <Text style={[styles.stageCountText, { color: stageColor }]}>
+                {counts[stage]}
               </Text>
-              <View
-                style={[
-                  styles.sectionCountBadge,
-                  { backgroundColor: stageColor + '22' },
-                ]}
-              >
-                <Text style={[styles.sectionCountText, { color: stageColor }]}>
-                  {counts[section.stage]}
-                </Text>
-              </View>
             </View>
-            {/* Tap + to focus the quick-add input and target this stage */}
-            <Pressable
-              onPress={() => {
-                setQuickStage(section.stage);
-                quickInputRef.current?.focus();
-              }}
-              hitSlop={10}
-            >
-              <Text
-                style={{ color: stageColor, fontSize: font.size.lg, fontWeight: '700' }}
-              >
-                +
-              </Text>
-            </Pressable>
           </View>
+          <Pressable
+            onPress={() => {
+              setQuickStage(stage);
+              quickInputRef.current?.focus();
+            }}
+            hitSlop={10}
+          >
+            <Text style={{ color: stageColor, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
+          </Pressable>
         </View>
-      );
-    },
-    [t, counts]
-  );
+      </View>
+    );
+  };
 
-  const renderSectionFooter = () => (
-    <View style={{ height: spacing.lg }} />
-  );
-
-  const keyExtractor = useCallback((item: Task) => String(item.id), []);
+  const keyExtractor = (item: Task) => String(item.id);
 
   return (
     <Screen padded={false}>
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <View
-        style={[
-          styles.topBar,
-          { backgroundColor: t.surface, borderBottomColor: t.border },
-        ]}
-      >
+      <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <Pressable onPress={onBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Boards</Text>
         </Pressable>
@@ -323,13 +318,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                 },
               ]}
             >
-              <Text
-                style={{
-                  fontSize: font.size.sm,
-                  fontWeight: font.weight.medium,
-                  color: active ? '#fff' : t.textMuted,
-                }}
-              >
+              <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.textMuted }}>
                 {f.label}
               </Text>
             </Pressable>
@@ -338,13 +327,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       </ScrollView>
 
       {/* ── Quick-add bar ────────────────────────────────────────────────── */}
-      <View
-        style={[
-          styles.quickAddOuter,
-          { backgroundColor: t.bg, borderBottomColor: t.border },
-        ]}
-      >
-        {/* Stage target selector */}
+      <View style={[styles.quickAddOuter, { backgroundColor: t.bg, borderBottomColor: t.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -365,13 +348,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                   },
                 ]}
               >
-                <Text
-                  style={{
-                    fontSize: font.size.xs,
-                    fontWeight: font.weight.semibold,
-                    color: active ? stageColor : t.textMuted,
-                  }}
-                >
+                <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.textMuted }}>
                   {s.label}
                 </Text>
               </Pressable>
@@ -379,13 +356,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
           })}
         </ScrollView>
 
-        {/* Text input + send */}
-        <View
-          style={[
-            styles.quickAddRow,
-            { backgroundColor: t.surface, borderColor: t.border },
-          ]}
-        >
+        <View style={[styles.quickAddRow, { backgroundColor: t.surface, borderColor: t.border }]}>
           <TextInput
             ref={quickInputRef}
             value={quickText}
@@ -406,26 +377,13 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1,
             })}
           >
-            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>
-              +
-            </Text>
+            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* ── Kanban SectionList ───────────────────────────────────────────── */}
-      <SectionList
-        sections={sections}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        renderSectionHeader={renderSectionHeader}
-        renderSectionFooter={renderSectionFooter}
-        stickySectionHeadersEnabled
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.xs,
-          paddingBottom: spacing.xxl * 2,
-        }}
+      {/* ── Kanban: three NestableDraggableFlatLists in NestableScrollContainer ── */}
+      <NestableScrollContainer
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -436,15 +394,32 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             tintColor={t.textMuted}
           />
         }
-        ListEmptyComponent={
-          !loading ? (
-            <Text style={[styles.empty, { color: t.textMuted }]}>
-              No tasks yet. Tap + to add one.
-            </Text>
-          ) : null
-        }
-        initialNumToRender={30}
-      />
+        contentContainerStyle={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.xs,
+          paddingBottom: spacing.xxl * 2,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {!loading && tasks.length === 0 && (
+          <Text style={[styles.empty, { color: t.textMuted }]}>
+            No tasks yet. Tap + to add one.
+          </Text>
+        )}
+
+        {STAGES.map((s) => (
+          <View key={s.key}>
+            <StageHeader stage={s.key} label={s.label} />
+            <NestableDraggableFlatList
+              data={stageData[s.key]}
+              keyExtractor={keyExtractor}
+              renderItem={renderDraggableItem(s.key)}
+              onDragEnd={({ data }) => handleDragEnd(s.key, data)}
+              activationDistance={10}
+            />
+          </View>
+        ))}
+      </NestableScrollContainer>
     </Screen>
   );
 }
@@ -465,10 +440,7 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.bold,
     marginHorizontal: spacing.md,
   },
-  filterBar: {
-    flexGrow: 0,
-    paddingVertical: spacing.sm,
-  },
+  filterBar: { flexGrow: 0, paddingVertical: spacing.sm },
   filterScroll: {
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
@@ -510,40 +482,41 @@ const styles = StyleSheet.create({
     height: 38,
     fontSize: font.size.md,
   },
-  // ── Kanban section headers ─────────────────────────────────────────────────
-  sectionHeader: {
+  // ── Stage headers ────────────────────────────────────────────────────────────
+  stageHeader: {
     paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
-  sectionHeaderInner: {
+  stageHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderLeftWidth: 3,
     paddingLeft: spacing.sm,
   },
-  sectionTitleRow: {
+  stageTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
   },
-  sectionTitle: {
+  stageTitle: {
     fontSize: font.size.sm,
     fontWeight: font.weight.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  sectionCountBadge: {
+  stageCountBadge: {
     paddingHorizontal: 7,
     paddingVertical: 1,
     borderRadius: 10,
     minWidth: 20,
     alignItems: 'center',
   },
-  sectionCountText: {
+  stageCountText: {
     fontSize: font.size.xs,
     fontWeight: font.weight.semibold,
   },
+  dragging: { opacity: 0.9 },
   empty: {
     textAlign: 'center',
     paddingTop: spacing.xxl,

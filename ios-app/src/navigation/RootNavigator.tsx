@@ -22,6 +22,7 @@ import { SettingsScreen } from '@/screens/SettingsScreen';
 import { SearchScreen } from '@/screens/SearchScreen';
 import { ArchivedScreen } from '@/screens/ArchivedScreen';
 import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
+import { NotificationsScreen } from '@/screens/NotificationsScreen';
 import { useTheme } from '@/theme';
 import type { Board, Task } from '@/api/types';
 
@@ -35,6 +36,7 @@ export type RootStackParamList = {
   Search: undefined;
   Archived: { board: Board };
   BoardMembers: { board: Board };
+  Notifications: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -48,6 +50,7 @@ function BoardListWrapper() {
       onOpenDashboard={() => nav.navigate('Dashboard')}
       onOpenSettings={() => nav.navigate('Settings')}
       onOpenSearch={() => nav.navigate('Search')}
+      onOpenNotifications={() => nav.navigate('Notifications')}
     />
   );
 }
@@ -114,6 +117,11 @@ function BoardMembersWrapper({ route }: { route: { params: { board: Board } } })
   return <BoardMembersScreen board={route.params.board} onBack={() => nav.goBack()} />;
 }
 
+function NotificationsWrapper() {
+  const nav = useNavigation<Nav>();
+  return <NotificationsScreen onBack={() => nav.goBack()} />;
+}
+
 export function RootNavigator() {
   const { user, loading } = useAuth();
   const scheme = useColorScheme();
@@ -158,6 +166,7 @@ export function RootNavigator() {
             <Stack.Screen name="Search" component={SearchWrapper} />
             <Stack.Screen name="Archived" component={ArchivedWrapper} />
             <Stack.Screen name="BoardMembers" component={BoardMembersWrapper} />
+            <Stack.Screen name="Notifications" component={NotificationsWrapper} />
             <Stack.Screen
               name="TaskDetail"
               component={TaskDetailWrapper}

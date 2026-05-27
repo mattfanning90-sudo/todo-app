@@ -8,9 +8,11 @@ import type {
   DashboardData,
   DigestFrequency,
   MemberBoard,
+  Notification,
   SearchHit,
   Task,
   User,
+  UserSearchResult,
 } from './types';
 
 // EXPO_PUBLIC_* vars are inlined by Metro at bundle time from .env
@@ -187,6 +189,21 @@ export const api = {
   dashboard: () => request<DashboardData>('/api/dashboard'),
   search: (q: string, signal?: AbortSignal) =>
     request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
+
+  // ── Notifications ──────────────────────────────────────────────────────────
+  notifications: () => request<Notification[]>('/api/notifications'),
+  markNotificationsRead: () =>
+    request<{ ok: true }>('/api/notifications/read', { method: 'POST' }),
+
+  // ── User search ─────────────────────────────────────────────────────────────
+  searchUsers: (q: string, signal?: AbortSignal) =>
+    request<UserSearchResult[]>(`/api/users/search?q=${encodeURIComponent(q)}`, { signal }),
+
+  // ── Category management ────────────────────────────────────────────────────
+  deleteCategory: (categoryId: number, boardId: number) =>
+    request<{ ok: true }>(`/api/categories/${categoryId}?board=${boardId}`, {
+      method: 'DELETE',
+    }),
 };
 
 export { setCookie as setSessionCookie };

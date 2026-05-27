@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActionSheetIOS,
   Alert,
   FlatList,
   Pressable,
@@ -21,6 +22,7 @@ interface Props {
   onOpenDashboard: () => void;
   onOpenSettings: () => void;
   onOpenSearch: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export function BoardListScreen({
@@ -28,6 +30,7 @@ export function BoardListScreen({
   onOpenDashboard,
   onOpenSettings,
   onOpenSearch,
+  onOpenNotifications,
 }: Props) {
   const t = useTheme();
   const { user, logout } = useAuth();
@@ -37,15 +40,18 @@ export function BoardListScreen({
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
     try {
-      const [owned, shared] = await Promise.all([
+      const [owned, shared, notifs] = await Promise.all([
         api.boards(),
         api.memberships().catch(() => [] as MemberBoard[]),
+        api.notifications().catch(() => []),
       ]);
       setBoards(owned);
       setMemberships(shared);
+      setUnreadCount(notifs.filter((n) => !n.read).length);
     } catch (err) {
       Alert.alert('Could not load boards', String(err));
     } finally {
@@ -70,10 +76,65 @@ export function BoardListScreen({
     }
   };
 
+  const handleBoardLongPress = (item: Board) => {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        title: item.name,
+        options: ['Rename', 'Delete', 'Cancel'],
+        destructiveButtonIndex: 1,
+        cancelButtonIndex: 2,
+      },
+      (idx) => {
+        if (idx === 0) {
+          // Rename
+          Alert.prompt(
+            'Rename board',
+            'Enter a new name:',
+            async (newName: string) => {
+              if (!newName?.trim()) return;
+              try {
+                const updated = await api.renameBoard(item.id, newName.trim());
+                setBoards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+              } catch (err) {
+                Alert.alert('Could not rename board', String(err));
+              }
+            },
+            'plain-text',
+            item.name
+          );
+        } else if (idx === 1) {
+          // Delete
+          Alert.alert(
+            `Delete "${item.name}"?`,
+            'All tasks on this board will be permanently deleted.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await api.deleteBoard(item.id);
+                    setBoards((prev) => prev.filter((b) => b.id !== item.id));
+                  } catch (err) {
+                    Alert.alert('Could not delete board', String(err));
+                  }
+                },
+              },
+            ]
+          );
+        }
+      }
+    );
+  };
+
   const renderBoardRow = (item: Board, shared?: MemberBoard) => (
     <Pressable
       key={item.id}
+      testID={`board-row-${item.id}`}
       onPress={() => onOpenBoard(item)}
+      onLongPress={() => !shared && handleBoardLongPress(item)}
+      delayLongPress={400}
       style={({ pressed }) => [
         styles.boardRow,
         {
@@ -116,6 +177,20 @@ export function BoardListScreen({
           <Pressable onPress={onOpenSearch} hitSlop={12} style={styles.iconBtn}>
             <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⌕</Text>
           </Pressable>
+          {onOpenNotifications && (
+            <Pressable onPress={onOpenNotifications} hitSlop={12} style={styles.iconBtn}>
+              <View>
+                <Text style={[styles.iconBtnText, { color: t.textMuted }]}>🔔</Text>
+                {unreadCount > 0 && (
+                  <View style={[styles.badge, { backgroundColor: t.danger }]}>
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </Pressable>
+          )}
           <Pressable onPress={onOpenSettings} hitSlop={12} style={styles.iconBtn}>
             <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⚙</Text>
           </Pressable>
@@ -271,6 +346,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   iconBtnText: { fontSize: 20 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
   greeting: { paddingTop: spacing.lg, paddingBottom: spacing.md },
   greetingSub: { fontSize: font.size.md },
   dashCard: {

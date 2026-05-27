@@ -21,6 +21,12 @@ interface Props {
   onToggleDone?: () => void;
   /** When provided, a "Move to…" pill appears on the card */
   onMoveToStage?: (stage: Stage) => void;
+  /** Long-press handler — used by DraggableFlatList to start a drag */
+  onLongPress?: () => void;
+  /** Delay before long-press fires (default 200ms) */
+  delayLongPress?: number;
+  /** testID passed to the root pressable for testing */
+  testID?: string;
 }
 
 function dueLabel(
@@ -41,7 +47,7 @@ function dueLabel(
   };
 }
 
-export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage }: Props) {
+export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage, onLongPress, delayLongPress = 200, testID }: Props) {
   const t = useTheme();
   const due = dueLabel(task.due_date);
   const isDone = task.stage === 'done';
@@ -83,6 +89,9 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage 
   return (
     <GHPressable
       onPress={onPress}
+      onLongPress={onLongPress}
+      delayLongPress={delayLongPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.card,
         {

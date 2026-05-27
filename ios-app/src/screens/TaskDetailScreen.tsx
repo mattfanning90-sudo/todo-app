@@ -16,10 +16,11 @@ import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
-import type { Board, Category, Priority, Stage, Task } from '@/api/types';
+import type { Board, Category, Priority, Stage, Task, UserSearchResult } from '@/api/types';
 
 const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 const PRIORITIES: Priority[] = ['none', 'low', 'medium', 'high'];
+const RECURRENCES: string[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'biweekly', 'quarterly', 'yearly'];
 const CATEGORY_COLORS = [
   '#4285F4', '#34A853', '#EA4335', '#FBBC05',
   '#8B5CF6', '#F59E0B', '#10B981', '#EC4899',
@@ -34,16 +35,41 @@ interface Props {
 export function TaskDetailScreen({ board, task, onClose }: Props) {
   const t = useTheme();
   const editing = task !== null;
+
+  // Core fields
   const [text, setText] = useState(task?.text ?? '');
   const [stage, setStage] = useState<Stage>(task?.stage ?? 'backlog');
   const [priority, setPriority] = useState<Priority>(task?.priority ?? 'none');
   const [categoryId, setCategoryId] = useState<number | null>(task?.category_id ?? null);
   const [dueDate, setDueDate] = useState<string>(task?.due_date ?? '');
+
+  // Notes / status
+  const [status, setStatus] = useState<string>(task?.status ?? '');
+
+  // Recurrence
+  const [recurrence, setRecurrence] = useState<string>(task?.recurrence ?? 'none');
+
+  // Assigned-to
+  const [assignedToUserId, setAssignedToUserId] = useState<number | null>(
+    task?.assigned_to_user_id ?? null
+  );
+  const [userQuery, setUserQuery] = useState('');
+  const [userResults, setUserResults] = useState<UserSearchResult[]>([]);
+  const [assignedUserLabel, setAssignedUserLabel] = useState<string>('');
+  const userSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Calendar
+  const [calStart, setCalStart] = useState<string>(task?.cal_start ?? '');
+  const [calEnd, setCalEnd] = useState<string>(task?.cal_end ?? '');
+
+  // Subtasks
   const [subtasks, setSubtasks] = useState<{ text: string; done: boolean }[]>(
     task?.subtasks ?? []
   );
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const subtaskInputRef = useRef<TextInput>(null);
+
+  // Category management
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
   const [creatingCategory, setCreatingCategory] = useState(false);
@@ -54,6 +80,26 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   useEffect(() => {
     api.categories(board.id).then(setCategories).catch(() => {});
   }, [board.id]);
+
+  // Live user search
+  useEffect(() => {
+    if (userQuery.length < 2) {
+      setUserResults([]);
+      return;
+    }
+    if (userSearchTimeout.current) clearTimeout(userSearchTimeout.current);
+    userSearchTimeout.current = setTimeout(async () => {
+      try {
+        const results = await api.searchUsers(userQuery);
+        setUserResults(results);
+      } catch {
+        setUserResults([]);
+      }
+    }, 300);
+    return () => {
+      if (userSearchTimeout.current) clearTimeout(userSearchTimeout.current);
+    };
+  }, [userQuery]);
 
   const canSave = useMemo(() => text.trim().length > 0, [text]);
 
@@ -68,6 +114,11 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         priority,
         category_id: categoryId,
         due_date: dueDate ? dueDate : null,
+        status,
+        recurrence: recurrence === 'none' ? null : recurrence,
+        assigned_to_user_id: assignedToUserId,
+        cal_start: calStart || null,
+        cal_end: calEnd || null,
         subtasks,
       };
       if (editing && task) {
@@ -85,12 +136,12 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
     }
   };
 
-  // ── Subtask actions ──────────────────────────────────────────────────────
+  // ── Subtask actions ──────────────────────────────────────────────────────────
 
   const addSubtask = () => {
-    const t = newSubtaskText.trim();
-    if (!t) return;
-    setSubtasks((prev) => [...prev, { text: t, done: false }]);
+    const st = newSubtaskText.trim();
+    if (!st) return;
+    setSubtasks((prev) => [...prev, { text: st, done: false }]);
     setNewSubtaskText('');
     subtaskInputRef.current?.focus();
   };
@@ -105,7 +156,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
     setSubtasks((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  // ── Category ─────────────────────────────────────────────────────────────
+  // ── Category ─────────────────────────────────────────────────────────────────
 
   const submitNewCategory = async () => {
     const name = newCatName.trim();
@@ -125,7 +176,30 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
     }
   };
 
-  // ── Destructive actions ───────────────────────────────────────────────────
+  const deleteCategory = (cat: Category) => {
+    Alert.alert(
+      `Delete "${cat.name}"?`,
+      'Tasks in this category will have their category removed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.deleteCategory(cat.id, board.id);
+              setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+              if (categoryId === cat.id) setCategoryId(null);
+            } catch (err) {
+              Alert.alert('Could not delete category', String(err));
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Destructive actions ───────────────────────────────────────────────────────
 
   const archive = () => {
     if (!task) return;
@@ -192,11 +266,21 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         </View>
 
         <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
+          {/* Task text */}
           <TextField
             label="What needs doing?"
             value={text}
             onChangeText={setText}
             placeholder="e.g. Pay rent tomorrow"
+            multiline
+          />
+
+          {/* Notes / status */}
+          <TextField
+            label="Notes"
+            value={status}
+            onChangeText={setStatus}
+            placeholder="Notes or status details…"
             multiline
           />
 
@@ -216,11 +300,36 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
             </View>
           </Section>
 
+          {/* Recurrence */}
+          <Section label="Recurrence">
+            <View style={styles.row}>
+              {RECURRENCES.map((r) => (
+                <Chip
+                  key={r}
+                  label={r}
+                  active={recurrence === r}
+                  color={t.accent}
+                  onPress={() => setRecurrence(r)}
+                />
+              ))}
+            </View>
+          </Section>
+
           <Section label="Category">
             <View style={styles.row}>
               <Chip label="None" active={categoryId === null} color={t.textMuted} onPress={() => setCategoryId(null)} />
               {categories.map((c) => (
-                <Chip key={c.id} label={c.name} active={categoryId === c.id} color={c.color} onPress={() => setCategoryId(c.id)} />
+                <View key={c.id} style={styles.catChipWrap}>
+                  <Chip label={c.name} active={categoryId === c.id} color={c.color} onPress={() => setCategoryId(c.id)} />
+                  <Pressable
+                    onPress={() => deleteCategory(c)}
+                    hitSlop={6}
+                    testID={`delete-category-${c.id}`}
+                    style={styles.catDeleteBtn}
+                  >
+                    <Text style={{ color: t.danger, fontSize: 11, fontWeight: '700' }}>×</Text>
+                  </Pressable>
+                </View>
               ))}
               <Pressable
                 onPress={() => setCreatingCategory((v) => !v)}
@@ -270,6 +379,74 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
             autoCapitalize="none"
             autoCorrect={false}
           />
+
+          {/* Assigned-to user */}
+          <Section label="Assign to">
+            {assignedToUserId ? (
+              <View style={styles.row}>
+                <View style={[styles.assignedPill, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
+                  <Text style={{ color: t.text, fontSize: font.size.sm }}>{assignedUserLabel}</Text>
+                </View>
+                <Pressable
+                  onPress={() => { setAssignedToUserId(null); setAssignedUserLabel(''); setUserQuery(''); }}
+                  style={{ padding: spacing.sm }}
+                >
+                  <Text style={{ color: t.danger, fontSize: font.size.sm }}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <>
+                <TextInput
+                  value={userQuery}
+                  onChangeText={setUserQuery}
+                  placeholder="Search user by name or email…"
+                  placeholderTextColor={t.textLight}
+                  style={[styles.searchInput, { borderColor: t.border, color: t.text, backgroundColor: t.surface }]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                {userResults.length > 0 && (
+                  <View style={[styles.userResultsList, { borderColor: t.border, backgroundColor: t.surface }]}>
+                    {userResults.map((u) => (
+                      <Pressable
+                        key={u.id}
+                        onPress={() => {
+                          setAssignedToUserId(u.id);
+                          setAssignedUserLabel(u.username);
+                          setUserQuery('');
+                          setUserResults([]);
+                        }}
+                        style={[styles.userResultRow, { borderBottomColor: t.border }]}
+                      >
+                        <Text style={{ color: t.text, fontWeight: font.weight.medium }}>{u.username}</Text>
+                        {u.name && <Text style={{ color: t.textMuted, fontSize: font.size.sm }}>{u.name}</Text>}
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+          </Section>
+
+          {/* Calendar fields */}
+          <Section label="Calendar">
+            <TextField
+              label="Start date (YYYY-MM-DD)"
+              value={calStart ? calStart.slice(0, 10) : ''}
+              onChangeText={setCalStart}
+              placeholder="Start date (YYYY-MM-DD)"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <TextField
+              label="End date (YYYY-MM-DD)"
+              value={calEnd ? calEnd.slice(0, 10) : ''}
+              onChangeText={setCalEnd}
+              placeholder="End date (YYYY-MM-DD)"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </Section>
 
           {/* ── Subtasks ─────────────────────────────────────────────────── */}
           <Section label={`Subtasks${subtasks.length > 0 ? ` (${subtasks.filter((s) => s.done).length}/${subtasks.length})` : ''}`}>
@@ -345,7 +522,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
   );
 }
 
-// ── Shared sub-components ────────────────────────────────────────────────────
+// ── Shared sub-components ────────────────────────────────────────────────────────
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   const t = useTheme();
@@ -401,6 +578,43 @@ const styles = StyleSheet.create({
   },
   palette: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   swatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2 },
+  searchInput: {
+    height: 40,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    fontSize: font.size.md,
+    marginBottom: spacing.sm,
+  },
+  userResultsList: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+  },
+  userResultRow: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 2,
+  },
+  assignedPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+  },
+  catChipWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  catDeleteBtn: {
+    marginLeft: -4,
+    marginTop: -8,
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   // Subtask styles
   subtaskRow: {
     flexDirection: 'row',
