@@ -18,8 +18,8 @@
       }
     },
     "plugins": ["expo-secure-store"],
-    "experiments": {
-      "typedRoutes": true
+    "extra": {
+      "apiBase": null
     }
   }
 }
