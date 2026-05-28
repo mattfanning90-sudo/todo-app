@@ -46,3 +46,38 @@ test('renders without onLongPress (optional prop)', () => {
     render(<TaskCard task={task} onPress={() => {}} />)
   ).not.toThrow();
 });
+
+test('shows notes preview when task has a non-empty status', () => {
+  const { getByTestId } = render(
+    <TaskCard
+      task={{ ...task, status: 'Waiting on design review' }}
+      onPress={() => {}}
+    />
+  );
+  const preview = getByTestId('task-notes-preview');
+  expect(preview.props.children).toContain('Waiting on design review');
+});
+
+test('does not render notes preview when status is empty', () => {
+  const { queryByTestId } = render(
+    <TaskCard task={{ ...task, status: '' }} onPress={() => {}} />
+  );
+  expect(queryByTestId('task-notes-preview')).toBeNull();
+});
+
+test('shows recurrence badge when task has a recurrence set', () => {
+  const { getByTestId } = render(
+    <TaskCard
+      task={{ ...task, recurrence: 'weekly' }}
+      onPress={() => {}}
+    />
+  );
+  expect(getByTestId('task-recurrence-badge')).toBeTruthy();
+});
+
+test('does not render recurrence badge when recurrence is null', () => {
+  const { queryByTestId } = render(
+    <TaskCard task={{ ...task, recurrence: null }} onPress={() => {}} />
+  );
+  expect(queryByTestId('task-recurrence-badge')).toBeNull();
+});

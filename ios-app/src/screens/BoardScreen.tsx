@@ -411,7 +411,9 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
           <View key={s.key}>
             <StageHeader stage={s.key} label={s.label} />
             <NestableDraggableFlatList
+              key={`${s.key}-${stageData[s.key].length}`}
               data={stageData[s.key]}
+              extraData={stageData[s.key]}
               keyExtractor={keyExtractor}
               renderItem={renderDraggableItem(s.key)}
               onDragEnd={({ data }) => handleDragEnd(s.key, data)}

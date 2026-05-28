@@ -129,22 +129,33 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
           </Pressable>
 
           {/* Task text */}
-          <Text
-            numberOfLines={2}
-            style={[
-              styles.text,
-              {
-                color: isDone ? t.textMuted : t.text,
-                textDecorationLine: isDone ? 'line-through' : 'none',
-              },
-            ]}
-          >
-            {task.text}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text
+              numberOfLines={2}
+              style={[
+                styles.text,
+                {
+                  color: isDone ? t.textMuted : t.text,
+                  textDecorationLine: isDone ? 'line-through' : 'none',
+                },
+              ]}
+            >
+              {task.text}
+            </Text>
+            {!!task.status && (
+              <Text
+                testID="task-notes-preview"
+                numberOfLines={1}
+                style={[styles.notesPreview, { color: t.textMuted }]}
+              >
+                {'↳ ' + task.status}
+              </Text>
+            )}
+          </View>
         </View>
 
         {/* Badges row */}
-        {(category || due || (task.subtasks?.length ?? 0) > 0 || onMoveToStage) && (
+        {(category || due || (task.subtasks?.length ?? 0) > 0 || onMoveToStage || task.recurrence) && (
           <View style={styles.badges}>
             {category && (
               <View style={[styles.catPill, { backgroundColor: category.color }]}>
@@ -162,6 +173,12 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
               <Text style={[styles.subtaskText, { color: t.textLight }]}>
                 {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length}
               </Text>
+            )}
+
+            {task.recurrence && (
+              <View testID="task-recurrence-badge" style={[styles.recurrenceBadge, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
+                <Text style={styles.recurrenceBadgeText}>🔁</Text>
+              </View>
             )}
 
             {/* Move-to-stage pill — only shown when callback is wired */}
@@ -260,5 +277,19 @@ const styles = StyleSheet.create({
   movePillText: {
     fontSize: font.size.xs,
     fontWeight: font.weight.medium,
+  },
+  notesPreview: {
+    fontSize: font.size.xs,
+    marginTop: 2,
+    fontStyle: 'italic',
+  },
+  recurrenceBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  recurrenceBadgeText: {
+    fontSize: font.size.xs,
   },
 });
