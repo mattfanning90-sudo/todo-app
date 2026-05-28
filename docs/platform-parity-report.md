@@ -1,11 +1,11 @@
 # Platform Parity Report — Web vs iOS
-_Generated 2026-05-27 · Updated 2026-05-27 (TDD sprint)_
+_Generated 2026-05-27 · Updated 2026-05-28 (card badges + cross-stage fix)_
 
 ---
 
 ## TL;DR
 
-The web app is a fully-featured team task management tool. As of the TDD sprint, the iOS app has reached near-full feature parity. All high- and medium-priority gaps have been closed. One low-priority feature (task sharing) and a few minor UI embellishments remain.
+The web app is a fully-featured team task management tool. The iOS app has reached near-full feature parity. All high- and medium-priority gaps are closed, the card-level UI badges are implemented, and cross-stage task movement works correctly. Only task sharing (low) and bulk import (low) remain.
 
 ---
 
@@ -54,9 +54,15 @@ LoginScreen
 | Feature | Web location | Priority | Notes |
 |---|---|---|---|
 | **Task sharing** | Share any task into another user's board | Low | `POST /api/tasks/:id/share` not yet in iOS |
-| **Status/notes inline preview on card** | "↳ ..." shown on card below text | Low | Only in detail screen on iOS |
-| **Repeat indicator badge** | 🔁 on card | Low | Recurrence UI exists in detail but no card badge |
 | **Import JSON** | Paste a JSON array to bulk-import tasks | Low | No API call for this exists |
+
+### Closed in card-badges sprint (2026-05-28)
+
+| Feature | Status |
+|---|---|
+| Status/notes inline preview on card | ✅ `↳ <status>` shown below task text; hidden when empty |
+| Repeat indicator badge | ✅ 🔁 badge in badges row; shown when `recurrence` is non-null |
+| Cross-stage task movement | ✅ `NestableDraggableFlatList` keyed on stage+count; tasks move visually on "Move →" |
 
 ### Closed in TDD sprint (2026-05-27)
 
@@ -146,5 +152,4 @@ All design tokens remain aligned (see original report for the full table).
 
 ### Low — nice to have
 1. **Task sharing** — `POST /api/tasks/:id/share` UI
-2. **Repeat / notes inline badge on card** — show 🔁 and notes preview text on TaskCard
-3. **Import JSON** — bulk import via a paste input
+2. **Import JSON** — bulk import via a paste input
