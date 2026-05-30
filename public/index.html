@@ -207,6 +207,28 @@
   <main class="main-content">
     <section class="screen active" id="screen-today"></section>
     <section class="screen" id="screen-board">
+    <div class="tk-board-head">
+      <div>
+        <button class="tk-board-switch" data-action="toggleBoardMenu">
+          <span id="tk-board-name">My Board</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <h1 class="tk-h1">Board</h1>
+      </div>
+      <div class="tk-board-head-right">
+        <span class="tk-done-pill" id="tk-done-pill">0% done</span>
+        <button class="tk-icon-btn" data-action="openBoardOverflow" aria-label="Board options">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="tk-board-bar"><div class="tk-board-bar-fill" id="tk-board-bar-fill"></div></div>
+    <div class="tk-overflow-menu" id="tk-overflow-menu" style="display:none">
+      <button class="tk-overflow-item" data-action="openMembersModal">Members</button>
+      <button class="tk-overflow-item" data-action="viewArchived">Archived</button>
+      <button class="tk-overflow-item" data-action="renameCurrentBoard">Rename board</button>
+      <button class="tk-overflow-item danger" data-action="deleteCurrentBoard">Delete board</button>
+    </div>
     <div class="content-top">
       <div class="add-task-row">
         <input id="task-input" type="text" placeholder="Add a task… (try 'dentist Thursday 2pm')" />

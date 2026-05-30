@@ -150,6 +150,22 @@
       const hasTasks = list.querySelectorAll('.task-card').length > 0;
       if (empty) empty.style.display = hasTasks ? 'none' : 'block';
     });
+    updateBoardHead();
+  }
+
+  function currentBoardId() {
+    return currentBoard ? currentBoard.id : (myBoards[0] && myBoards[0].id);
+  }
+  function updateBoardHead() {
+    const counts = STAGES.map(s => (getList(s)?.querySelectorAll('.task-card').length) || 0);
+    const total = counts.reduce((a, b) => a + b, 0);
+    const donePct = total ? Math.round((counts[2] / total) * 100) : 0;
+    const pill = document.getElementById('tk-done-pill');
+    const fill = document.getElementById('tk-board-bar-fill');
+    const nameEl = document.getElementById('tk-board-name');
+    if (pill) pill.textContent = donePct + '% done';
+    if (fill) fill.style.width = donePct + '%';
+    if (nameEl) nameEl.textContent = currentBoard ? currentBoard.name : 'My Board';
   }
 
   function applyFilter() {
@@ -1980,6 +1996,12 @@
     if (!document.getElementById('account-btn').closest('.account-wrap').contains(e.target)) {
       closeAccountMenu();
     }
+    const overflow = document.getElementById('tk-overflow-menu');
+    if (overflow && overflow.style.display === 'block' &&
+        !overflow.contains(e.target) &&
+        !e.target.closest('[data-action="openBoardOverflow"]')) {
+      overflow.style.display = 'none';
+    }
   });
 
   function jumpToStage(stage) {
@@ -2011,6 +2033,28 @@
   }
 
   /* ── Event delegation: replaces inline onclick handlers so CSP can ban inline JS ── */
+  function openBoardOverflow() {
+    const m = document.getElementById('tk-overflow-menu');
+    m.style.display = m.style.display === 'none' ? 'block' : 'none';
+  }
+  async function renameCurrentBoard() {
+    document.getElementById('tk-overflow-menu').style.display = 'none';
+    const id = currentBoardId();
+    if (!id) { alert('No board to rename.'); return; }
+    const current = currentBoard ? currentBoard.name : 'My Board';
+    const name = prompt('Rename board', current);
+    if (!name || !name.trim()) return;
+    await apiPut(`/api/boards/${id}`, { name: name.trim() });
+    location.reload();
+  }
+  async function deleteCurrentBoard() {
+    document.getElementById('tk-overflow-menu').style.display = 'none';
+    if (!currentBoard) { alert('You can\'t delete your default board.'); return; }
+    if (!confirm(`Delete board "${currentBoard.name}"? This cannot be undone.`)) return;
+    await apiDelete(`/api/boards/${currentBoard.id}`);
+    location.reload();
+  }
+
   const __actions = {
     gotoTab,
     toggleSidebar, toggleBoardMenu, switchBoard, closeBoardMenu, openMembersModal,
@@ -2023,6 +2067,7 @@
     inviteMember, removeMember, revokeInvite, copyInviteLink,
     deleteCategory, clearAssign, restoreTask, jumpToStage,
     setTodayFilter, toggleTaskDone, openQuickAdd, closeQuickAdd, submitQuickAdd,
+    openBoardOverflow, renameCurrentBoard, deleteCurrentBoard,
     openMembersFromBoardMenu: () => { closeBoardMenu(); openMembersModal(); },
     closeBoardMenuAndCreateBoard: () => { closeBoardMenu(); openCreateBoardModal(); },
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },

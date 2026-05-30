@@ -1032,3 +1032,36 @@
 .tk-empty { padding:32px; text-align:center; color:var(--tk-muted); }
 .tk-btn-primary { padding:14px; border-radius:12px; background:var(--tk-accent); border:none;
   color:#fff; font:inherit; font-size:15px; font-weight:600; cursor:pointer; }
+
+/* ── Board tab: header + continuous flow + card restyle ── */
+.tk-board-head { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:14px; }
+.tk-board-switch { display:inline-flex; align-items:center; gap:6px; background:none; border:none;
+  cursor:pointer; font:inherit; font-size:12px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--tk-muted); padding:0; }
+.tk-board-head-right { display:flex; align-items:center; gap:10px; }
+.tk-done-pill { font-size:12px; font-weight:700; color:#047857; background:rgba(16,185,129,.10);
+  border-radius:99px; padding:6px 12px; }
+.tk-board-bar { height:4px; border-radius:99px; background:var(--tk-line); overflow:hidden; margin-bottom:24px; }
+.tk-board-bar-fill { height:100%; border-radius:99px;
+  background:linear-gradient(90deg, var(--tk-accent), #10B981); width:0; transition:width .4s ease; }
+.tk-icon-btn { width:36px; height:36px; border-radius:10px; border:none; background:rgba(30,30,46,.05);
+  cursor:pointer; display:inline-flex; align-items:center; justify-content:center; color:var(--tk-muted); }
+.tk-overflow-menu { position:absolute; right:40px; z-index:60; background:var(--tk-card);
+  border:1px solid var(--tk-line); border-radius:12px; box-shadow:0 8px 32px rgba(30,30,46,.15);
+  padding:6px; min-width:170px; }
+.tk-overflow-item { display:block; width:100%; text-align:left; padding:10px 12px; border:none;
+  background:none; cursor:pointer; font:inherit; font-size:14px; color:var(--tk-text); border-radius:8px; }
+.tk-overflow-item.danger { color:#DC2626; }
+
+/* Continuous flow: stack the existing columns vertically */
+#screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
+#screen-board .board { display:flex; flex-direction:column; gap:0; }
+#screen-board .column { width:auto; max-width:none; min-width:0; background:transparent; border:none; padding:0; }
+#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:24px 0 12px; }
+#screen-board .column-header::after { content:""; flex:1; height:1px; background:var(--tk-line); }
+#screen-board .column-title { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
+#screen-board .task-list { display:flex; flex-direction:column; gap:8px; }
+
+/* Card restyle to Taskly (shell only — internal card DOM unchanged) */
+#screen-board .task-card { background:var(--tk-card); border:1px solid var(--tk-line); border-radius:14px;
+  box-shadow:var(--tk-shadow); padding:14px 16px; }
