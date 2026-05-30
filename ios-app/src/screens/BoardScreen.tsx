@@ -292,6 +292,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                 category={item.category_id ? categoriesById.get(item.category_id) : undefined}
                 onPress={() => !isActive && !draggingTask && onOpenTask(item)}
                 onToggleDone={() => toggleDone(item)}
+                onMoveStage={(target) => moveToStage(item, target)}
                 onLongPress={drag}
                 delayLongPress={180}
                 dragHandle={
@@ -305,7 +306,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             </View>
           </ScaleDecorator>
         ),
-    [categoriesById, onOpenTask, toggleDone, draggingTask,
+    [categoriesById, onOpenTask, toggleDone, moveToStage, draggingTask,
      handleCrossStageDragStart, handleCrossStageDragMove, handleCrossStageDragEnd]
   );
 

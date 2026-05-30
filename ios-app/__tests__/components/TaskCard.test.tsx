@@ -101,9 +101,41 @@ test('does not render a drag handle strip when dragHandle prop is absent', () =>
   expect(queryByTestId('test-drag-handle')).toBeNull();
 });
 
-test('does not render a Move pill', () => {
-  const { queryByText } = render(
-    <TaskCard task={task} onPress={() => {}} />
+// ── Cross-stage move buttons (reliable alternative to drag) ──────────────────
+
+test('backlog task: forward move button fires onMoveStage("in_progress"), no back button', () => {
+  const onMoveStage = jest.fn();
+  const { getByTestId, queryByTestId } = render(
+    <TaskCard task={task} onPress={() => {}} onMoveStage={onMoveStage} />
   );
-  expect(queryByText('Move →')).toBeNull();
+  expect(queryByTestId('move-back')).toBeNull();
+  fireEvent.press(getByTestId('move-forward'));
+  expect(onMoveStage).toHaveBeenCalledWith('in_progress');
+});
+
+test('in_progress task: both move buttons fire the adjacent stages', () => {
+  const onMoveStage = jest.fn();
+  const { getByTestId } = render(
+    <TaskCard task={{ ...task, stage: 'in_progress' }} onPress={() => {}} onMoveStage={onMoveStage} />
+  );
+  fireEvent.press(getByTestId('move-back'));
+  expect(onMoveStage).toHaveBeenCalledWith('backlog');
+  fireEvent.press(getByTestId('move-forward'));
+  expect(onMoveStage).toHaveBeenCalledWith('done');
+});
+
+test('done task: back move button fires onMoveStage("in_progress"), no forward button', () => {
+  const onMoveStage = jest.fn();
+  const { getByTestId, queryByTestId } = render(
+    <TaskCard task={{ ...task, stage: 'done' }} onPress={() => {}} onMoveStage={onMoveStage} />
+  );
+  expect(queryByTestId('move-forward')).toBeNull();
+  fireEvent.press(getByTestId('move-back'));
+  expect(onMoveStage).toHaveBeenCalledWith('in_progress');
+});
+
+test('does not render move buttons when onMoveStage is absent', () => {
+  const { queryByTestId } = render(<TaskCard task={task} onPress={() => {}} />);
+  expect(queryByTestId('move-back')).toBeNull();
+  expect(queryByTestId('move-forward')).toBeNull();
 });

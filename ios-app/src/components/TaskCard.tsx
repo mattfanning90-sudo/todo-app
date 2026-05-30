@@ -8,7 +8,14 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 // gesture causes competition that cancels taps. RN's native Pressable
 // (using iOS's native responder system) works correctly inside RNGH.
 import { useTheme, radius, spacing, font } from '@/theme';
-import type { Category, Task } from '@/api/types';
+import type { Category, Stage, Task } from '@/api/types';
+
+const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
+const STAGE_LABELS: Record<Stage, string> = {
+  backlog: 'Backlog',
+  in_progress: 'In Progress',
+  done: 'Done',
+};
 
 interface Props {
   task: Task;
@@ -23,6 +30,8 @@ interface Props {
   delayLongPress?: number;
   /** testID passed to the root pressable for testing */
   testID?: string;
+  /** When provided, renders ← / → buttons to move the task between stages */
+  onMoveStage?: (target: Stage) => void;
 }
 
 function dueLabel(
@@ -43,10 +52,14 @@ function dueLabel(
   };
 }
 
-export function TaskCard({ task, category, onPress, onToggleDone, dragHandle, onLongPress, delayLongPress = 200, testID }: Props) {
+export function TaskCard({ task, category, onPress, onToggleDone, dragHandle, onLongPress, delayLongPress = 200, testID, onMoveStage }: Props) {
   const t = useTheme();
   const due = dueLabel(task.due_date);
   const isDone = task.stage === 'done';
+
+  const stageIdx = STAGES.indexOf(task.stage);
+  const prevStage = stageIdx > 0 ? STAGES[stageIdx - 1] : null;
+  const nextStage = stageIdx < STAGES.length - 1 ? STAGES[stageIdx + 1] : null;
 
   const priorityBorder =
     task.priority === 'none' ? 'transparent' : t.priority[task.priority];
@@ -161,6 +174,31 @@ export function TaskCard({ task, category, onPress, onToggleDone, dragHandle, on
               )}
             </View>
           )}
+
+          {onMoveStage && (
+            <View style={styles.moveRow}>
+              {prevStage && (
+                <Pressable
+                  testID="move-back"
+                  onPress={() => onMoveStage(prevStage)}
+                  hitSlop={6}
+                  style={({ pressed }) => [styles.moveBtn, { borderColor: t.border, opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Text style={[styles.moveBtnText, { color: t.textMuted }]}>← {STAGE_LABELS[prevStage]}</Text>
+                </Pressable>
+              )}
+              {nextStage && (
+                <Pressable
+                  testID="move-forward"
+                  onPress={() => onMoveStage(nextStage)}
+                  hitSlop={6}
+                  style={({ pressed }) => [styles.moveBtn, { borderColor: t.border, opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Text style={[styles.moveBtnText, { color: t.accent }]}>{STAGE_LABELS[nextStage]} →</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
       </View>
     </Pressable>
@@ -248,5 +286,21 @@ const styles = StyleSheet.create({
   },
   recurrenceBadgeText: {
     fontSize: font.size.xs,
+  },
+  moveRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: 8,
+    marginLeft: 26,
+  },
+  moveBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  moveBtnText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
   },
 });
