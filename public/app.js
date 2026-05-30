@@ -22,6 +22,7 @@
   let myBoards = [];
   let currentBoard = null; // { id, name, ownerId } — null = default board
   let sidebarOpen = true;
+  let currentTab = 'board';
 
   function boardParam() { return currentBoard ? `?board=${currentBoard.id}` : ''; }
   function boardBody()  { return currentBoard ? { boardId: currentBoard.id } : {}; }
@@ -194,6 +195,25 @@
     document.getElementById('nav-all').classList.toggle('active', !todayFilter && !activeFilter);
     document.getElementById('nav-today').classList.toggle('active', todayFilter);
   }
+
+  function renderToday() {}   // stub — replaced in a later task
+  function renderProfile() {} // stub — replaced in a later task
+  function showTab(tab) {
+    currentTab = tab;
+    ['today', 'board', 'profile'].forEach(t => {
+      const screen = document.getElementById('screen-' + t);
+      if (screen) screen.classList.toggle('active', t === tab);
+      const navItem = document.getElementById('tab-' + t);
+      if (navItem) navItem.classList.toggle('active', t === tab);
+    });
+    document.querySelectorAll('.tk-tabbar-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.tab === tab);
+    });
+    if (tab === 'today') renderToday();
+    if (tab === 'profile') renderProfile();
+    closeSidebarMobile();
+  }
+  function gotoTab(tab) { showTab(tab); }
 
   function saveOrder(...stages) {
     const toSave = stages.length ? stages : STAGES;
@@ -383,6 +403,8 @@
       const initial = (user.username || myName)[0].toUpperCase();
       document.getElementById('user-name').textContent = displayName;
       document.getElementById('user-avatar').textContent = initial;
+      document.getElementById('sidebar-avatar').textContent = initial;
+      document.getElementById('sidebar-name').textContent = displayName;
       document.getElementById('account-avatar').textContent = initial;
       document.getElementById('account-name').textContent = displayName;
       document.getElementById('account-email').textContent = user.email || '';
@@ -416,6 +438,7 @@
     } catch (err) {
       console.error('Failed to load:', err);
     }
+    showTab('board');
   }
 
   /* ── Board switching ── */
@@ -1864,6 +1887,7 @@
 
   /* ── Event delegation: replaces inline onclick handlers so CSP can ban inline JS ── */
   const __actions = {
+    gotoTab,
     toggleSidebar, toggleBoardMenu, switchBoard, closeBoardMenu, openMembersModal,
     toggleTheme, toggleNotifications, toggleAccountMenu, closeAccountMenu,
     openSearch, openHelpModal, closeHelpModal,
