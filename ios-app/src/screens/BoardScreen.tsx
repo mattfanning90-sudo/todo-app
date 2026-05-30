@@ -75,6 +75,8 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const [quickStage, setQuickStage] = useState<Stage>('backlog');
   const [quickSaving, setQuickSaving] = useState(false);
   const quickInputRef = useRef<TextInput | null>(null);
+  // While a card drags, lift it (and its stage) above the rest so it renders in front.
+  const [dragging, setDragging] = useState<{ id: number; stage: Stage } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -343,7 +345,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               key={s.key}
               droppableId={s.key}
               onDrop={(data) => moveToStage(data.task, s.key)}
-              style={styles.stageDroppable}
+              style={[styles.stageDroppable, dragging?.stage === s.key && styles.stageLifted]}
               activeStyle={[styles.stageActive, { borderColor: t.stage[s.key], backgroundColor: t.stage[s.key] + '0d' }]}
             >
               <StageHeader stage={s.key} label={s.label} />
@@ -357,7 +359,9 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                     key={task.id}
                     data={{ task }}
                     preDragDelay={180}
-                    style={styles.draggable}
+                    onDragStart={() => setDragging({ id: task.id, stage: s.key })}
+                    onDragEnd={() => setDragging(null)}
+                    style={[styles.draggable, dragging?.id === task.id && styles.draggingCard]}
                   >
                     <TaskCard
                       task={task}
@@ -430,6 +434,15 @@ const styles = StyleSheet.create({
   stageDroppable: { borderRadius: radius.lg, borderWidth: 1, borderColor: 'transparent', marginBottom: spacing.sm, paddingBottom: spacing.xs },
   stageActive: { borderStyle: 'dashed' },
   draggable: { marginBottom: spacing.sm },
+  // Lift the dragging card (and its stage) above siblings so it animates in front.
+  stageLifted: { zIndex: 10 },
+  draggingCard: {
+    zIndex: 999,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+  },
   stageEmpty: {
     height: 44,
     borderRadius: radius.md,
