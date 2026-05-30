@@ -91,7 +91,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const draggingTaskRef = useRef<Task | null>(null); // ref mirror — readable synchronously in callbacks
   const [targetStage, setTargetStage] = useState<Stage | null>(null);
   const ghostYValue = useRef(new Animated.Value(0)).current;
-  const containerTopValue = useRef(new Animated.Value(0)).current;
+  const containerTopRef = useRef(0);
   const stageBoundsRef = useRef(new Map<Stage, StageBounds>());
   const scrollOffsetRef = useRef(0);
   const kanbanRef = useRef<View>(null);
@@ -229,11 +229,11 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 
   const resolveStage = useCallback(
     (absoluteY: number): Stage | null => {
-      const containerTop = (containerTopValue as any)._value ?? 0;
+      const containerTop = containerTopRef.current;
       const adjustedY = absoluteY - containerTop + scrollOffsetRef.current;
       return resolveStageFromBounds(adjustedY, stageBoundsRef.current);
     },
-    [containerTopValue]
+    []
   );
 
   const handleCrossStageDragStart = useCallback(
@@ -242,14 +242,14 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       draggingTaskRef.current = task;
       setDraggingTask(task);
       setTargetStage(null);
-      ghostYValue.setValue(absoluteY);
+      ghostYValue.setValue(absoluteY - containerTopRef.current);
     },
     [ghostYValue]
   );
 
   const handleCrossStageDragMove = useCallback(
     (absoluteY: number) => {
-      ghostYValue.setValue(absoluteY);
+      ghostYValue.setValue(absoluteY - containerTopRef.current);
       const stage = resolveStage(absoluteY);
       setTargetStage(stage);
     },
@@ -260,14 +260,17 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     async (absoluteY: number) => {
       const task = draggingTaskRef.current;
       if (!task) return;
-      const stage = resolveStage(absoluteY);
-      if (stage && stage !== task.stage) {
-        await moveToStage(task, stage);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      try {
+        const stage = resolveStage(absoluteY);
+        if (stage && stage !== task.stage) {
+          await moveToStage(task, stage);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        }
+      } finally {
+        draggingTaskRef.current = null;
+        setDraggingTask(null);
+        setTargetStage(null);
       }
-      draggingTaskRef.current = null;
-      setDraggingTask(null);
-      setTargetStage(null);
     },
     [resolveStage, moveToStage]
   );
@@ -478,7 +481,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
         style={{ flex: 1 }}
         onLayout={() => {
           kanbanRef.current?.measure((_x, _y, _w, _h, _px, py) => {
-            containerTopValue.setValue(py);
+            containerTopRef.current = py;
           });
         }}
       >
@@ -544,7 +547,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             pointerEvents="none"
             style={[
               styles.ghost,
-              { top: Animated.subtract(ghostYValue, containerTopValue) as any },
+              { top: ghostYValue },
             ]}
           >
             <View style={[styles.ghostCard, { backgroundColor: t.surface, borderColor: t.accent }]}>
