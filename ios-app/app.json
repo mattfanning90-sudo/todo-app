@@ -11,7 +11,14 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.matthewfanning.todo",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "com.googleusercontent.apps.715885239899-a245f5lnvhg9akc82secj3u7l20nfui6"
+            ]
+          }
+        ]
       }
     },
     "android": {
