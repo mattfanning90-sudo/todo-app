@@ -15,7 +15,10 @@ jest.mock('../../src/auth/AuthContext', () => ({
 // Wrap fn() call to discard the Promise (async fn → Promise ≠ cleanup fn).
 jest.mock('@react-navigation/native', () => {
   const React = require('react');
-  return { useFocusEffect: (fn: () => unknown) => React.useEffect(() => { fn(); }, []) };
+  return {
+    useFocusEffect: (fn: () => unknown) => React.useEffect(() => { fn(); }, []),
+    useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
+  };
 });
 
 const notifs = [

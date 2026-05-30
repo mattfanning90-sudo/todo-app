@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { DropProvider, Draggable, Droppable } from 'react-native-reanimated-dnd';
 import { Screen } from '@/components/Screen';
@@ -19,6 +19,8 @@ import { useTheme, radius, spacing, font } from '@/theme';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
 import type { Board, Category, Stage, Task } from '@/api/types';
+import type { Nav, BoardStackParams } from '@/navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 const STAGES: { key: Stage; label: string }[] = [
   { key: 'backlog', label: 'Backlog' },
@@ -55,14 +57,23 @@ function isOverdue(dateStr: string | null): boolean {
 }
 
 interface Props {
-  board: Board;
-  onBack: () => void;
-  onOpenTask: (task: Task | null) => void;
-  onOpenArchived: () => void;
-  onOpenMembers: () => void;
+  board?: Board;
+  onBack?: () => void;
+  onOpenTask?: (task: Task | null) => void;
+  onOpenArchived?: () => void;
+  onOpenMembers?: () => void;
 }
 
-export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenMembers }: Props) {
+export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchived, onOpenMembers }: Props) {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<BoardStackParams, 'Board'>>();
+  const board = boardProp ?? (route.params?.board as Board);
+
+  const goBack = onBack ?? (() => nav.goBack());
+  const openTask = onOpenTask ?? ((task: Task | null) => nav.navigate('TaskDetail', { board, task }));
+  const openArchived = onOpenArchived ?? (() => nav.navigate('Archived', { board }));
+  const openMembers = onOpenMembers ?? (() => nav.navigate('BoardMembers', { board }));
+
   const t = useTheme();
   const { user } = useAuth();
   const isOwner = user?.id === board.owner_user_id;
@@ -217,14 +228,14 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     <Screen padded={false}>
       {/* ── Top bar ─────────────────────────────────────────────────────── */}
       <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Boards</Text>
         </Pressable>
         <Text style={[styles.boardName, { color: t.text }]} numberOfLines={1}>
           {board.name}
         </Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <Pressable onPress={() => onOpenTask(null)} hitSlop={10}>
+          <Pressable onPress={() => openTask(null)} hitSlop={10}>
             <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '600' }}>+</Text>
           </Pressable>
           <Pressable
@@ -234,8 +245,8 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               ActionSheetIOS.showActionSheetWithOptions(
                 { options, cancelButtonIndex: cancelIdx, title: board.name },
                 (idx) => {
-                  if (options[idx] === 'Archived tasks') onOpenArchived();
-                  else if (options[idx] === 'Members') onOpenMembers();
+                  if (options[idx] === 'Archived tasks') openArchived();
+                  else if (options[idx] === 'Members') openMembers();
                 }
               );
             }}
@@ -366,7 +377,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                     <TaskCard
                       task={task}
                       category={task.category_id ? categoriesById.get(task.category_id) : undefined}
-                      onPress={() => onOpenTask(task)}
+                      onPress={() => openTask(task)}
                       onToggleDone={() => toggleDone(task)}
                       onMoveStage={(target) => moveToStage(task, target)}
                     />

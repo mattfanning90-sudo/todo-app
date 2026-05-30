@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
@@ -16,12 +17,13 @@ import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import type { Board, MemberBoard } from '@/api/types';
+import type { Nav } from '@/navigation/types';
 
 interface Props {
-  onOpenBoard: (board: Board) => void;
-  onOpenDashboard: () => void;
-  onOpenSettings: () => void;
-  onOpenSearch: () => void;
+  onOpenBoard?: (board: Board) => void;
+  onOpenDashboard?: () => void;
+  onOpenSettings?: () => void;
+  onOpenSearch?: () => void;
   onOpenNotifications?: () => void;
 }
 
@@ -32,6 +34,12 @@ export function BoardListScreen({
   onOpenSearch,
   onOpenNotifications,
 }: Props) {
+  const nav = useNavigation<Nav>();
+  const openBoard = onOpenBoard ?? ((board: Board) => nav.navigate('Board', { board }));
+  const openDashboard = onOpenDashboard ?? (() => {});  // no Dashboard in new nav; no-op
+  const openSettings = onOpenSettings ?? (() => nav.navigate('Settings'));
+  const openSearch = onOpenSearch ?? (() => nav.navigate('Search'));
+  const openNotifications = onOpenNotifications ?? (() => nav.navigate('Notifications'));
   const t = useTheme();
   const { user, logout } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
@@ -132,7 +140,7 @@ export function BoardListScreen({
     <Pressable
       key={item.id}
       testID={`board-row-${item.id}`}
-      onPress={() => onOpenBoard(item)}
+      onPress={() => openBoard(item)}
       onLongPress={() => !shared && handleBoardLongPress(item)}
       delayLongPress={400}
       style={({ pressed }) => [
@@ -174,24 +182,22 @@ export function BoardListScreen({
           <Text style={[styles.logoText, { color: t.text }]}>Todo</Text>
         </View>
         <View style={styles.headerRight}>
-          <Pressable onPress={onOpenSearch} hitSlop={12} style={styles.iconBtn}>
+          <Pressable onPress={openSearch} hitSlop={12} style={styles.iconBtn}>
             <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⌕</Text>
           </Pressable>
-          {onOpenNotifications && (
-            <Pressable onPress={onOpenNotifications} hitSlop={12} style={styles.iconBtn}>
-              <View>
-                <Text style={[styles.iconBtnText, { color: t.textMuted }]}>🔔</Text>
-                {unreadCount > 0 && (
-                  <View style={[styles.badge, { backgroundColor: t.danger }]}>
-                    <Text style={styles.badgeText}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </Pressable>
-          )}
-          <Pressable onPress={onOpenSettings} hitSlop={12} style={styles.iconBtn}>
+          <Pressable onPress={openNotifications} hitSlop={12} style={styles.iconBtn}>
+            <View>
+              <Text style={[styles.iconBtnText, { color: t.textMuted }]}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={[styles.badge, { backgroundColor: t.danger }]}>
+                  <Text style={styles.badgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </Pressable>
+          <Pressable onPress={openSettings} hitSlop={12} style={styles.iconBtn}>
             <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⚙</Text>
           </Pressable>
         </View>
@@ -226,7 +232,7 @@ export function BoardListScreen({
 
             {/* Dashboard card */}
             <Pressable
-              onPress={onOpenDashboard}
+              onPress={openDashboard}
               style={({ pressed }) => [
                 styles.dashCard,
                 {

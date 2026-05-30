@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
+import type { Nav } from '@/navigation/types';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import type { DigestFrequency } from '@/api/types';
 
 interface Props {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 const OPTIONS: { value: DigestFrequency; label: string; sub: string }[] = [
@@ -18,6 +20,8 @@ const OPTIONS: { value: DigestFrequency; label: string; sub: string }[] = [
 ];
 
 export function SettingsScreen({ onBack }: Props) {
+  const nav = useNavigation<Nav>();
+  const goBack = onBack ?? (() => nav.goBack());
   const t = useTheme();
   const { user, patchUser } = useAuth();
   const current = user?.digest_frequency ?? 'none';
@@ -41,7 +45,7 @@ export function SettingsScreen({ onBack }: Props) {
   return (
     <Screen>
       <View style={styles.topBar}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
         </Pressable>
         <Text style={[styles.title, { color: t.text }]}>Settings</Text>

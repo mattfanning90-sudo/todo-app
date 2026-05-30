@@ -14,6 +14,8 @@ jest.mock('../../src/auth/AuthContext', () => ({
 
 jest.mock('@react-navigation/native', () => ({
   useFocusEffect: jest.fn(),
+  useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
+  useRoute: () => ({ params: {} }),
 }));
 
 const board: Board = { id: 1, owner_user_id: 1, name: 'My Board', slug: 'my-board' };
