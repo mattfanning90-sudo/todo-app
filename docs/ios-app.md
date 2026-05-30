@@ -50,6 +50,7 @@ The Google reversed-client-ID scheme is what makes `expo-auth-session` OAuth red
 - iOS OAuth client in [Google Cloud Console](https://console.cloud.google.com) must have Bundle ID: `com.matthewfanning.todo`
 - `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` is set as an EAS secret (production environment) — not in `.env`
 - The reversed client ID scheme **must be in `Info.plist`**, not just `app.json`
+- **`expo-auth-session@7` breaking change:** the default native redirect URI changed from the reversed client ID (`com.googleusercontent.apps.XXX:/oauthredirect`) to the bundle ID (`com.matthewfanning.todo:/oauthredirect`). Google's iOS OAuth client rejects the bundle ID form. `LoginScreen.tsx` computes and passes `GOOGLE_IOS_REDIRECT_URI` explicitly to override this.
 
 ### npm peer-dep conflicts
 `jest-expo` and React version mismatches will fail the EAS `npm ci` step. `.npmrc` contains `legacy-peer-deps=true` to suppress this — do not remove it.

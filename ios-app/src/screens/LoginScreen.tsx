@@ -18,6 +18,13 @@ const googleConfigured = Boolean(
   GOOGLE_IOS_CLIENT_ID || GOOGLE_ANDROID_CLIENT_ID || GOOGLE_WEB_CLIENT_ID
 );
 
+// expo-auth-session@7 changed the native redirect URI to ${Application.applicationId}:/oauthredirect
+// (the bundle ID). Google's iOS OAuth client only accepts the reversed-client-ID form, so we
+// must override redirectUri explicitly to restore the correct value.
+const GOOGLE_IOS_REDIRECT_URI = GOOGLE_IOS_CLIENT_ID
+  ? `com.googleusercontent.apps.${GOOGLE_IOS_CLIENT_ID.replace('.apps.googleusercontent.com', '')}:/oauthredirect`
+  : undefined;
+
 // Isolated component so useIdTokenAuthRequest only runs when credentials exist.
 // React hooks must not be called conditionally, so we gate at the component level.
 function GoogleLoginButton({
@@ -31,6 +38,7 @@ function GoogleLoginButton({
     iosClientId: GOOGLE_IOS_CLIENT_ID,
     androidClientId: GOOGLE_ANDROID_CLIENT_ID,
     clientId: GOOGLE_WEB_CLIENT_ID,
+    redirectUri: GOOGLE_IOS_REDIRECT_URI,
   });
 
   useEffect(() => {
