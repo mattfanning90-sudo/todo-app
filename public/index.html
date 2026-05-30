@@ -129,7 +129,10 @@
       <span class="user-avatar" id="sidebar-avatar" aria-hidden="true">?</span>
       <div class="tk-foot-id"><div class="tk-foot-name" id="sidebar-name"></div></div>
     </div>
-    <!-- TODO Task 7 (cleanup): remove this legacy-sidebar block once all features are folded into the 3 tabs -->
+    <!-- DEFERRED CLEANUP: this hidden block keeps legacy sidebar element ids alive because live JS
+         still writes to them (updateCounts -> #nav-count-today/#nav-count-all, renderSidebarBoards ->
+         #sidebar-boards, loadArchivedCount -> #nav-count-archived). Removing it requires guarding/removing
+         those writers; do that in a follow-up PR with a live browser to verify nothing null-refs. -->
     <div id="legacy-sidebar" hidden>
     <div class="sidebar-section">
       <div class="sidebar-label">Navigation</div>
