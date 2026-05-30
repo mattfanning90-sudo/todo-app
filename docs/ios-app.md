@@ -2,9 +2,66 @@
 
 A React Native / Expo client that hits the same `/api/*` endpoints the web app uses. Nothing in `ios-app/` is built or deployed by Railway — Railway only builds the Node root.
 
+## TestFlight deployment
+
+### Key identifiers
+| Thing | Value |
+|---|---|
+| Bundle ID | `com.matthewfanning.todo` |
+| Apple Team ID | `KGQVBM3UF4` |
+| App Store Connect App ID | `6774876992` |
+| EAS Project ID | `8cc288c3-7847-47a2-a1fe-55059996080b` |
+| EAS Owner | `mfanning90` |
+| Production API | `https://todo-app-production-a338.up.railway.app` |
+
+### Build + submit pipeline
+```bash
+cd ios-app
+eas build --platform ios --profile production --non-interactive
+# wait for FINISHED, then:
+eas submit --platform ios --latest --non-interactive
+```
+`autoIncrement: true` in `eas.json` bumps the build number automatically each build.
+
+### Critical native files — do not regenerate blindly
+`ios/` is **gitignored but committed** (force-added). EAS uses the native project as-is; changes to `app.json`'s `ios.infoPlist` section are **ignored** for bare workflow builds. All native config must go directly into:
+- `ios/Todo/Info.plist` — URL schemes, encryption flag, capabilities
+- `ios/Todo.xcodeproj/` — signing, capabilities
+
+### Info.plist URL schemes (must stay in sync)
+```xml
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>todoapp</string>
+      <string>com.matthewfanning.todo</string>
+      <string>com.googleusercontent.apps.715885239899-a245f5lnvhg9akc82secj3u7l20nfui6</string>
+    </array>
+  </dict>
+</array>
+<key>ITSAppUsesNonExemptEncryption</key>
+<false/>
+```
+The Google reversed-client-ID scheme is what makes `expo-auth-session` OAuth redirects work on device. Without it, Google sign-in silently fails.
+
+### Google Sign-In requirements
+- iOS OAuth client in [Google Cloud Console](https://console.cloud.google.com) must have Bundle ID: `com.matthewfanning.todo`
+- `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID` is set as an EAS secret (production environment) — not in `.env`
+- The reversed client ID scheme **must be in `Info.plist`**, not just `app.json`
+
+### npm peer-dep conflicts
+`jest-expo` and React version mismatches will fail the EAS `npm ci` step. `.npmrc` contains `legacy-peer-deps=true` to suppress this — do not remove it.
+
+### Build number
+Managed by `autoIncrement: true` in `eas.json`. If a build is rejected by Apple for a duplicate build number, increment `ios.buildNumber` in `app.json` manually to skip past the used value.
+
+---
+
 ## Stack
 
-- Expo SDK 51 + TypeScript
+- Expo SDK 54 + TypeScript
 - React Navigation (native stack)
 - `expo-auth-session` for Google sign-in
 - `expo-secure-store` for cookie persistence
