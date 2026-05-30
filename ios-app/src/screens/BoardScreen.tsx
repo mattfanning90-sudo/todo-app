@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
-  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,21 +9,12 @@ import {
   Text,
   TextInput,
   View,
-  type LayoutChangeEvent,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import {
-  NestableScrollContainer,
-  NestableDraggableFlatList,
-  ScaleDecorator,
-  RenderItemParams,
-} from 'react-native-draggable-flatlist';
+import { DropProvider, Draggable, Droppable } from 'react-native-reanimated-dnd';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
-import { DragHandle } from '@/components/DragHandle';
-import { resolveStageFromBounds } from '@/utils/resolveStageFromBounds';
-import type { StageBounds } from '@/utils/resolveStageFromBounds';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
@@ -85,16 +75,8 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const [quickStage, setQuickStage] = useState<Stage>('backlog');
   const [quickSaving, setQuickSaving] = useState(false);
   const quickInputRef = useRef<TextInput | null>(null);
-
-  // ─── Cross-stage drag state ──────────────────────────────────────────────
-  const [draggingTask, setDraggingTask] = useState<Task | null>(null);
-  const draggingTaskRef = useRef<Task | null>(null); // ref mirror — readable synchronously in callbacks
-  const [targetStage, setTargetStage] = useState<Stage | null>(null);
-  const ghostYValue = useRef(new Animated.Value(0)).current;
-  const containerTopRef = useRef(0);
-  const stageBoundsRef = useRef(new Map<Stage, StageBounds>());
-  const scrollOffsetRef = useRef(0);
-  const kanbanRef = useRef<View>(null);
+  // While a card drags, lift it (and its stage) above the rest so it renders in front.
+  const [dragging, setDragging] = useState<{ id: number; stage: Stage } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -126,7 +108,6 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 
   const applyFilter = useCallback(
     (stageTasks: Task[]) => {
-      if (filter === 'all') return stageTasks;
       if (filter === 'today') return stageTasks.filter((tk) => isToday(tk.due_date));
       if (filter === 'overdue') return stageTasks.filter((tk) => isOverdue(tk.due_date));
       if (filter === 'nodate') return stageTasks.filter((tk) => !tk.due_date);
@@ -136,20 +117,17 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   );
 
   /** Ordered tasks per stage, with filter applied */
-  const stageData = useMemo(
-    () => ({
-      backlog: applyFilter(
-        tasks.filter((tk) => tk.stage === 'backlog' && !tk.archived_at).sort((a, b) => a.position - b.position)
-      ),
-      in_progress: applyFilter(
-        tasks.filter((tk) => tk.stage === 'in_progress' && !tk.archived_at).sort((a, b) => a.position - b.position)
-      ),
-      done: applyFilter(
-        tasks.filter((tk) => tk.stage === 'done' && !tk.archived_at).sort((a, b) => a.position - b.position)
-      ),
-    }),
-    [tasks, applyFilter]
-  );
+  const stageData = useMemo(() => {
+    const byStage = (stage: Stage) =>
+      applyFilter(
+        tasks.filter((tk) => tk.stage === stage && !tk.archived_at).sort((a, b) => a.position - b.position)
+      );
+    return {
+      backlog: byStage('backlog'),
+      in_progress: byStage('in_progress'),
+      done: byStage('done'),
+    };
+  }, [tasks, applyFilter]);
 
   const counts = useMemo(() => {
     const c: Record<Stage, number> = { backlog: 0, in_progress: 0, done: 0 };
@@ -197,7 +175,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     async (task: Task, newStage: Stage) => {
       if (task.stage === newStage) return;
       setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       try {
         await api.updateTask(task.id, { board_id: board.id, stage: newStage });
       } catch (err) {
@@ -208,133 +186,17 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     [board.id, load]
   );
 
-  const handleDragEnd = useCallback(
-    async (stage: Stage, data: Task[]) => {
-      setTasks((prev) => {
-        const rest = prev.filter((tk) => tk.stage !== stage || !!tk.archived_at);
-        return [...rest, ...data.map((tk, idx) => ({ ...tk, position: idx }))];
-      });
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      try {
-        await api.reorder(data.map((tk) => tk.id), board.id);
-      } catch {
-        // best-effort — reload on failure
-        load();
-      }
-    },
-    [board.id, load]
-  );
-
-  // ─── Cross-stage drag handlers ────────────────────────────────────────────
-
-  const resolveStage = useCallback(
-    (absoluteY: number): Stage | null => {
-      const containerTop = containerTopRef.current;
-      const adjustedY = absoluteY - containerTop + scrollOffsetRef.current;
-      return resolveStageFromBounds(adjustedY, stageBoundsRef.current);
-    },
-    []
-  );
-
-  const handleCrossStageDragStart = useCallback(
-    (task: Task, absoluteY: number) => {
-      if (draggingTaskRef.current) return;
-      draggingTaskRef.current = task;
-      setDraggingTask(task);
-      setTargetStage(null);
-      ghostYValue.setValue(absoluteY - containerTopRef.current);
-    },
-    [ghostYValue]
-  );
-
-  const handleCrossStageDragMove = useCallback(
-    (absoluteY: number) => {
-      ghostYValue.setValue(absoluteY - containerTopRef.current);
-      const stage = resolveStage(absoluteY);
-      setTargetStage(stage);
-    },
-    [ghostYValue, resolveStage]
-  );
-
-  const handleCrossStageDragEnd = useCallback(
-    async (absoluteY: number) => {
-      const task = draggingTaskRef.current;
-      if (!task) return;
-      try {
-        const stage = resolveStage(absoluteY);
-        if (stage && stage !== task.stage) {
-          await moveToStage(task, stage);
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-        }
-      } finally {
-        draggingTaskRef.current = null;
-        setDraggingTask(null);
-        setTargetStage(null);
-      }
-    },
-    [resolveStage, moveToStage]
-  );
-
-  // ─── Draggable item renderer ─────────────────────────────────────────────────
-
-  const renderDraggableItem = useCallback(
-    (stage: Stage) =>
-      ({ item, drag, isActive }: RenderItemParams<Task>) =>
-        (
-          <ScaleDecorator>
-            <View style={[
-              { marginBottom: spacing.sm },
-              isActive && styles.dragging,
-              !isActive && draggingTask?.id === item.id && styles.draggingSource,
-            ]}>
-              <TaskCard
-                task={item}
-                category={item.category_id ? categoriesById.get(item.category_id) : undefined}
-                onPress={() => !isActive && !draggingTask && onOpenTask(item)}
-                onToggleDone={() => toggleDone(item)}
-                onMoveStage={(target) => moveToStage(item, target)}
-                onLongPress={drag}
-                delayLongPress={180}
-                dragHandle={
-                  <DragHandle
-                    onDragStart={(y) => handleCrossStageDragStart(item, y)}
-                    onDragMove={handleCrossStageDragMove}
-                    onDragEnd={handleCrossStageDragEnd}
-                  />
-                }
-              />
-            </View>
-          </ScaleDecorator>
-        ),
-    [categoriesById, onOpenTask, toggleDone, moveToStage, draggingTask,
-     handleCrossStageDragStart, handleCrossStageDragMove, handleCrossStageDragEnd]
-  );
-
   // ─── Stage section header ────────────────────────────────────────────────────
 
-  const StageHeader = ({
-    stage,
-    label,
-    isDropTarget,
-  }: {
-    stage: Stage;
-    label: string;
-    isDropTarget?: boolean;
-  }) => {
+  const StageHeader = ({ stage, label }: { stage: Stage; label: string }) => {
     const stageColor = t.stage[stage];
     return (
       <View style={[styles.stageHeader, { backgroundColor: t.bg }]}>
-        <View style={[
-          styles.stageHeaderInner,
-          { borderLeftColor: stageColor },
-          isDropTarget && { borderLeftWidth: 4 },
-        ]}>
+        <View style={[styles.stageHeaderInner, { borderLeftColor: stageColor }]}>
           <View style={styles.stageTitleRow}>
             <Text style={[styles.stageTitle, { color: stageColor }]}>{label}</Text>
             <View style={[styles.stageCountBadge, { backgroundColor: stageColor + '22' }]}>
-              <Text style={[styles.stageCountText, { color: stageColor }]}>
-                {counts[stage]}
-              </Text>
+              <Text style={[styles.stageCountText, { color: stageColor }]}>{counts[stage]}</Text>
             </View>
           </View>
           <Pressable
@@ -347,16 +209,9 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             <Text style={{ color: stageColor, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
-        {isDropTarget && (
-          <View style={[styles.dropZone, { borderColor: stageColor }]}>
-            <Text style={[styles.dropZoneText, { color: stageColor }]}>✦ drop here</Text>
-          </View>
-        )}
       </View>
     );
   };
-
-  const keyExtractor = (item: Task) => String(item.id);
 
   return (
     <Screen padded={false}>
@@ -406,10 +261,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               onPress={() => setFilter(f.key)}
               style={[
                 styles.filterPill,
-                {
-                  backgroundColor: active ? t.accent : t.surface,
-                  borderColor: active ? t.accent : t.border,
-                },
+                { backgroundColor: active ? t.accent : t.surface, borderColor: active ? t.accent : t.border },
               ]}
             >
               <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.textMuted }}>
@@ -422,11 +274,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 
       {/* ── Quick-add bar ────────────────────────────────────────────────── */}
       <View style={[styles.quickAddOuter, { backgroundColor: t.bg, borderBottomColor: t.border }]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickStageRow}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickStageRow}>
           {STAGES.map((s) => {
             const active = quickStage === s.key;
             const stageColor = t.stage[s.key];
@@ -436,10 +284,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                 onPress={() => setQuickStage(s.key)}
                 style={[
                   styles.quickStagePill,
-                  {
-                    backgroundColor: active ? stageColor + '22' : t.surface,
-                    borderColor: active ? stageColor : t.border,
-                  },
+                  { backgroundColor: active ? stageColor + '22' : t.surface, borderColor: active ? stageColor : t.border },
                 ]}
               >
                 <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.textMuted }}>
@@ -467,98 +312,71 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             onPress={submitQuickAdd}
             disabled={!quickText.trim() || quickSaving}
             hitSlop={10}
-            style={({ pressed }) => ({
-              opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1,
-            })}
+            style={({ pressed }) => ({ opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1 })}
           >
             <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
       </View>
 
-      {/* ── Kanban ─────────────────────────────────────────────────────────── */}
-      <View
-        ref={kanbanRef}
+      {/* ── Kanban: drag a card onto another stage to move it; ←/→ buttons also work ── */}
+      <ScrollView
         style={{ flex: 1 }}
-        onLayout={() => {
-          kanbanRef.current?.measure((_x, _y, _w, _h, _px, py) => {
-            containerTopRef.current = py;
-          });
-        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              load();
+            }}
+            tintColor={t.textMuted}
+          />
+        }
+        contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.xxl * 2 }}
+        showsVerticalScrollIndicator={false}
       >
-        <NestableScrollContainer
-          scrollEnabled={!draggingTask}
-          onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                load();
-              }}
-              tintColor={t.textMuted}
-            />
-          }
-          contentContainerStyle={{
-            paddingHorizontal: spacing.lg,
-            paddingTop: spacing.xs,
-            paddingBottom: spacing.xxl * 2,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
+        <DropProvider>
           {!loading && tasks.length === 0 && (
-            <Text style={[styles.empty, { color: t.textMuted }]}>
-              No tasks yet. Tap + to add one.
-            </Text>
+            <Text style={[styles.empty, { color: t.textMuted }]}>No tasks yet. Tap + to add one.</Text>
           )}
 
-          {STAGES.map((s) => {
-            const isDropTarget =
-              !!draggingTask &&
-              targetStage === s.key &&
-              targetStage !== draggingTask.stage;
-            return (
-              <View
-                key={s.key}
-                testID={`stage-container-${s.key}`}
-                onLayout={(e: LayoutChangeEvent) => {
-                  const { y, height } = e.nativeEvent.layout;
-                  stageBoundsRef.current.set(s.key, { top: y, bottom: y + height });
-                }}
-              >
-                <StageHeader stage={s.key} label={s.label} isDropTarget={isDropTarget} />
-                <NestableDraggableFlatList
-                  key={`${s.key}-${stageData[s.key].length}`}
-                  data={stageData[s.key]}
-                  extraData={stageData[s.key]}
-                  keyExtractor={keyExtractor}
-                  renderItem={renderDraggableItem(s.key)}
-                  onDragEnd={({ data }) => handleDragEnd(s.key, data)}
-                  activationDistance={20}
-                />
-              </View>
-            );
-          })}
-        </NestableScrollContainer>
-
-        {/* Ghost card — follows finger during cross-stage drag */}
-        {draggingTask && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              styles.ghost,
-              { top: ghostYValue },
-            ]}
-          >
-            <View style={[styles.ghostCard, { backgroundColor: t.surface, borderColor: t.accent }]}>
-              <Text style={[styles.ghostText, { color: t.text }]} numberOfLines={1}>
-                {draggingTask.text}
-              </Text>
-            </View>
-          </Animated.View>
-        )}
-      </View>
+          {STAGES.map((s) => (
+            <Droppable<{ task: Task }>
+              key={s.key}
+              droppableId={s.key}
+              onDrop={(data) => moveToStage(data.task, s.key)}
+              style={[styles.stageDroppable, dragging?.stage === s.key && styles.stageLifted]}
+              activeStyle={[styles.stageActive, { borderColor: t.stage[s.key], backgroundColor: t.stage[s.key] + '0d' }]}
+            >
+              <StageHeader stage={s.key} label={s.label} />
+              {stageData[s.key].length === 0 ? (
+                <View style={styles.stageEmpty}>
+                  <Text style={[styles.stageEmptyText, { color: t.textLight }]}>Drop a task here</Text>
+                </View>
+              ) : (
+                stageData[s.key].map((task) => (
+                  <Draggable<{ task: Task }>
+                    key={task.id}
+                    data={{ task }}
+                    preDragDelay={180}
+                    onDragStart={() => setDragging({ id: task.id, stage: s.key })}
+                    onDragEnd={() => setDragging(null)}
+                    style={[styles.draggable, dragging?.id === task.id && styles.draggingCard]}
+                  >
+                    <TaskCard
+                      task={task}
+                      category={task.category_id ? categoriesById.get(task.category_id) : undefined}
+                      onPress={() => onOpenTask(task)}
+                      onToggleDone={() => toggleDone(task)}
+                      onMoveStage={(target) => moveToStage(task, target)}
+                    />
+                  </Draggable>
+                ))
+              )}
+            </Droppable>
+          ))}
+        </DropProvider>
+      </ScrollView>
     </Screen>
   );
 }
@@ -580,17 +398,8 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
   },
   filterBar: { flexGrow: 0, paddingVertical: spacing.sm },
-  filterScroll: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    alignItems: 'center',
-  },
-  filterPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 5,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-  },
+  filterScroll: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: 'center' },
+  filterPill: { paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.xl, borderWidth: 1 },
   quickAddOuter: {
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
@@ -598,17 +407,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: spacing.xs,
   },
-  quickStageRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingBottom: spacing.xs,
-  },
-  quickStagePill: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-  },
+  quickStageRow: { flexDirection: 'row', gap: spacing.xs, paddingBottom: spacing.xs },
+  quickStagePill: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.xl, borderWidth: 1 },
   quickAddRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -616,16 +416,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
   },
-  quickInput: {
-    flex: 1,
-    height: 38,
-    fontSize: font.size.md,
-  },
+  quickInput: { flex: 1, height: 38, fontSize: font.size.md },
   // ── Stage headers ────────────────────────────────────────────────────────────
-  stageHeader: {
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
+  stageHeader: { paddingTop: spacing.md, paddingBottom: spacing.sm },
   stageHeaderInner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -633,69 +426,33 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     paddingLeft: spacing.sm,
   },
-  stageTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  stageTitle: {
-    fontSize: font.size.sm,
-    fontWeight: font.weight.bold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  stageCountBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 1,
-    borderRadius: 10,
-    minWidth: 20,
-    alignItems: 'center',
-  },
-  stageCountText: {
-    fontSize: font.size.xs,
-    fontWeight: font.weight.semibold,
-  },
-  dragging: { opacity: 0.9 },
-  draggingSource: { opacity: 0.3 },
-  dropZone: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: 6,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-    marginBottom: 4,
-  },
-  dropZoneText: {
-    fontSize: font.size.xs,
-    fontWeight: font.weight.semibold,
-  },
-  ghost: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
+  stageTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  stageTitle: { fontSize: font.size.sm, fontWeight: font.weight.bold, textTransform: 'uppercase', letterSpacing: 0.5 },
+  stageCountBadge: { paddingHorizontal: 7, paddingVertical: 1, borderRadius: 10, minWidth: 20, alignItems: 'center' },
+  stageCountText: { fontSize: font.size.xs, fontWeight: font.weight.semibold },
+  // ── Droppable stage + draggable cards ──────────────────────────────────────────
+  stageDroppable: { borderRadius: radius.lg, borderWidth: 1, borderColor: 'transparent', marginBottom: spacing.sm, paddingBottom: spacing.xs },
+  stageActive: { borderStyle: 'dashed' },
+  draggable: { marginBottom: spacing.sm },
+  // Lift the dragging card (and its stage) above siblings so it animates in front.
+  stageLifted: { zIndex: 10 },
+  draggingCard: {
     zIndex: 999,
-  },
-  ghostCard: {
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 8,
-    opacity: 0.92,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
   },
-  ghostText: {
-    fontSize: font.size.md,
-    fontWeight: font.weight.medium,
+  stageEmpty: {
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#e4e4e7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.sm,
   },
-  empty: {
-    textAlign: 'center',
-    paddingTop: spacing.xxl,
-    fontSize: font.size.md,
-  },
+  stageEmptyText: { fontSize: font.size.sm },
+  empty: { textAlign: 'center', paddingTop: spacing.xxl, fontSize: font.size.md },
 });
