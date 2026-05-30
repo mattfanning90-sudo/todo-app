@@ -106,3 +106,17 @@ export interface UserSearchResult {
   email: string;
   username: string;
 }
+
+export interface TodayTask {
+  id: number;
+  text: string;
+  stage: Stage;
+  due_date: string;          // YYYY-MM-DD
+  priority: Priority;
+  status: string;
+  board_id: number;
+  board_name: string;
+  cat_name: string | null;
+  cat_color: string | null;
+  completed_at: string | null;
+}
