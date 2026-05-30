@@ -6,8 +6,7 @@ import {
 import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
-import { createBottomTabNavigator, type BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import type { RouteProp } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useColorScheme } from 'react-native';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/theme';
@@ -127,7 +126,7 @@ export function RootNavigator() {
     >
       {user ? (
         <Tab.Navigator
-          screenOptions={({ route }: { route: RouteProp<Record<string, undefined>, string> }): BottomTabNavigationOptions => ({
+          screenOptions={({ route }) => ({
             headerShown: false,
             tabBarActiveTintColor: t.tk.accent,
             tabBarInactiveTintColor: t.tk.muted,
