@@ -9,8 +9,13 @@ Short index. Detailed feature docs live in `docs/` — load only what you need f
 | CSP, `data-action` delegation, instant-paint cache, keyboard shortcuts | `docs/frontend.md` |
 | Railway deploy, env vars, /healthz, cron, migration runner | `docs/operations.md` |
 | Vitest + pg-mem harness, what it covers and doesn't | `docs/testing.md` |
-| Expo client under `ios-app/` | `docs/ios-app.md` |
+| Expo client, TestFlight pipeline, Google OAuth gotchas, bundle ID | `docs/ios-app.md` |
 | **Web + iOS feature parity, API contract, design tokens** | `docs/cross-platform.md` |
+| iOS feature parity status (living doc) | `docs/platform-parity-report.md` |
+| Cross-stage drag design spec | `docs/superpowers/specs/2026-05-30-cross-stage-drag-design.md` |
+| Cross-stage drag implementation plan | `docs/superpowers/plans/2026-05-30-cross-stage-drag.md` |
+| App icon design spec | `docs/superpowers/specs/2026-05-30-app-icon-design.md` |
+| App icon implementation plan | `docs/superpowers/plans/2026-05-30-app-icon.md` |
 
 ## Cross-platform skill
 
