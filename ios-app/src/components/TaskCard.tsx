@@ -1,5 +1,5 @@
-import React from 'react';
-import { ActionSheetIOS, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { ReactNode } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 // Use React Native's core Pressable throughout.
 // Previously we used RNGH's Pressable to avoid being swallowed by
 // GestureHandlerRootView, but that was specific to the old non-nestable
@@ -8,24 +8,16 @@ import { ActionSheetIOS, Pressable, StyleSheet, Text, View } from 'react-native'
 // gesture causes competition that cancels taps. RN's native Pressable
 // (using iOS's native responder system) works correctly inside RNGH.
 import { useTheme, radius, spacing, font } from '@/theme';
-import type { Category, Stage, Task } from '@/api/types';
-
-const STAGE_LABELS: Record<Stage, string> = {
-  backlog: 'Backlog',
-  in_progress: 'In Progress',
-  done: 'Done',
-};
-
-const ALL_STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
+import type { Category, Task } from '@/api/types';
 
 interface Props {
   task: Task;
   category?: Category;
   onPress: () => void;
   onToggleDone?: () => void;
-  /** When provided, a "Move to…" pill appears on the card */
-  onMoveToStage?: (stage: Stage) => void;
-  /** Long-press handler — used by DraggableFlatList to start a drag */
+  /** When provided, rendered as a left-edge drag handle strip */
+  dragHandle?: ReactNode;
+  /** Long-press handler — used by DraggableFlatList to start within-stage drag */
   onLongPress?: () => void;
   /** Delay before long-press fires (default 200ms) */
   delayLongPress?: number;
@@ -51,7 +43,7 @@ function dueLabel(
   };
 }
 
-export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage, onLongPress, delayLongPress = 200, testID }: Props) {
+export function TaskCard({ task, category, onPress, onToggleDone, dragHandle, onLongPress, delayLongPress = 200, testID }: Props) {
   const t = useTheme();
   const due = dueLabel(task.due_date);
   const isDone = task.stage === 'done';
@@ -76,20 +68,6 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
       ? '#166534'
       : t.textMuted;
 
-  const handleMovePress = () => {
-    const targets = ALL_STAGES.filter((s) => s !== task.stage);
-    ActionSheetIOS.showActionSheetWithOptions(
-      {
-        title: 'Move to…',
-        options: [...targets.map((s) => STAGE_LABELS[s]), 'Cancel'],
-        cancelButtonIndex: targets.length,
-      },
-      (idx) => {
-        if (idx < targets.length) onMoveToStage?.(targets[idx]);
-      }
-    );
-  };
-
   return (
     <Pressable
       onPress={onPress}
@@ -111,95 +89,79 @@ export function TaskCard({ task, category, onPress, onToggleDone, onMoveToStage,
         },
       ]}
     >
-      <View style={styles.inner}>
-        <View style={styles.topRow}>
-          {/* Checkbox — inner Pressable wins the responder automatically */}
-          <Pressable
-            onPress={() => onToggleDone?.()}
-            hitSlop={8}
-            style={[
-              styles.checkbox,
-              {
-                borderColor: isDone ? t.success : t.borderInput,
-                backgroundColor: isDone ? t.success : 'transparent',
-              },
-            ]}
-          >
-            {isDone && <Text style={styles.checkmark}>✓</Text>}
-          </Pressable>
-
-          {/* Task text */}
-          <View style={{ flex: 1 }}>
-            <Text
-              numberOfLines={2}
+      <View style={styles.cardRow}>
+        {dragHandle}
+        <View style={styles.inner}>
+          <View style={styles.topRow}>
+            {/* Checkbox — inner Pressable wins the responder automatically */}
+            <Pressable
+              onPress={() => onToggleDone?.()}
+              hitSlop={8}
               style={[
-                styles.text,
+                styles.checkbox,
                 {
-                  color: isDone ? t.textMuted : t.text,
-                  textDecorationLine: isDone ? 'line-through' : 'none',
+                  borderColor: isDone ? t.success : t.borderInput,
+                  backgroundColor: isDone ? t.success : 'transparent',
                 },
               ]}
             >
-              {task.text}
-            </Text>
-            {!!task.status && (
+              {isDone && <Text style={styles.checkmark}>✓</Text>}
+            </Pressable>
+
+            {/* Task text */}
+            <View style={{ flex: 1 }}>
               <Text
-                testID="task-notes-preview"
-                numberOfLines={1}
-                style={[styles.notesPreview, { color: t.textMuted }]}
-              >
-                {'↳ ' + task.status}
-              </Text>
-            )}
-          </View>
-        </View>
-
-        {/* Badges row */}
-        {(category || due || (task.subtasks?.length ?? 0) > 0 || onMoveToStage || task.recurrence) && (
-          <View style={styles.badges}>
-            {category && (
-              <View style={[styles.catPill, { backgroundColor: category.color }]}>
-                <Text style={styles.catPillText}>{category.name}</Text>
-              </View>
-            )}
-            {due && (
-              <View style={[styles.dueBadge, { backgroundColor: dueBg }]}>
-                <Text style={[styles.dueBadgeText, { color: dueFg }]}>
-                  {due.label}
-                </Text>
-              </View>
-            )}
-            {task.subtasks && task.subtasks.length > 0 && (
-              <Text style={[styles.subtaskText, { color: t.textLight }]}>
-                {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length}
-              </Text>
-            )}
-
-            {task.recurrence && (
-              <View testID="task-recurrence-badge" style={[styles.recurrenceBadge, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
-                <Text style={styles.recurrenceBadgeText}>🔁</Text>
-              </View>
-            )}
-
-            {/* Move-to-stage pill — only shown when callback is wired */}
-            {onMoveToStage && (
-              <Pressable
-                onPress={handleMovePress}
-                hitSlop={6}
-                style={({ pressed }) => [
-                  styles.movePill,
+                numberOfLines={2}
+                style={[
+                  styles.text,
                   {
-                    backgroundColor: t.surfaceElevated,
-                    borderColor: t.border,
-                    opacity: pressed ? 0.6 : 1,
+                    color: isDone ? t.textMuted : t.text,
+                    textDecorationLine: isDone ? 'line-through' : 'none',
                   },
                 ]}
               >
-                <Text style={[styles.movePillText, { color: t.textMuted }]}>Move →</Text>
-              </Pressable>
-            )}
+                {task.text}
+              </Text>
+              {!!task.status && (
+                <Text
+                  testID="task-notes-preview"
+                  numberOfLines={1}
+                  style={[styles.notesPreview, { color: t.textMuted }]}
+                >
+                  {'↳ ' + task.status}
+                </Text>
+              )}
+            </View>
           </View>
-        )}
+
+          {/* Badges row */}
+          {(category || due || (task.subtasks?.length ?? 0) > 0 || task.recurrence) && (
+            <View style={styles.badges}>
+              {category && (
+                <View style={[styles.catPill, { backgroundColor: category.color }]}>
+                  <Text style={styles.catPillText}>{category.name}</Text>
+                </View>
+              )}
+              {due && (
+                <View style={[styles.dueBadge, { backgroundColor: dueBg }]}>
+                  <Text style={[styles.dueBadgeText, { color: dueFg }]}>
+                    {due.label}
+                  </Text>
+                </View>
+              )}
+              {task.subtasks && task.subtasks.length > 0 && (
+                <Text style={[styles.subtaskText, { color: t.textLight }]}>
+                  {task.subtasks.filter((s) => s.done).length}/{task.subtasks.length}
+                </Text>
+              )}
+              {task.recurrence && (
+                <View testID="task-recurrence-badge" style={[styles.recurrenceBadge, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
+                  <Text style={styles.recurrenceBadgeText}>🔁</Text>
+                </View>
+              )}
+            </View>
+          )}
+        </View>
       </View>
     </Pressable>
   );
@@ -212,7 +174,12 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     overflow: 'hidden',
   },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
   inner: {
+    flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -267,16 +234,6 @@ const styles = StyleSheet.create({
   },
   subtaskText: {
     fontSize: font.size.xs,
-  },
-  movePill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  movePillText: {
-    fontSize: font.size.xs,
-    fontWeight: font.weight.medium,
   },
   notesPreview: {
     fontSize: font.size.xs,

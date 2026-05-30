@@ -2,6 +2,7 @@
  * TaskCard tests — verify the component accepts and fires onLongPress.
  */
 import React from 'react';
+import { View } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
 import { TaskCard } from '../../src/components/TaskCard';
 import type { Task } from '../../src/api/types';
@@ -80,4 +81,29 @@ test('does not render recurrence badge when recurrence is null', () => {
     <TaskCard task={{ ...task, recurrence: null }} onPress={() => {}} />
   );
   expect(queryByTestId('task-recurrence-badge')).toBeNull();
+});
+
+test('renders the dragHandle node when dragHandle prop is provided', () => {
+  const { getByTestId } = render(
+    <TaskCard
+      task={task}
+      onPress={() => {}}
+      dragHandle={<View testID="test-drag-handle" />}
+    />
+  );
+  expect(getByTestId('test-drag-handle')).toBeTruthy();
+});
+
+test('does not render a drag handle strip when dragHandle prop is absent', () => {
+  const { queryByTestId } = render(
+    <TaskCard task={{ ...task, recurrence: null }} onPress={() => {}} />
+  );
+  expect(queryByTestId('test-drag-handle')).toBeNull();
+});
+
+test('does not render a Move pill', () => {
+  const { queryByText } = render(
+    <TaskCard task={task} onPress={() => {}} />
+  );
+  expect(queryByText('Move →')).toBeNull();
 });
