@@ -44,6 +44,16 @@ memDb.public.registerFunction({
   implementation: n => new Date(n * 1000),
 });
 
+// pg-mem doesn't support the ~ (regex match) operator used in uniqueSlug().
+// Register it so POST /api/boards works in tests.
+memDb.public.registerOperator({
+  operator: '~',
+  left: DataType.text,
+  right: DataType.text,
+  returns: DataType.bool,
+  implementation: (text, pattern) => new RegExp(pattern).test(text),
+});
+
 const pgAdapter = memDb.adapters.createPg();
 const pgMock = {
   Pool: pgAdapter.Pool,
