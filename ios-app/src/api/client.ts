@@ -99,22 +99,28 @@ export const api = {
   baseUrl: API_BASE,
 
   async login(email: string, password: string): Promise<User> {
-    return request<User>('/auth/login', {
-      method: 'POST',
-      body: { email, password },
-    });
+    const { mobileSession, ...user } = await request<User & { mobileSession?: string }>(
+      '/auth/login',
+      { method: 'POST', body: { email, password } }
+    );
+    if (mobileSession) await setCookie(mobileSession);
+    return user as User;
   },
   async signup(email: string, password: string, name?: string): Promise<User> {
-    return request<User>('/auth/signup', {
-      method: 'POST',
-      body: { email, password, name },
-    });
+    const { mobileSession, ...user } = await request<User & { mobileSession?: string }>(
+      '/auth/signup',
+      { method: 'POST', body: { email, password, name } }
+    );
+    if (mobileSession) await setCookie(mobileSession);
+    return user as User;
   },
   async googleLogin(idToken: string): Promise<User> {
-    return request<User>('/auth/google/mobile', {
-      method: 'POST',
-      body: { id_token: idToken },
-    });
+    const { mobileSession, ...user } = await request<User & { mobileSession?: string }>(
+      '/auth/google/mobile',
+      { method: 'POST', body: { id_token: idToken } }
+    );
+    if (mobileSession) await setCookie(mobileSession);
+    return user as User;
   },
   async logout(): Promise<void> {
     try {

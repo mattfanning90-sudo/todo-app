@@ -19,6 +19,7 @@ Local auth users get a synthetic Google ID of `local:<email>` so the column stay
 - 30-day TTL when "remember me" is checked, otherwise session-scoped.
 - `req.session.regenerate()` is called after every successful login to prevent session-fixation.
 - `SESSION_SECRET` must be ≥ 32 chars in production — the boot guard exits otherwise.
+- **Mobile session delivery:** auth JSON responses return the signed session both in an `X-Session-Cookie` response header **and** in the body as `mobileSession`. iOS native networking (NSURLSession) can swallow the header in standalone/TestFlight builds, so the client captures from the body (header is the fallback). Both carry the same `connect.sid=…` value. Covered by `tests/ios-session.test.js`.
 
 ## Password policy (`isStrongPassword`)
 
