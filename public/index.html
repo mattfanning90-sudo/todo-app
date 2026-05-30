@@ -112,11 +112,11 @@
       Taskly
     </div>
     <nav class="tk-nav">
-      <button class="tk-nav-item" id="tab-today" data-action="gotoTab" data-args='["today"]'>
+      <button class="tk-nav-item active" id="tab-today" data-action="gotoTab" data-args='["today"]'>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v3m8-3v3M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
         Today
       </button>
-      <button class="tk-nav-item active" id="tab-board" data-action="gotoTab" data-args='["board"]'>
+      <button class="tk-nav-item" id="tab-board" data-action="gotoTab" data-args='["board"]'>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h6v6H3zm0 8h6v6H3zm8-8h10M11 9h7M11 13h10M11 17h7"/></svg>
         Board
       </button>
@@ -205,8 +205,8 @@
 
   <!-- Main content -->
   <main class="main-content">
-    <section class="screen" id="screen-today"></section>
-    <section class="screen active" id="screen-board">
+    <section class="screen active" id="screen-today"></section>
+    <section class="screen" id="screen-board">
     <div class="content-top">
       <div class="add-task-row">
         <input id="task-input" type="text" placeholder="Add a task… (try 'dentist Thursday 2pm')" />
@@ -397,11 +397,11 @@
 </div>
 
 <nav class="tk-tabbar" id="tk-tabbar" aria-label="Primary">
-  <button class="tk-tabbar-item" data-tab="today" data-action="gotoTab" data-args='["today"]'>
+  <button class="tk-tabbar-item active" data-tab="today" data-action="gotoTab" data-args='["today"]'>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 2v3m8-3v3M3 9h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/></svg>
     <span>Today</span>
   </button>
-  <button class="tk-tabbar-item active" data-tab="board" data-action="gotoTab" data-args='["board"]'>
+  <button class="tk-tabbar-item" data-tab="board" data-action="gotoTab" data-args='["board"]'>
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h6v6H3zm0 8h6v6H3zm8-8h10M11 9h7M11 13h10M11 17h7"/></svg>
     <span>Board</span>
   </button>
@@ -410,6 +410,18 @@
     <span>Profile</span>
   </button>
 </nav>
+
+<div class="modal-overlay" id="quickadd-modal" style="display:none" data-action="closeQuickAdd">
+  <div class="modal tk-card" data-action="stop" style="max-width:440px;padding:24px;">
+    <div class="modal-header"><h2>New Task</h2>
+      <button class="modal-close" data-action="closeQuickAdd">×</button></div>
+    <input id="quickadd-input" type="text" placeholder="Task title…" autocomplete="off"
+      style="width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--tk-line);
+      background:var(--tk-card);color:var(--tk-text);font:inherit;font-size:15px;outline:none;" />
+    <button class="tk-btn-primary" data-action="submitQuickAdd"
+      style="width:100%;margin-top:12px;">Add Task</button>
+  </div>
+</div>
 
 <script src="/app.js?v=20260520d" defer></script>
 </body>

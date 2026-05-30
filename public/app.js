@@ -22,7 +22,9 @@
   let myBoards = [];
   let currentBoard = null; // { id, name, ownerId } — null = default board
   let sidebarOpen = true;
-  let currentTab = 'board';
+  let currentTab = 'today';
+  let todayTasks = [];
+  let todayFilterMode = 'all';
 
   function boardParam() { return currentBoard ? `?board=${currentBoard.id}` : ''; }
   function boardBody()  { return currentBoard ? { boardId: currentBoard.id } : {}; }
@@ -196,7 +198,107 @@
     document.getElementById('nav-today').classList.toggle('active', todayFilter);
   }
 
-  function renderToday() {}   // stub — replaced in a later task
+  async function renderToday() {
+    const el = document.getElementById('screen-today');
+    if (!el) return;
+    try {
+      const res = await fetch('/api/tasks/today', { headers: { 'X-Requested-With': 'fetch' } });
+      todayTasks = res.ok ? await res.json() : [];
+    } catch { todayTasks = []; }
+    paintToday();
+  }
+
+  // Re-render from the already-loaded todayTasks without a network round-trip
+  // (used by filter chips so switching All/Active/Done feels instant).
+  function paintToday() {
+    const el = document.getElementById('screen-today');
+    if (!el) return;
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const dueToday = todayTasks.filter(t => t.due_date === todayStr);
+    const doneToday = dueToday.filter(t => t.stage === 'done').length;
+    const pct = dueToday.length ? Math.round((doneToday / dueToday.length) * 100) : 0;
+    const dateLabel = new Date().toLocaleDateString(undefined,
+      { weekday: 'long', month: 'long', day: 'numeric' });
+
+    const visible = todayTasks.filter(t =>
+      todayFilterMode === 'all' ? true :
+      todayFilterMode === 'done' ? t.stage === 'done' : t.stage !== 'done');
+
+    const counts = {
+      all: todayTasks.length,
+      active: todayTasks.filter(t => t.stage !== 'done').length,
+      done: todayTasks.filter(t => t.stage === 'done').length,
+    };
+    const chip = (mode, label) =>
+      `<button class="tk-filter-chip ${todayFilterMode === mode ? 'active' : ''}"
+         data-action="setTodayFilter" data-args='["${mode}"]'>${label}
+         <span style="opacity:.8;font-size:11px">${counts[mode]}</span></button>`;
+
+    el.innerHTML = `
+      <div class="tk-today-head">
+        <div>
+          <p class="tk-eyebrow">${dateLabel}</p>
+          <h1 class="tk-h1">Today</h1>
+        </div>
+        <div class="tk-ring-wrap">${progressRing(pct, 80, 6)}
+          <div class="tk-ring-label"><div class="tk-ring-pct">${pct}%</div>
+            <div class="tk-ring-sub">done</div></div></div>
+      </div>
+      <div class="tk-chip-row">${chip('all','All')}${chip('active','Active')}${chip('done','Done')}</div>
+      <div class="tk-today-list">
+        ${visible.map(t => todayRow(t, todayStr)).join('') ||
+          '<div class="tk-empty">Nothing for today 🎉</div>'}
+      </div>
+      <button class="tk-add-row" data-action="openQuickAdd">+ Add task…</button>`;
+  }
+
+  function todayRow(t, todayStr) {
+    const done = t.stage === 'done';
+    const overdue = !done && t.due_date && t.due_date !== '' && t.due_date < todayStr;
+    return `<div class="tk-task-row ${done ? 'is-done' : ''}">
+      <button class="tk-check ${done ? 'on' : ''}" style="${done ? '' : 'border-color:' + prioColor(t.priority)}"
+        data-action="toggleTaskDone" data-args='[${t.id},"${done ? 'backlog' : 'done'}",${t.board_id}]'></button>
+      <div class="tk-task-main">
+        <div class="tk-task-title">${escapeHtml(t.text)}</div>
+        <div class="tk-task-meta">
+          <span class="tk-due ${overdue ? 'overdue' : ''}">${t.due_date ? formatDueDate(t.due_date) : ''}</span>
+          ${tagChip(t.cat_name, t.cat_color)}
+          <span class="tk-board-tag">${escapeHtml(t.board_name || '')}</span>
+        </div>
+      </div>
+      <span class="tk-prio-dot" style="background:${prioColor(t.priority)}"></span>
+    </div>`;
+  }
+
+  function setTodayFilter(mode) { todayFilterMode = mode; paintToday(); }
+
+  async function toggleTaskDone(taskId, newStage, boardId) {
+    await apiPut(`/api/tasks/${taskId}?board=${boardId}`, { stage: newStage, boardId });
+    // apiFetch() already clears boot_cache_v1 on non-GET to /api/tasks — no manual cache call needed.
+    renderToday();
+  }
+
+  function openQuickAdd() {
+    const m = document.getElementById('quickadd-modal');
+    m.style.display = 'flex';
+    const inp = document.getElementById('quickadd-input');
+    inp.value = '';
+    if (!inp.dataset.bound) {
+      inp.dataset.bound = '1';
+      inp.addEventListener('keydown', e => { if (e.key === 'Enter') submitQuickAdd(); });
+    }
+    setTimeout(() => inp.focus(), 30);
+  }
+  function closeQuickAdd() { document.getElementById('quickadd-modal').style.display = 'none'; }
+  async function submitQuickAdd() {
+    const text = document.getElementById('quickadd-input').value.trim();
+    if (!text) return;
+    const today = new Date().toISOString().slice(0, 10);
+    await apiPost('/api/tasks', { text, stage: 'backlog', due_date: today }); // lands on default board
+    closeQuickAdd();
+    renderToday();
+  }
+
   function renderProfile() {} // stub — replaced in a later task
   function showTab(tab) {
     currentTab = tab;
@@ -438,7 +540,7 @@
     } catch (err) {
       console.error('Failed to load:', err);
     }
-    showTab('board');
+    showTab('today');
   }
 
   /* ── Board switching ── */
@@ -1287,6 +1389,29 @@
     return typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c) ? c : '#94A3B8';
   }
 
+  function prioColor(p) {
+    return p === 'high' ? 'var(--tk-prio-high)'
+         : p === 'medium' ? 'var(--tk-prio-med)'
+         : p === 'low' ? 'var(--tk-prio-low)'
+         : 'var(--tk-prio-low)';
+  }
+  function tagChip(name, color) {
+    if (!name) return '';
+    const c = safeColor(color || '#888');
+    // 6-digit hex → append alpha for a ~10% tint; anything else → neutral tint
+    const bg = /^#[0-9a-fA-F]{6}$/.test(c) ? `${c}1a` : 'rgba(30,30,46,.06)';
+    return `<span class="tk-chip" style="background:${bg};color:${c}">${escapeHtml(name)}</span>`;
+  }
+  function progressRing(pct, size = 80, stroke = 6) {
+    const r = (size - stroke) / 2, circ = 2 * Math.PI * r;
+    const off = circ * (1 - (pct || 0) / 100);
+    return `<svg width="${size}" height="${size}" style="transform:rotate(-90deg)">
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="rgba(0,0,0,.07)" stroke-width="${stroke}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${r}" fill="none" stroke="var(--tk-accent)" stroke-width="${stroke}"
+      stroke-dasharray="${circ}" stroke-dashoffset="${off}" stroke-linecap="round"
+      style="transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)"/></svg>`;
+  }
+
   function getDueBadgeClass(dueDate) {
     if (!dueDate) return '';
     const today = new Date().toISOString().split('T')[0];
@@ -1897,6 +2022,7 @@
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
     deleteCategory, clearAssign, restoreTask, jumpToStage,
+    setTodayFilter, toggleTaskDone, openQuickAdd, closeQuickAdd, submitQuickAdd,
     openMembersFromBoardMenu: () => { closeBoardMenu(); openMembersModal(); },
     closeBoardMenuAndCreateBoard: () => { closeBoardMenu(); openCreateBoardModal(); },
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },
