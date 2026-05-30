@@ -1,6 +1,6 @@
 // ios-app/scripts/generate-icon.mjs
 import sharp from 'sharp';
-import { mkdirSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -12,17 +12,17 @@ const S = 1024; // icon size in px
 // Card stack: centred, 54% wide × 60% tall
 const CW = Math.round(S * 0.54);   // 553
 const CH = Math.round(S * 0.60);   // 614
-const CX = Math.round((S - CW) / 2); // 235  (left edge of front card)
+const CX = Math.round((S - CW) / 2); // 236  (left edge of front card)
 const CY = Math.round((S - CH) / 2); // 205  (top edge of front card)
 const CR = Math.round(S * 0.055);  // 56   (corner radius)
 
 // Rotation pivot: bottom-centre of the front card
-const PX = CX + CW / 2;           // 511.5
+const PX = CX + CW / 2;           // 512.5
 const PY = CY + CH;                // 819
 
 // Task lines: inside front card with ~7% horizontal, ~6.5% vertical padding
 const LP = Math.round(CW * 0.07);  // 39  (horizontal padding each side)
-const LX = CX + LP;                // 274 (left edge of lines)
+const LX = CX + LP;                // 275 (left edge of lines)
 const LW = CW - LP * 2;            // 475 (max line width)
 const LH = Math.round(S * 0.045); // 46  (line height)
 const LR = Math.round(LH / 2);    // 23  (pill radius)
@@ -90,13 +90,18 @@ const assetOut  = join(ROOT, 'assets', 'icon.png');
 const xcodeOut  = join(ROOT, 'ios', 'Todo', 'Images.xcassets',
                        'AppIcon.appiconset', 'App-Icon-1024x1024@1x.png');
 
-mkdirSync(join(ROOT, 'assets'), { recursive: true });
+try {
+  mkdirSync(join(ROOT, 'assets'), { recursive: true });
+  mkdirSync(dirname(xcodeOut), { recursive: true });
 
-const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  const pngBuffer = await sharp(Buffer.from(svg)).png().toBuffer();
+  writeFileSync(assetOut, pngBuffer);
+  writeFileSync(xcodeOut, pngBuffer);
 
-await sharp(pngBuffer).toFile(assetOut);
-await sharp(pngBuffer).toFile(xcodeOut);
-
-console.log(`✓ icon.png written (${pngBuffer.length} bytes)`);
-console.log(`  → ${assetOut}`);
-console.log(`  → ${xcodeOut}`);
+  console.log(`✓ icon.png written (${pngBuffer.length} bytes)`);
+  console.log(`  → ${assetOut}`);
+  console.log(`  → ${xcodeOut}`);
+} catch (err) {
+  console.error('✗ Icon generation failed:', err.message);
+  process.exit(1);
+}

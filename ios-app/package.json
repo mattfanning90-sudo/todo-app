@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "generate-icon": "node scripts/generate-icon.mjs"
   },
   "jest": {
     "preset": "jest-expo",
