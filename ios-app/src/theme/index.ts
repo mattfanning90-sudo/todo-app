@@ -29,6 +29,19 @@ export interface Theme {
     low: string;
     none: string;
   };
+  tk: {
+    accent: string;
+    accentHover: string;
+    bg: string;
+    card: string;
+    text: string;
+    muted: string;
+    line: string;
+    prioHigh: string;
+    prioMed: string;
+    prioLow: string;
+    shadow: string;
+  };
 }
 
 // Matches the web app's CSS variables exactly.
@@ -59,6 +72,19 @@ const light: Theme = {
     low: '#3B82F6',
     none: '#94A3B8',
   },
+  tk: {
+    accent: '#FF6B47',
+    accentHover: '#E8522E',
+    bg: '#F7F7FA',
+    card: '#FFFFFF',
+    text: '#1E1E2E',
+    muted: 'rgba(30,30,46,0.45)',
+    line: 'rgba(30,30,46,0.08)',
+    prioHigh: '#FF6B47',
+    prioMed: '#F59E0B',
+    prioLow: '#9CA3AF',
+    shadow: '0 1px 4px rgba(30,30,46,0.06)',
+  },
 };
 
 const dark: Theme = {
@@ -87,6 +113,19 @@ const dark: Theme = {
     medium: '#F59E0B',
     low: '#3B82F6',
     none: '#94A3B8',
+  },
+  tk: {
+    accent: '#FF6B47',
+    accentHover: '#E8522E',
+    bg: '#16161D',
+    card: '#1E1E28',
+    text: '#F2F2F7',
+    muted: 'rgba(242,242,247,0.5)',
+    line: 'rgba(255,255,255,0.08)',
+    prioHigh: '#FF6B47',
+    prioMed: '#F59E0B',
+    prioLow: '#9CA3AF',
+    shadow: '0 1px 4px rgba(0,0,0,0.2)',
   },
 };
 
