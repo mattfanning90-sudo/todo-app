@@ -25,18 +25,6 @@
       </div>
       Tasks
     </a>
-    <div class="board-switcher" id="board-switcher" style="margin-left:4px;">
-      <button class="board-switch-btn" id="board-switch-btn" data-action="toggleBoardMenu">
-        <span id="board-label">My Board</span>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
-      </button>
-      <div class="board-menu" id="board-menu" style="display:none">
-        <div class="board-menu-item active" id="my-board-item" data-action="switchBoard" data-args="[null]">✓ My Board</div>
-        <div id="board-menu-memberships"></div>
-        <div class="board-menu-sep"></div>
-        <div class="board-menu-item manage" data-action="openMembersFromBoardMenu">Manage Members…</div>
-      </div>
-    </div>
     <span class="viewing-banner" id="viewing-banner"></span>
   </div>
 
@@ -212,10 +200,18 @@
     <section class="screen" id="screen-board">
     <div class="tk-board-head">
       <div>
-        <button class="tk-board-switch" data-action="toggleBoardMenu">
-          <span id="tk-board-name">My Board</span>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
+        <div class="board-switcher tk-board-switch" id="board-switcher">
+          <button class="board-switch-btn" id="board-switch-btn" data-action="toggleBoardMenu">
+            <span id="board-label">My Board</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="board-menu" id="board-menu" style="display:none">
+            <div class="board-menu-item active" id="my-board-item" data-action="switchBoard" data-args="[null]">✓ My Board</div>
+            <div id="board-menu-memberships"></div>
+            <div class="board-menu-sep"></div>
+            <div class="board-menu-item manage" data-action="openMembersFromBoardMenu">Manage Members…</div>
+          </div>
+        </div>
         <h1 class="tk-h1">Board</h1>
       </div>
       <div class="tk-board-head-right">

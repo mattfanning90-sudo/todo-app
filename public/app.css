@@ -1080,3 +1080,16 @@
   padding:14px 20px; border:none; border-top:1px solid var(--tk-line); background:none;
   cursor:pointer; font:inherit; font-size:15px; color:var(--tk-text); text-decoration:none; }
 .tk-set-row.danger { color:#DC2626; }
+
+/* Collapse the old top header: controls now live in Board (switcher) + Profile
+   (theme/account/search); only the notification bell remains. */
+.app-header .sidebar-toggle,
+.app-header .app-logo,
+.app-header #search-btn,
+.app-header #theme-toggle,
+.app-header .account-wrap,
+.app-header .viewing-banner { display:none !important; }
+.app-header { justify-content:flex-end; min-height:0; padding-top:8px; padding-bottom:8px; box-shadow:none; }
+/* board switcher now sits in the board header */
+.tk-board-switch .board-switch-btn { font-size:12px; font-weight:600; letter-spacing:.06em;
+  text-transform:uppercase; color:var(--tk-muted); padding:0; background:none; border:none; }
