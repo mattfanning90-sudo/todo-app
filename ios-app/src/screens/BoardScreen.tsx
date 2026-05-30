@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
+  Animated,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,10 +10,11 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import DraggableFlatList, {
+import {
   NestableScrollContainer,
   NestableDraggableFlatList,
   ScaleDecorator,
@@ -20,6 +22,9 @@ import DraggableFlatList, {
 } from 'react-native-draggable-flatlist';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
+import { DragHandle } from '@/components/DragHandle';
+import { resolveStageFromBounds } from '@/utils/resolveStageFromBounds';
+import type { StageBounds } from '@/utils/resolveStageFromBounds';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
@@ -80,6 +85,16 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const [quickStage, setQuickStage] = useState<Stage>('backlog');
   const [quickSaving, setQuickSaving] = useState(false);
   const quickInputRef = useRef<TextInput | null>(null);
+
+  // ─── Cross-stage drag state ──────────────────────────────────────────────
+  const [draggingTask, setDraggingTask] = useState<Task | null>(null);
+  const draggingTaskRef = useRef<Task | null>(null); // ref mirror — readable synchronously in callbacks
+  const [targetStage, setTargetStage] = useState<Stage | null>(null);
+  const ghostYValue = useRef(new Animated.Value(0)).current;
+  const containerTopValue = useRef(new Animated.Value(0)).current;
+  const stageBoundsRef = useRef(new Map<Stage, StageBounds>());
+  const scrollOffsetRef = useRef(0);
+  const kanbanRef = useRef<View>(null);
 
   const load = useCallback(async () => {
     try {
@@ -210,6 +225,53 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     [board.id, load]
   );
 
+  // ─── Cross-stage drag handlers ────────────────────────────────────────────
+
+  const resolveStage = useCallback(
+    (absoluteY: number): Stage | null => {
+      const containerTop = (containerTopValue as any)._value ?? 0;
+      const adjustedY = absoluteY - containerTop + scrollOffsetRef.current;
+      return resolveStageFromBounds(adjustedY, stageBoundsRef.current);
+    },
+    [containerTopValue]
+  );
+
+  const handleCrossStageDragStart = useCallback(
+    (task: Task, absoluteY: number) => {
+      if (draggingTaskRef.current) return;
+      draggingTaskRef.current = task;
+      setDraggingTask(task);
+      setTargetStage(null);
+      ghostYValue.setValue(absoluteY);
+    },
+    [ghostYValue]
+  );
+
+  const handleCrossStageDragMove = useCallback(
+    (absoluteY: number) => {
+      ghostYValue.setValue(absoluteY);
+      const stage = resolveStage(absoluteY);
+      setTargetStage(stage);
+    },
+    [ghostYValue, resolveStage]
+  );
+
+  const handleCrossStageDragEnd = useCallback(
+    async (absoluteY: number) => {
+      const task = draggingTaskRef.current;
+      if (!task) return;
+      const stage = resolveStage(absoluteY);
+      if (stage && stage !== task.stage) {
+        await moveToStage(task, stage);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      }
+      draggingTaskRef.current = null;
+      setDraggingTask(null);
+      setTargetStage(null);
+    },
+    [resolveStage, moveToStage]
+  );
+
   // ─── Draggable item renderer ─────────────────────────────────────────────────
 
   const renderDraggableItem = useCallback(
@@ -217,29 +279,52 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       ({ item, drag, isActive }: RenderItemParams<Task>) =>
         (
           <ScaleDecorator>
-            <View style={[{ marginBottom: spacing.sm }, isActive && styles.dragging]}>
+            <View style={[
+              { marginBottom: spacing.sm },
+              isActive && styles.dragging,
+              !isActive && draggingTask?.id === item.id && styles.draggingSource,
+            ]}>
               <TaskCard
                 task={item}
                 category={item.category_id ? categoriesById.get(item.category_id) : undefined}
-                onPress={() => !isActive && onOpenTask(item)}
+                onPress={() => !isActive && !draggingTask && onOpenTask(item)}
                 onToggleDone={() => toggleDone(item)}
-                onMoveToStage={(s) => moveToStage(item, s)}
                 onLongPress={drag}
                 delayLongPress={180}
+                dragHandle={
+                  <DragHandle
+                    onDragStart={(y) => handleCrossStageDragStart(item, y)}
+                    onDragMove={handleCrossStageDragMove}
+                    onDragEnd={handleCrossStageDragEnd}
+                  />
+                }
               />
             </View>
           </ScaleDecorator>
         ),
-    [categoriesById, onOpenTask, toggleDone, moveToStage]
+    [categoriesById, onOpenTask, toggleDone, draggingTask,
+     handleCrossStageDragStart, handleCrossStageDragMove, handleCrossStageDragEnd]
   );
 
   // ─── Stage section header ────────────────────────────────────────────────────
 
-  const StageHeader = ({ stage, label }: { stage: Stage; label: string }) => {
+  const StageHeader = ({
+    stage,
+    label,
+    isDropTarget,
+  }: {
+    stage: Stage;
+    label: string;
+    isDropTarget?: boolean;
+  }) => {
     const stageColor = t.stage[stage];
     return (
       <View style={[styles.stageHeader, { backgroundColor: t.bg }]}>
-        <View style={[styles.stageHeaderInner, { borderLeftColor: stageColor }]}>
+        <View style={[
+          styles.stageHeaderInner,
+          { borderLeftColor: stageColor },
+          isDropTarget && { borderLeftWidth: 4 },
+        ]}>
           <View style={styles.stageTitleRow}>
             <Text style={[styles.stageTitle, { color: stageColor }]}>{label}</Text>
             <View style={[styles.stageCountBadge, { backgroundColor: stageColor + '22' }]}>
@@ -258,6 +343,11 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             <Text style={{ color: stageColor, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
+        {isDropTarget && (
+          <View style={[styles.dropZone, { borderColor: stageColor }]}>
+            <Text style={[styles.dropZoneText, { color: stageColor }]}>✦ drop here</Text>
+          </View>
+        )}
       </View>
     );
   };
@@ -382,46 +472,89 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
         </View>
       </View>
 
-      {/* ── Kanban: three NestableDraggableFlatLists in NestableScrollContainer ── */}
-      <NestableScrollContainer
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={t.textMuted}
-          />
-        }
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.xs,
-          paddingBottom: spacing.xxl * 2,
+      {/* ── Kanban ─────────────────────────────────────────────────────────── */}
+      <View
+        ref={kanbanRef}
+        style={{ flex: 1 }}
+        onLayout={() => {
+          kanbanRef.current?.measure((_x, _y, _w, _h, _px, py) => {
+            containerTopValue.setValue(py);
+          });
         }}
-        showsVerticalScrollIndicator={false}
       >
-        {!loading && tasks.length === 0 && (
-          <Text style={[styles.empty, { color: t.textMuted }]}>
-            No tasks yet. Tap + to add one.
-          </Text>
-        )}
-
-        {STAGES.map((s) => (
-          <View key={s.key}>
-            <StageHeader stage={s.key} label={s.label} />
-            <NestableDraggableFlatList
-              key={`${s.key}-${stageData[s.key].length}`}
-              data={stageData[s.key]}
-              extraData={stageData[s.key]}
-              keyExtractor={keyExtractor}
-              renderItem={renderDraggableItem(s.key)}
-              onDragEnd={({ data }) => handleDragEnd(s.key, data)}
-              activationDistance={20}
+        <NestableScrollContainer
+          scrollEnabled={!draggingTask}
+          onScroll={(e) => { scrollOffsetRef.current = e.nativeEvent.contentOffset.y; }}
+          scrollEventThrottle={16}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+              tintColor={t.textMuted}
             />
-          </View>
-        ))}
-      </NestableScrollContainer>
+          }
+          contentContainerStyle={{
+            paddingHorizontal: spacing.lg,
+            paddingTop: spacing.xs,
+            paddingBottom: spacing.xxl * 2,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {!loading && tasks.length === 0 && (
+            <Text style={[styles.empty, { color: t.textMuted }]}>
+              No tasks yet. Tap + to add one.
+            </Text>
+          )}
+
+          {STAGES.map((s) => {
+            const isDropTarget =
+              !!draggingTask &&
+              targetStage === s.key &&
+              targetStage !== draggingTask.stage;
+            return (
+              <View
+                key={s.key}
+                testID={`stage-container-${s.key}`}
+                onLayout={(e: LayoutChangeEvent) => {
+                  const { y, height } = e.nativeEvent.layout;
+                  stageBoundsRef.current.set(s.key, { top: y, bottom: y + height });
+                }}
+              >
+                <StageHeader stage={s.key} label={s.label} isDropTarget={isDropTarget} />
+                <NestableDraggableFlatList
+                  key={`${s.key}-${stageData[s.key].length}`}
+                  data={stageData[s.key]}
+                  extraData={stageData[s.key]}
+                  keyExtractor={keyExtractor}
+                  renderItem={renderDraggableItem(s.key)}
+                  onDragEnd={({ data }) => handleDragEnd(s.key, data)}
+                  activationDistance={20}
+                />
+              </View>
+            );
+          })}
+        </NestableScrollContainer>
+
+        {/* Ghost card — follows finger during cross-stage drag */}
+        {draggingTask && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ghost,
+              { top: Animated.subtract(ghostYValue, containerTopValue) as any },
+            ]}
+          >
+            <View style={[styles.ghostCard, { backgroundColor: t.surface, borderColor: t.accent }]}>
+              <Text style={[styles.ghostText, { color: t.text }]} numberOfLines={1}>
+                {draggingTask.text}
+              </Text>
+            </View>
+          </Animated.View>
+        )}
+      </View>
     </Screen>
   );
 }
@@ -519,6 +652,43 @@ const styles = StyleSheet.create({
     fontWeight: font.weight.semibold,
   },
   dragging: { opacity: 0.9 },
+  draggingSource: { opacity: 0.3 },
+  dropZone: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: 6,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  dropZoneText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+  },
+  ghost: {
+    position: 'absolute',
+    left: spacing.lg,
+    right: spacing.lg,
+    zIndex: 999,
+  },
+  ghostCard: {
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    opacity: 0.92,
+  },
+  ghostText: {
+    fontSize: font.size.md,
+    fontWeight: font.weight.medium,
+  },
   empty: {
     textAlign: 'center',
     paddingTop: spacing.xxl,
