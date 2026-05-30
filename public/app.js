@@ -352,6 +352,7 @@
       ${row('Appearance', 'toggleTheme')}
       ${row('Notifications', 'openDigestPicker')}
       ${row('Boards', 'gotoTab', '["board"]')}
+      ${row('Search', 'openSearch')}
       <a class="tk-set-row" href="/api/export"><span>Export data</span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
       ${row('About &amp; help', 'openHelpModal')}
