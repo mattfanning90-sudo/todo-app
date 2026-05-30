@@ -177,7 +177,15 @@ export function TodayScreen({ navigation }: Props) {
                 <Text style={s.eyebrow}>{dateLabel}</Text>
                 <Text style={s.h1}>Today</Text>
               </View>
-              <ProgressRing pct={pct} size={80} stroke={6} color={t.tk.accent} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <Pressable onPress={() => navigation.navigate('Search')} testID="search-btn" hitSlop={8}>
+                  <Text style={{ fontSize: 20, color: t.tk.muted }}>⌕</Text>
+                </Pressable>
+                <Pressable onPress={() => navigation.navigate('Notifications')} testID="bell-btn" hitSlop={8}>
+                  <Text style={{ fontSize: 20, color: t.tk.muted }}>🔔</Text>
+                </Pressable>
+                <ProgressRing pct={pct} size={80} stroke={6} color={t.tk.accent} />
+              </View>
             </View>
             <View style={s.chipRow}>
               <FilterChip mode="all" label="All" />
