@@ -9,7 +9,10 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.todoapp.ios"
+      "bundleIdentifier": "com.matthewfanning.todo",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.todoapp.android",
@@ -17,9 +20,15 @@
         "backgroundColor": "#0B0B0F"
       }
     },
-    "plugins": ["expo-secure-store"],
+    "plugins": [
+      "expo-secure-store"
+    ],
     "extra": {
-      "apiBase": null
-    }
+      "apiBase": "https://todo-app-production-a338.up.railway.app",
+      "eas": {
+        "projectId": "8cc288c3-7847-47a2-a1fe-55059996080b"
+      }
+    },
+    "owner": "mfanning90"
   }
 }
