@@ -315,7 +315,50 @@
     renderToday();
   }
 
-  function renderProfile() {} // stub — replaced in a later task
+  async function renderProfile() {
+  const el = document.getElementById('screen-profile');
+  if (!el) return;
+  let d = {};
+  try {
+    const res = await fetch('/api/dashboard', { headers: { 'X-Requested-With': 'fetch' } });
+    d = res.ok ? await res.json() : {};
+  } catch { d = {}; }
+  const s = d.stats || {};
+  const counts = d.counts || {};
+  const stat = (val, label) =>
+    `<div class="tk-stat tk-card"><div class="tk-stat-val">${val ?? 0}</div>
+       <div class="tk-stat-label">${label}</div></div>`;
+  const initial = (myName || '?')[0].toUpperCase();
+  const row = (label, action, args) =>
+    `<button class="tk-set-row" data-action="${action}" ${args ? `data-args='${args}'` : ''}>
+       <span>${label}</span>
+       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+     </button>`;
+
+  el.innerHTML = `
+    <h1 class="tk-h1" style="margin-bottom:24px">Profile</h1>
+    <div class="tk-profile-card tk-card">
+      <span class="user-avatar large">${initial}</span>
+      <div><div class="tk-profile-name">${escapeHtml(myName || '')}</div></div>
+    </div>
+    <div class="tk-stat-grid">
+      ${stat(s.done_total, 'Done')}
+      ${stat(s.completed_week, 'This week')}
+      ${stat(counts.open, 'Open')}
+      ${stat(counts.overdue, 'Overdue')}
+    </div>
+    <div class="tk-settings tk-card">
+      <p class="tk-settings-head">Settings</p>
+      ${row('Appearance', 'toggleTheme')}
+      ${row('Notifications', 'openDigestPicker')}
+      ${row('Boards', 'gotoTab', '["board"]')}
+      <a class="tk-set-row" href="/api/export"><span>Export data</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+      ${row('About &amp; help', 'openHelpModal')}
+      <a class="tk-set-row danger" href="/auth/logout"><span>Sign out</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
+    </div>`;
+}
   function showTab(tab) {
     currentTab = tab;
     ['today', 'board', 'profile'].forEach(t => {
@@ -1983,6 +2026,13 @@
   async function saveDigestFrequency(value) {
     await apiFetch('PUT', '/api/user/digest', { frequency: value });
   }
+  function openDigestPicker() {
+    const choice = prompt('Email digest: none / daily / weekly / fortnightly');
+    if (!choice) return;
+    const v = choice.trim().toLowerCase();
+    if (!['none', 'daily', 'weekly', 'fortnightly'].includes(v)) { alert('Invalid option'); return; }
+    saveDigestFrequency(v);
+  }
 
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });
   document.getElementById('task-input').addEventListener('keydown', e => { if (e.key === 'Enter') addTask(); });
@@ -2061,7 +2111,7 @@
     toggleTheme, toggleNotifications, toggleAccountMenu, closeAccountMenu,
     openSearch, openHelpModal, closeHelpModal,
     clearTodayFilter, setFilter, filterToday, viewDashboard, viewArchived,
-    toggleNewCatForm, saveNewCategory, saveDigestFrequency, addTask, toggleImport,
+    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, toggleImport,
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
