@@ -7,6 +7,10 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
+    "runtimeVersion": { "policy": "appVersion" },
+    "updates": {
+      "url": "https://u.expo.dev/8cc288c3-7847-47a2-a1fe-55059996080b"
+    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.matthewfanning.todo",
