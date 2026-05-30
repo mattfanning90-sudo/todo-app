@@ -796,6 +796,30 @@ app.get('/api/tasks/count', requireAuth, wrap(async (req, res) => {
   res.json({ count: rows[0].count });
 }));
 
+app.get('/api/tasks/today', requireAuth, wrap(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const { rows } = await pool.query(
+    `SELECT DISTINCT t.id, t.text, t.stage, t.due_date, t.priority, t.status,
+            t.board_id, b.name AS board_name,
+            c.name AS cat_name, c.color AS cat_color, t.completed_at
+       FROM tasks t
+       JOIN boards b ON b.id = t.board_id
+       LEFT JOIN board_members bm ON bm.board_id = t.board_id AND bm.member_user_id = $1
+       LEFT JOIN categories c ON c.id = t.category_id
+      WHERE (b.owner_user_id = $1 OR bm.member_user_id IS NOT NULL)
+        AND (t.archived IS NULL OR t.archived = false)
+        AND (
+              t.due_date = $2
+           -- due_date is TEXT (default ''); '' sorts before every YYYY-MM-DD, so the
+           -- <> '' guard is load-bearing — without it, dateless tasks look "overdue".
+           OR (t.due_date <> '' AND t.due_date < $2 AND t.stage <> 'done')
+        )
+      ORDER BY t.due_date ASC`,
+    [req.user.id, today]
+  );
+  res.json(rows);
+}));
+
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
   const { boardId, ownerId } = await getBoardContext(req);
   const { text: rawText, status = '', owners = [], cal_start = '', cal_end = '',
