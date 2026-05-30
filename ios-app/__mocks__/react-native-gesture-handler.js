@@ -1,6 +1,8 @@
 const React = require('react');
 const { View, Pressable } = require('react-native');
 
+const MOCK_ABSOLUTE_Y = 100;
+
 const State = {
   UNDETERMINED: 0,
   FAILED: 1,
@@ -16,7 +18,7 @@ function LongPressGestureHandler({ children, onHandlerStateChange }) {
   return React.cloneElement(React.Children.only(children), {
     onLongPress: () =>
       onHandlerStateChange?.({
-        nativeEvent: { state: State.ACTIVE, absoluteY: 100 },
+        nativeEvent: { state: State.ACTIVE, absoluteY: MOCK_ABSOLUTE_Y },
       }),
   });
 }

@@ -1,10 +1,11 @@
 import React, { useRef } from 'react';
-import { Animated, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   LongPressGestureHandler,
   PanGestureHandler,
   State,
 } from 'react-native-gesture-handler';
+import type { LongPressGestureHandler as LPGestureHandler, PanGestureHandler as PanGH } from 'react-native-gesture-handler';
 
 interface Props {
   onDragStart: (absoluteY: number) => void;
@@ -13,8 +14,8 @@ interface Props {
 }
 
 export function DragHandle({ onDragStart, onDragMove, onDragEnd }: Props) {
-  const panRef = useRef(null);
-  const longPressRef = useRef(null);
+  const panRef = useRef<PanGH>(null);
+  const longPressRef = useRef<LPGestureHandler>(null);
 
   return (
     // Pressable absorbs taps on the handle so they don't bubble to the card's onPress
@@ -30,7 +31,7 @@ export function DragHandle({ onDragStart, onDragMove, onDragEnd }: Props) {
         }}
       >
         {/* testID here so the RNGH mock can inject onLongPress onto this view */}
-        <Animated.View testID="drag-handle-lp-wrapper">
+        <View testID="drag-handle-lp-wrapper">
           <PanGestureHandler
             ref={panRef}
             simultaneousHandlers={[longPressRef]}
@@ -52,7 +53,7 @@ export function DragHandle({ onDragStart, onDragMove, onDragEnd }: Props) {
               <Text style={styles.icon}>⠿</Text>
             </Animated.View>
           </PanGestureHandler>
-        </Animated.View>
+        </View>
       </LongPressGestureHandler>
     </Pressable>
   );
