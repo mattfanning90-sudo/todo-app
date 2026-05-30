@@ -314,10 +314,15 @@ function requireAuth(req, res, next) {
 // session cookie in X-Session-Cookie so the mobile client can capture it and
 // replay it on every subsequent request.
 function setMobileSessionHeader(req, res) {
-  if (!req.sessionID) return;
+  if (!req.sessionID) return null;
   const secret = process.env.SESSION_SECRET || 'dev-secret-change-me';
   const sig = cookieSignature.sign(req.sessionID, secret);
-  res.setHeader('X-Session-Cookie', 'connect.sid=' + encodeURIComponent('s:' + sig));
+  const cookie = 'connect.sid=' + encodeURIComponent('s:' + sig);
+  // Echo in a header AND return it so auth responses can also carry it in the
+  // JSON body — iOS native networking can swallow the header in standalone
+  // builds, so the body is the reliable capture path. See ios-app client.ts.
+  res.setHeader('X-Session-Cookie', cookie);
+  return cookie;
 }
 
 /* ── Auth routes ── */
@@ -408,10 +413,11 @@ app.post('/auth/google/mobile', authLimiter, wrap(async (req, res) => {
     req.login(user, loginErr => {
       if (loginErr) return res.status(500).json({ error: 'Login error' });
       req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
-      setMobileSessionHeader(req, res);
+      const mobileSession = setMobileSessionHeader(req, res);
       res.json({
         id: user.id, email: user.email, name: user.name,
         username: user.username, digest_frequency: user.digest_frequency,
+        mobileSession,
       });
     });
   });
@@ -484,10 +490,11 @@ app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
     req.login(newUser, err => {
       if (err) return fail('server', 'Login error', 500);
       if (json) {
-        setMobileSessionHeader(req, res);
+        const mobileSession = setMobileSessionHeader(req, res);
         return res.json({
           id: newUser.id, email: newUser.email, name: newUser.name,
           username: newUser.username, digest_frequency: newUser.digest_frequency,
+          mobileSession,
         });
       }
       res.redirect('/');
@@ -509,10 +516,11 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
         if (loginErr) return next(loginErr);
         if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
         if (json) {
-          setMobileSessionHeader(req, res);
+          const mobileSession = setMobileSessionHeader(req, res);
           return res.json({
             id: user.id, email: user.email, name: user.name,
             username: user.username, digest_frequency: user.digest_frequency,
+            mobileSession,
           });
         }
         res.redirect('/');
