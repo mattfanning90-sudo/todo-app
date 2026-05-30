@@ -1,8 +1,8 @@
 // ios-app/__tests__/utils/resolveStageFromBounds.test.ts
-import { resolveStageFromBounds } from '../../src/utils/resolveStageFromBounds';
+import { resolveStageFromBounds, type StageBounds } from '../../src/utils/resolveStageFromBounds';
 import type { Stage } from '../../src/api/types';
 
-const bounds = new Map<Stage, { top: number; bottom: number }>([
+const bounds = new Map<Stage, StageBounds>([
   ['backlog',     { top: 0,   bottom: 300 }],
   ['in_progress', { top: 300, bottom: 600 }],
   ['done',        { top: 600, bottom: 900 }],
@@ -32,6 +32,6 @@ test('boundary: Y equal to top is inside the stage', () => {
   expect(resolveStageFromBounds(300, bounds)).toBe('in_progress');
 });
 
-test('boundary: Y equal to bottom is outside the stage (exclusive)', () => {
+test('boundary: Y equal to stage bottom resolves to the next stage, not the current one', () => {
   expect(resolveStageFromBounds(600, bounds)).toBe('done');
 });
