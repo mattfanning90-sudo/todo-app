@@ -12,9 +12,6 @@
   let activeFilter = null;
   let todayFilter = false;
   let selectedColor = COLOR_PALETTE[0];
-  let dragSrc = null;
-  let dragSrcStage = null;
-  let touchDragInProgress = false;
   let myId = null;
   let myName = '';
   let boardMembers = [];
@@ -592,7 +589,7 @@
       }
       writeBootCache({ userId: user.id, boardKey, categories: cats, tasks });
 
-      setupColumnDrop();
+      initSortable();
       loadArchivedCount();
 
       const digestSel = document.getElementById('digest-frequency');
@@ -919,7 +916,6 @@
 
     const card = document.createElement('li');
     card.className = 'task-card';
-    card.draggable = true;
     card.dataset.taskId = task.id;
     card.dataset.stage = stage;
     card.dataset.categoryId = task.category_id || '';
@@ -1284,7 +1280,6 @@
     });
 
     card.querySelector('.task-item').addEventListener('click', () => {
-      if (touchDragInProgress) return;
       const open = panel.classList.toggle('open');
       if (open) textarea.focus();
     });
@@ -1338,48 +1333,7 @@
       window.open(url, '_blank');
     });
 
-    card.addEventListener('dragstart', e => {
-      dragSrc = card; dragSrcStage = card.dataset.stage;
-      card.classList.add('dragging');
-      e.dataTransfer.effectAllowed = 'move';
-    });
-    card.addEventListener('dragover', e => {
-      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-      if (card !== dragSrc) card.classList.add('drag-over');
-    });
-    card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
-    card.addEventListener('drop', e => {
-      e.stopPropagation();
-      if (card === dragSrc) return;
-      card.classList.remove('drag-over');
-      const targetList = card.closest('.task-list');
-      const items = [...targetList.children];
-      const insertBefore = items.indexOf(dragSrc) < items.indexOf(card) ? card.nextSibling : card;
-      applyDrop(targetList, insertBefore);
-    });
-    card.addEventListener('dragend', () => {
-      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('dragging', 'drag-over'));
-      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-      dragSrc = null; dragSrcStage = null;
-    });
-
-    setupTouchDrag(card);
     list.appendChild(card);
-  }
-
-  function applyDrop(targetList, insertBeforeCard) {
-    if (!dragSrc) return;
-    const targetStage = targetList.closest('.column').dataset.stage;
-    if (insertBeforeCard) targetList.insertBefore(dragSrc, insertBeforeCard);
-    else targetList.appendChild(dragSrc);
-    if (dragSrcStage !== targetStage) {
-      dragSrc.dataset.stage = targetStage;
-      apiPut(`/api/tasks/${dragSrc.dataset.taskId}`, { ...getCardPayload(dragSrc), stage: targetStage });
-      rebuildStageButtons(dragSrc, Number(dragSrc.dataset.taskId), targetStage);
-      if (targetStage === 'done' && dragSrc.dataset.recurrence) spawnRecurringTask(dragSrc);
-      saveOrder(dragSrcStage, targetStage);
-    } else { saveOrder(targetStage); }
-    updateCounts();
   }
 
   function moveToStage(card, taskId, newStage) {
@@ -1390,7 +1344,48 @@
     rebuildStageButtons(card, taskId, newStage);
     if (newStage === 'done' && card.dataset.recurrence) spawnRecurringTask(card);
     updateCounts();
+    announce(`${(card.querySelector('.task-text')?.textContent || 'Task')} moved to ${STAGE_LABELS[newStage]} from ${STAGE_LABELS[oldStage]}`);
     saveOrder(oldStage, newStage);
+  }
+
+  function announce(msg) {
+    const el = document.getElementById('a11y-live');
+    if (el) el.textContent = msg;
+  }
+
+  let sortables = [];
+  function initSortable() {
+    sortables.forEach(s => s.destroy());
+    sortables = STAGES.map(stage => {
+      const list = getList(stage);
+      return Sortable.create(list, {
+        group: 'kanban',
+        animation: 150,
+        filter: '.stage-btn, .icon-btn, button, input, select, textarea, .status-panel, a',
+        preventOnFilter: false,
+        forceFallback: true,
+        fallbackOnBody: true,
+        onEnd: handleSortEnd,
+      });
+    });
+  }
+
+  function handleSortEnd(evt) {
+    const card = evt.item;
+    const taskId = Number(card.dataset.taskId);
+    const fromStage = evt.from.closest('.column').dataset.stage;
+    const toStage = evt.to.closest('.column').dataset.stage;
+    if (toStage !== card.dataset.stage) {
+      card.dataset.stage = toStage;
+      apiPut(`/api/tasks/${taskId}`, { ...getCardPayload(card), stage: toStage });
+      rebuildStageButtons(card, taskId, toStage);
+      if (toStage === 'done' && card.dataset.recurrence) spawnRecurringTask(card);
+      announce(`${(card.querySelector('.task-text')?.textContent || 'Task')} moved to ${STAGE_LABELS[toStage]} from ${STAGE_LABELS[fromStage]}`);
+      saveOrder(fromStage, toStage);
+    } else {
+      saveOrder(toStage);
+    }
+    updateCounts();
   }
 
   function rebuildStageButtons(card, taskId, stage) {
@@ -1403,14 +1398,6 @@
       ${nextStage ? `<button class="stage-btn forward" data-target="${nextStage}">${STAGE_LABELS[nextStage]} →</button>` : ''}`;
     stageBtns.querySelectorAll('.stage-btn').forEach(btn => {
       btn.addEventListener('click', e => { e.stopPropagation(); moveToStage(card, taskId, btn.dataset.target); });
-    });
-  }
-
-  function setupColumnDrop() {
-    document.querySelectorAll('.task-list').forEach(listEl => {
-      listEl.addEventListener('dragover', e => { e.preventDefault(); listEl.classList.add('drag-over-col'); });
-      listEl.addEventListener('dragleave', () => listEl.classList.remove('drag-over-col'));
-      listEl.addEventListener('drop', e => { e.stopPropagation(); listEl.classList.remove('drag-over-col'); applyDrop(listEl, null); });
     });
   }
 
@@ -1573,141 +1560,6 @@
       return now.toISOString().split('T')[0];
     }
     return base.toISOString().split('T')[0];
-  }
-
-  function setupTouchDrag(card) {
-    let startTouch, dragActive = false, ghost = null;
-    let ghostOffsetX = 0, ghostOffsetY = 0;
-    let longPressTimer = null, rafId = null;
-    let lastX = 0, lastY = 0;
-    let autoScrollTimer = null;
-
-    function activateDrag(touch) {
-      dragActive = true;
-      touchDragInProgress = true;
-      dragSrc = card;
-      dragSrcStage = card.dataset.stage;
-      if (navigator.vibrate) navigator.vibrate(40);
-
-      const rect = card.getBoundingClientRect();
-      ghostOffsetX = touch.clientX - rect.left;
-      ghostOffsetY = touch.clientY - rect.top;
-
-      ghost = card.cloneNode(true);
-      const ghostPanel = ghost.querySelector('.status-panel');
-      if (ghostPanel) ghostPanel.remove();
-      Object.assign(ghost.style, {
-        position: 'fixed',
-        left: rect.left + 'px',
-        top: rect.top + 'px',
-        width: rect.width + 'px',
-        pointerEvents: 'none',
-        zIndex: '9999',
-        opacity: '0.96',
-        transform: 'scale(1.04) rotate(1.5deg)',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.28)',
-        transition: 'transform 0.15s, box-shadow 0.15s',
-        willChange: 'left, top',
-        borderColor: 'var(--primary)',
-      });
-      document.body.appendChild(ghost);
-
-      card.style.cssText += ';opacity:0.25;transform:scale(0.97);transition:opacity 0.2s,transform 0.2s;';
-    }
-
-    function moveGhost(clientX, clientY) {
-      if (!ghost) return;
-      ghost.style.left = (clientX - ghostOffsetX) + 'px';
-      ghost.style.top  = (clientY - ghostOffsetY) + 'px';
-    }
-
-    function getDropTargets(clientX, clientY) {
-      ghost.style.visibility = 'hidden';
-      const el = document.elementFromPoint(clientX, clientY);
-      ghost.style.visibility = '';
-      return {
-        overCard: el?.closest('.task-card'),
-        overList: el?.closest('.task-list'),
-      };
-    }
-
-    function updateHighlight(clientX, clientY) {
-      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
-      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-      const { overCard, overList } = getDropTargets(clientX, clientY);
-      if (overCard && overCard !== card) overCard.classList.add('drag-over');
-      else if (overList) overList.classList.add('drag-over-col');
-    }
-
-    function tickAutoScroll(clientY) {
-      if (autoScrollTimer) clearInterval(autoScrollTimer);
-      autoScrollTimer = setInterval(() => {
-        const zone = 90, speed = 8, h = window.innerHeight;
-        if (clientY < zone) window.scrollBy(0, -speed);
-        else if (clientY > h - zone) window.scrollBy(0, speed);
-        else { clearInterval(autoScrollTimer); autoScrollTimer = null; }
-      }, 16);
-    }
-
-    function endDrag(clientX, clientY) {
-      clearTimeout(longPressTimer);
-      if (rafId) cancelAnimationFrame(rafId);
-      if (autoScrollTimer) { clearInterval(autoScrollTimer); autoScrollTimer = null; }
-      if (!dragActive) return;
-
-      const { overCard, overList } = getDropTargets(clientX, clientY);
-
-      ghost.remove(); ghost = null;
-      card.style.cssText = card.style.cssText.replace(/opacity:[^;]+;?/g, '').replace(/transform:[^;]+;?/g, '').replace(/transition:[^;]+;?/g, '');
-
-      document.querySelectorAll('.task-card').forEach(c => c.classList.remove('drag-over'));
-      document.querySelectorAll('.task-list').forEach(l => l.classList.remove('drag-over-col'));
-
-      if (overCard && overCard !== card) {
-        const list = overCard.closest('.task-list');
-        const items = [...list.querySelectorAll('.task-card')];
-        const before = items.indexOf(card) < items.indexOf(overCard) ? overCard.nextSibling : overCard;
-        applyDrop(list, before);
-      } else if (overList) {
-        applyDrop(overList, null);
-      }
-
-      dragActive = false; dragSrc = null; dragSrcStage = null;
-      setTimeout(() => { touchDragInProgress = false; }, 60);
-    }
-
-    card.addEventListener('touchstart', e => {
-      if (e.touches.length > 1) return;
-      startTouch = e.touches[0];
-      longPressTimer = setTimeout(() => activateDrag(startTouch), 320);
-    }, { passive: true });
-
-    card.addEventListener('touchmove', e => {
-      const t = e.touches[0];
-      lastX = t.clientX; lastY = t.clientY;
-
-      if (!dragActive) {
-        const dx = Math.abs(t.clientX - startTouch.clientX);
-        const dy = Math.abs(t.clientY - startTouch.clientY);
-        if (dx > 6 || dy > 6) { clearTimeout(longPressTimer); }
-        return;
-      }
-
-      e.preventDefault();
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        moveGhost(lastX, lastY);
-        updateHighlight(lastX, lastY);
-        tickAutoScroll(lastY);
-      });
-    }, { passive: false });
-
-    card.addEventListener('touchend', e => {
-      const t = e.changedTouches[0];
-      endDrag(t.clientX, t.clientY);
-    });
-
-    card.addEventListener('touchcancel', () => endDrag(lastX, lastY));
   }
 
   function spawnRecurringTask(card) {
