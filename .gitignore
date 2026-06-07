@@ -2,3 +2,5 @@
 node_modules/
 todos.db
 sessions.db
+.superpowers/
+.claude/
