@@ -1053,14 +1053,17 @@
   background:none; cursor:pointer; font:inherit; font-size:14px; color:var(--tk-text); border-radius:8px; }
 .tk-overflow-item.danger { color:#DC2626; }
 
-/* Continuous flow: stack the existing columns vertically */
+/* Board: 3 columns on desktop/iPad, vertical stack on phone */
 #screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
-#screen-board .board { display:flex; flex-direction:column; gap:0; }
-#screen-board .column { width:auto; max-width:none; min-width:0; background:transparent; border:none; padding:0; }
-#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:24px 0 12px; }
-#screen-board .column-header::after { content:""; flex:1; height:1px; background:var(--tk-line); }
+#screen-board .board { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; align-items:start; min-width:0; height:auto; }
+#screen-board .column { background:rgba(30,30,46,.025); border:1px solid rgba(30,30,46,.06); border-radius:16px; padding:14px 12px; width:auto; max-width:none; min-width:0; }
+#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:2px 4px 12px; }
+#screen-board .column-header::after { content:none; }
 #screen-board .column-title { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
-#screen-board .task-list { display:flex; flex-direction:column; gap:8px; }
+#screen-board .task-list { display:flex; flex-direction:column; gap:10px; min-height:24px; }
+@media (max-width: 760px) {
+  #screen-board .board { grid-template-columns:1fr; gap:14px; }
+}
 
 /* Card restyle to Taskly (shell only — internal card DOM unchanged) */
 #screen-board .task-card { background:var(--tk-card); border:1px solid var(--tk-line); border-radius:14px;
