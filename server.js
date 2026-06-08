@@ -195,6 +195,18 @@ async function getBoardContext(req) {
   throw Object.assign(new Error('Access denied'), { status: 403 });
 }
 
+// Reject a category_id that doesn't belong to the task's board. A null/absent
+// category clears the field and is always allowed. Without this, a client could
+// reference a category from another board (cross-board leak / orphan FK), and a
+// non-existent id would surface as a 500 from the FK violation instead of a 400.
+async function assertCategoryOnBoard(categoryId, boardId) {
+  if (categoryId == null) return;
+  const { rows } = await pool.query(
+    'SELECT 1 FROM categories WHERE id = $1 AND board_id = $2', [categoryId, boardId]
+  );
+  if (!rows[0]) throw Object.assign(new Error('Invalid category for this board'), { status: 400 });
+}
+
 /* ── User seeding ── */
 const DEFAULT_CATEGORIES = [
   { name: 'Household', color: '#34A853' }, { name: 'Financial', color: '#FBBC05' },
@@ -542,12 +554,12 @@ app.put('/api/user/digest', requireAuth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.get('/api/check-username', usernameLimiter, async (req, res) => {
+app.get('/api/check-username', usernameLimiter, wrap(async (req, res) => {
   const { username } = req.query;
   if (!username || !/^[a-zA-Z0-9_]{3,30}$/.test(username)) return res.json({ available: false });
   const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(username) = LOWER($1)', [username]);
   res.json({ available: !rows.length });
-});
+}));
 
 /* ── Boards CRUD ── */
 app.use('/api/', apiLimiter);
@@ -681,8 +693,8 @@ app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
   const emailSent = await sendEmail({
     to: email, subject: `${inviterName} invited you to their Tasks board`,
     html: `<div style="font-family:Inter,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;background:#F8FAFC;border-radius:12px;border:1px solid #E2E8F0;">
-      <h2 style="color:#0F172A;margin:0 0 8px;">${inviterName} invited you to Tasks</h2>
-      <p style="color:#64748B;margin:0 0 24px;">You've been invited to collaborate on the <strong>${boardName}</strong> board.</p>
+      <h2 style="color:#0F172A;margin:0 0 8px;">${escapeHtml(inviterName)} invited you to Tasks</h2>
+      <p style="color:#64748B;margin:0 0 24px;">You've been invited to collaborate on the <strong>${escapeHtml(boardName)}</strong> board.</p>
       <a href="${inviteLink}" style="background:#3B82F6;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Accept &amp; Create Account →</a>
       <p style="color:#94A3B8;font-size:0.75rem;margin-top:20px;">Or copy: <a href="${inviteLink}" style="color:#3B82F6;">${inviteLink}</a></p>
     </div>`
@@ -711,7 +723,7 @@ app.delete('/api/boards/invites/:id', requireAuth, wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-app.get('/api/invite/:token', async (req, res) => {
+app.get('/api/invite/:token', wrap(async (req, res) => {
   const { rows } = await pool.query(
     `SELECT i.invitee_email, b.name as board_name, u.name as inviter_name, u.username as inviter_username, u.email as inviter_email
      FROM invites i JOIN users u ON u.id = i.inviter_user_id LEFT JOIN boards b ON b.id = i.board_id
@@ -721,7 +733,7 @@ app.get('/api/invite/:token', async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'Invalid or expired invite link' });
   const r = rows[0];
   res.json({ email: r.invitee_email, inviterName: r.inviter_name || r.inviter_username || r.inviter_email, boardName: r.board_name });
-});
+}));
 
 /* ── Notifications ── */
 app.get('/api/notifications', requireAuth, wrap(async (req, res) => {
@@ -827,6 +839,7 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
     priority = 'none', recurrence = '', subtasks = [], assigned_to_user_id = null } = req.body;
   if (!rawText) return res.status(400).json({ error: 'Text required' });
   if (rawText.length > 2000) return res.status(400).json({ error: 'Text too long' });
+  await assertCategoryOnBoard(category_id, boardId);
 
   let due_date = explicitDue, text = rawText;
   if (!explicitDue) {
@@ -870,6 +883,10 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   const task = rows[0];
+
+  if (Object.prototype.hasOwnProperty.call(req.body, 'category_id')) {
+    await assertCategoryOnBoard(req.body.category_id, boardId);
+  }
 
   // Partial-update semantics: only fields present in the request body are
   // written. Previously the destructure-with-defaults pattern overwrote any
