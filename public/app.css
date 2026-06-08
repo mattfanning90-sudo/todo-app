@@ -1053,14 +1053,17 @@
   background:none; cursor:pointer; font:inherit; font-size:14px; color:var(--tk-text); border-radius:8px; }
 .tk-overflow-item.danger { color:#DC2626; }
 
-/* Continuous flow: stack the existing columns vertically */
+/* Board: 3 columns on desktop/iPad, vertical stack on phone */
 #screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
-#screen-board .board { display:flex; flex-direction:column; gap:0; }
-#screen-board .column { width:auto; max-width:none; min-width:0; background:transparent; border:none; padding:0; }
-#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:24px 0 12px; }
-#screen-board .column-header::after { content:""; flex:1; height:1px; background:var(--tk-line); }
+#screen-board .board { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; align-items:start; min-width:0; height:auto; }
+#screen-board .column { background:rgba(30,30,46,.025); border:1px solid rgba(30,30,46,.06); border-radius:16px; padding:14px 12px; width:auto; max-width:none; min-width:0; }
+#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:2px 4px 12px; }
+#screen-board .column-header::after { content:none; }
 #screen-board .column-title { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
-#screen-board .task-list { display:flex; flex-direction:column; gap:8px; }
+#screen-board .task-list { display:flex; flex-direction:column; gap:10px; min-height:24px; }
+@media (max-width: 760px) {
+  #screen-board .board { grid-template-columns:1fr; gap:14px; }
+}
 
 /* Card restyle to Taskly (shell only — internal card DOM unchanged) */
 #screen-board .task-card { background:var(--tk-card); border:1px solid var(--tk-line); border-radius:14px;
@@ -1093,3 +1096,17 @@
 /* board switcher now sits in the board header */
 .tk-board-switch .board-switch-btn { font-size:12px; font-weight:600; letter-spacing:.06em;
   text-transform:uppercase; color:var(--tk-muted); padding:0; background:none; border:none; }
+
+/* Board card — Taskly polish */
+#screen-board .task-card { padding:12px 14px 11px; cursor:grab; }
+#screen-board .task-card .task-text { font-size:13.5px; font-weight:500; color:var(--tk-text); line-height:1.4; }
+#screen-board .task-card .task-badges { display:flex; align-items:center; gap:7px; margin-top:9px; flex-wrap:wrap; }
+#screen-board .task-card .due-badge { font-size:11px; color:var(--tk-muted); background:none; padding:0; }
+#screen-board .task-card .due-badge.overdue { color:#DC2626; font-weight:600; }
+#screen-board .task-card .subtask-count,
+#screen-board .task-card .assignee-badge { font-size:11px; color:var(--tk-muted); }
+#screen-board .task-card .task-age { display:none; }
+#screen-board .task-card .stage-btns { display:flex; justify-content:flex-end; gap:6px; margin-top:10px; }
+#screen-board .task-card .stage-btn { padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; border:1px solid var(--tk-line); background:rgba(30,30,46,.04); color:var(--tk-muted); cursor:pointer; }
+#screen-board .task-card .stage-btn.forward { border:none; background:rgba(255,107,71,.10); color:var(--tk-accent); }
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
