@@ -1363,6 +1363,8 @@
       return Sortable.create(list, {
         group: 'kanban',
         animation: 150,
+        delay: 150,
+        delayOnTouchOnly: true,
         filter: '.stage-btn, .icon-btn, button, input, select, textarea, .status-panel, a',
         preventOnFilter: false,
         forceFallback: true,
