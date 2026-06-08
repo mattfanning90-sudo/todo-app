@@ -962,7 +962,12 @@
       </div>
       <div class="status-panel">
         <label>Due date</label>
-        <input type="date" class="due-date-input" value="${task.due_date || ''}" />
+        <button type="button" class="date-trigger ${task.due_date ? '' : 'empty'}" data-action="openDatePicker">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF6B47" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="date-trigger-label">${task.due_date ? formatTriggerDate(task.due_date) : 'Set due date…'}</span>
+          <span class="date-clear-x" data-action="clearDueDate"${task.due_date ? '' : ' hidden'}>×</span>
+        </button>
+        <input type="hidden" class="due-date-input" value="${task.due_date || ''}" />
 
         <label>Priority</label>
         <div class="priority-selector">
@@ -1463,6 +1468,89 @@
       style="transition:stroke-dashoffset .8s cubic-bezier(.4,0,.2,1)"/></svg>`;
   }
 
+  /* ── Calendar date picker (replaces the native yyyy-mm-dd input) ── */
+  let dpInput = null, dpTrigger = null, dpMonth = null;
+  function dpPad(n) { return String(n).padStart(2, '0'); }
+  function dpYmd(d) { return `${d.getFullYear()}-${dpPad(d.getMonth() + 1)}-${dpPad(d.getDate())}`; }
+  function dpParse(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
+  function formatTriggerDate(s) {
+    return dpParse(s).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  function openDatePicker(e) {
+    const trigger = (this && this.classList && this.classList.contains('date-trigger'))
+      ? this : (e && e.target.closest('.date-trigger'));
+    if (!trigger) return;
+    dpTrigger = trigger;
+    dpInput = trigger.closest('.task-card').querySelector('.due-date-input');
+    const cur = dpInput.value ? dpParse(dpInput.value) : new Date();
+    dpMonth = { y: cur.getFullYear(), m: cur.getMonth() };
+    renderCalendar();
+    const pop = document.getElementById('date-picker');
+    pop.style.display = 'block';
+    const r = trigger.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.top = Math.min(r.bottom + 6, window.innerHeight - 380) + 'px';
+    pop.style.left = Math.min(r.left, window.innerWidth - 316) + 'px';
+  }
+  function renderCalendar() {
+    const pop = document.getElementById('date-picker');
+    const { y, m } = dpMonth;
+    const today = dpYmd(new Date());
+    const sel = dpInput ? dpInput.value : '';
+    const startDow = new Date(y, m, 1).getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    pop.querySelector('.dp-title').textContent =
+      new Date(y, m, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    let cells = '';
+    for (let i = 0; i < startDow; i++) cells += `<span class="dp-day muted"></span>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const ds = `${y}-${dpPad(m + 1)}-${dpPad(d)}`;
+      const cls = ['dp-day'];
+      if (ds === today) cls.push('today');
+      if (ds === sel) cls.push('sel');
+      cells += `<button type="button" class="${cls.join(' ')}" data-action="pickDate" data-args='["${ds}"]'>${d}</button>`;
+    }
+    pop.querySelector('.dp-grid').innerHTML = cells;
+  }
+  function dpNav(delta) {
+    let { y, m } = dpMonth; m += delta;
+    if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
+    dpMonth = { y, m }; renderCalendar();
+  }
+  function pickDate(ds) {
+    if (!dpInput) return;
+    dpInput.value = ds;
+    dpInput.dispatchEvent(new Event('change'));
+    if (dpTrigger) {
+      dpTrigger.classList.remove('empty');
+      dpTrigger.querySelector('.date-trigger-label').textContent = formatTriggerDate(ds);
+      const x = dpTrigger.querySelector('.date-clear-x'); if (x) x.hidden = false;
+    }
+    closeDatePicker();
+  }
+  function clearDueDate() {
+    const t = (this && this.closest && this.closest('.date-trigger')) || dpTrigger;
+    if (!t) return;
+    const input = t.closest('.task-card').querySelector('.due-date-input');
+    input.value = '';
+    input.dispatchEvent(new Event('change'));
+    t.classList.add('empty');
+    t.querySelector('.date-trigger-label').textContent = 'Set due date…';
+    const x = t.querySelector('.date-clear-x'); if (x) x.hidden = true;
+    closeDatePicker();
+  }
+  function dpQuick(which) {
+    const d = new Date();
+    if (which === 'tomorrow') d.setDate(d.getDate() + 1);
+    if (which === 'week') d.setDate(d.getDate() + 7);
+    pickDate(dpYmd(d));
+  }
+  function closeDatePicker() {
+    const pop = document.getElementById('date-picker');
+    if (pop) pop.style.display = 'none';
+    dpInput = null; dpTrigger = null;
+  }
+
   function getDueBadgeClass(dueDate) {
     if (!dueDate) return '';
     const today = new Date().toISOString().split('T')[0];
@@ -1871,6 +1959,7 @@
     }
     if (e.key === '?' && !inField) { e.preventDefault(); openHelpModal(); return; }
     if (e.key === 'Escape') {
+      closeDatePicker();
       closeSearch(); closeHelpModal(); closeMembersModal(); closeCreateBoardModal(); closeBoardMenu(); closeAccountMenu();
     }
   });
@@ -1908,6 +1997,10 @@
         !overflow.contains(e.target) &&
         !e.target.closest('[data-action="openBoardOverflow"]')) {
       overflow.style.display = 'none';
+    }
+    const dp = document.getElementById('date-picker');
+    if (dp && dp.style.display === 'block' && !dp.contains(e.target) && !e.target.closest('.date-trigger')) {
+      closeDatePicker();
     }
   });
 
@@ -1980,6 +2073,13 @@
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },
     closeAccountAndOpenSearch: () => { closeAccountMenu(); openSearch(); },
     closeAccountAndOpenHelp: () => { closeAccountMenu(); openHelpModal(); },
+    openDatePicker, clearDueDate, pickDate,
+    dpPrev: () => dpNav(-1),
+    dpNext: () => dpNav(1),
+    dpToday: () => dpQuick('today'),
+    dpTomorrow: () => dpQuick('tomorrow'),
+    dpWeek: () => dpQuick('week'),
+    dpClear: clearDueDate,
   };
   function __parseArgs(el) {
     if (!el.dataset.args) return [];
