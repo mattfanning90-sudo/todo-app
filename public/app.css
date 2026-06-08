@@ -969,8 +969,8 @@
 /* ── Taskly shell ── */
 .screen { display:none; }
 .screen.active { display:block; flex:1 1 auto; min-height:0; overflow-y:auto; }
-/* board screen owns the vertical scroll; neutralize the legacy board-scroll clip */
-#screen-board .board-scroll { overflow:visible; flex:none; }
+/* board screen owns vertical scroll; board-scroll scrolls columns horizontally when they don't fit */
+#screen-board .board-scroll { overflow-x:auto; flex:none; }
 .tk-wordmark { display:flex; align-items:center; gap:10px; padding:24px 20px 16px;
   font-size:18px; font-weight:700; color:var(--tk-text); }
 .tk-wordmark-icon { width:32px; height:32px; border-radius:10px; background:var(--tk-accent);
@@ -1058,7 +1058,7 @@
 
 /* Board: 3 columns on desktop/iPad, vertical stack on phone */
 #screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
-#screen-board .board { display:grid; grid-template-columns:repeat(3, 1fr); gap:18px; align-items:start; min-width:0; height:auto; }
+#screen-board .board { display:grid; grid-template-columns:repeat(3, minmax(300px, 1fr)); gap:18px; align-items:start; min-width:0; height:auto; }
 #screen-board .column { background:rgba(30,30,46,.025); border:1px solid rgba(30,30,46,.06); border-radius:16px; padding:14px 12px; width:auto; max-width:none; min-width:0; }
 #screen-board .column-header { display:flex; align-items:center; gap:8px; padding:2px 4px 12px; }
 #screen-board .column-header::after { content:none; }
