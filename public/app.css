@@ -1088,11 +1088,13 @@
    (theme/account/search); only the notification bell remains. */
 .app-header .sidebar-toggle,
 .app-header .app-logo,
-.app-header #search-btn,
 .app-header #theme-toggle,
 .app-header .account-wrap,
 .app-header .viewing-banner { display:none !important; }
-.app-header { justify-content:flex-end; min-height:0; padding-top:8px; padding-bottom:8px; box-shadow:none; }
+.app-header { justify-content:space-between; box-shadow:none; }
+.tk-topbar-title { margin:0; font-size:16px; font-weight:600; color:var(--tk-text); }
+.app-header .header-right { display:flex; align-items:center; gap:10px; }
+.app-header .hdr-btn { width:36px; height:36px; border-radius:10px; background:rgba(30,30,46,.05); }
 /* board switcher now sits in the board header */
 .tk-board-switch .board-switch-btn { font-size:12px; font-weight:600; letter-spacing:.06em;
   text-transform:uppercase; color:var(--tk-muted); padding:0; background:none; border:none; }

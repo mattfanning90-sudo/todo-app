@@ -359,6 +359,8 @@
 }
   function showTab(tab) {
     currentTab = tab;
+    const tt = document.getElementById('topbar-title');
+    if (tt) tt.textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
     ['today', 'board', 'profile'].forEach(t => {
       const screen = document.getElementById('screen-' + t);
       if (screen) screen.classList.toggle('active', t === tab);
