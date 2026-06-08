@@ -797,6 +797,7 @@
       .app-header { position: sticky; top: 0; z-index: 50; }
       .app-body { overflow: visible; height: auto; }
       .main-content { overflow: visible; }
+      .screen.active { overflow: visible; min-height: 0; flex: none; }
 
       /* Sidebar becomes an off-canvas drawer on phones — toggled via the
          hamburger button, dimmed by .sidebar-overlay. The default
@@ -967,7 +968,9 @@
 
 /* ── Taskly shell ── */
 .screen { display:none; }
-.screen.active { display:block; }
+.screen.active { display:block; flex:1 1 auto; min-height:0; overflow-y:auto; }
+/* board screen owns the vertical scroll; neutralize the legacy board-scroll clip */
+#screen-board .board-scroll { overflow:visible; flex:none; }
 .tk-wordmark { display:flex; align-items:center; gap:10px; padding:24px 20px 16px;
   font-size:18px; font-weight:700; color:var(--tk-text); }
 .tk-wordmark-icon { width:32px; height:32px; border-radius:10px; background:var(--tk-accent);
