@@ -42,6 +42,9 @@ export interface Task {
   recurrence: string | null;
   subtasks: { text: string; done: boolean }[] | null;
   assigned_to_user_id: number | null;
+  // Joined from the assignee on GET /api/tasks (absent on POST/INSERT responses).
+  assigned_to_name?: string | null;
+  assigned_to_username?: string | null;
   cal_start: string | null;
   cal_end: string | null;
   archived?: boolean;

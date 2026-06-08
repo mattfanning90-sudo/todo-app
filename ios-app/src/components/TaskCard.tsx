@@ -34,11 +34,19 @@ interface Props {
   onMoveStage?: (target: Stage) => void;
 }
 
+// Parse a 'YYYY-MM-DD' date-only string in the LOCAL timezone. `new Date('YYYY-MM-DD')`
+// parses as UTC midnight, which lands on the previous calendar day for users west
+// of UTC — making due-today look overdue and due-tomorrow look like today.
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
 function dueLabel(
   due: string | null
 ): { label: string; variant: 'overdue' | 'today' | 'soon' | 'normal' } | null {
   if (!due) return null;
-  const d = new Date(due);
+  const d = parseLocalDate(due);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));

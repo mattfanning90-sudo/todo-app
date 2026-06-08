@@ -3,6 +3,12 @@
   "compilerOptions": {
     "strict": true,
     "baseUrl": ".",
+    // Scope type resolution to this package's own @types. Without this, tsc walks
+    // up to the parent web app's node_modules/@types and tries to load unrelated
+    // (and sometimes duplicate-named) type libraries, breaking `npm run typecheck`.
+    "typeRoots": [
+      "./node_modules/@types"
+    ],
     "paths": {
       "@/*": [
         "src/*"

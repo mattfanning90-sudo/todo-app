@@ -37,9 +37,17 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'nodate', label: 'No date' },
 ];
 
+// Parse a 'YYYY-MM-DD' date-only string in the LOCAL timezone. `new Date('YYYY-MM-DD')`
+// parses as UTC midnight, which lands on the previous calendar day for users west
+// of UTC — making the Today / Overdue filters off by a day.
+function parseLocalDate(s: string): Date {
+  const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1);
+}
+
 function isToday(dateStr: string | null): boolean {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   const now = new Date();
   return (
     d.getFullYear() === now.getFullYear() &&
@@ -50,7 +58,7 @@ function isToday(dateStr: string | null): boolean {
 
 function isOverdue(dateStr: string | null): boolean {
   if (!dateStr) return false;
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return d < today;

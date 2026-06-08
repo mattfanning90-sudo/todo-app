@@ -75,7 +75,7 @@ const light: Theme = {
   tk: {
     accent: '#FF6B47',
     accentHover: '#E8522E',
-    bg: '#F7F7FA',
+    bg: '#F2F2F7',
     card: '#FFFFFF',
     text: '#1E1E2E',
     muted: 'rgba(30,30,46,0.45)',

@@ -63,7 +63,9 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
   );
   const [userQuery, setUserQuery] = useState('');
   const [userResults, setUserResults] = useState<UserSearchResult[]>([]);
-  const [assignedUserLabel, setAssignedUserLabel] = useState<string>('');
+  const [assignedUserLabel, setAssignedUserLabel] = useState<string>(
+    task?.assigned_to_username ?? task?.assigned_to_name ?? ''
+  );
   const userSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Calendar

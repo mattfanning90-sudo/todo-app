@@ -93,6 +93,28 @@ describe('tasks CRUD', () => {
     expect(res.status).toBe(403);
     expect(res.body.error).toBe('csrf_protection');
   });
+
+  it('rejects a category_id belonging to another board with 400', async () => {
+    const agent = await signupAndAgent();
+    // Second board + a category that lives on it.
+    const board2 = (await agent.post('/api/boards').send({ name: 'Second' })).body;
+    const cat2 = (await agent
+      .post(`/api/categories?board=${board2.id}`)
+      .send({ name: 'B2 only', color: '#34A853' })).body;
+
+    // Creating a task on the default board must not accept board2's category.
+    const create = await agent
+      .post('/api/tasks')
+      .send({ text: 'cross-board cat', category_id: cat2.id });
+    expect(create.status).toBe(400);
+
+    // Same guard on update.
+    const task = (await agent.post('/api/tasks').send({ text: 'ok' })).body;
+    const put = await agent
+      .put(`/api/tasks/${task.id}`)
+      .send({ category_id: cat2.id });
+    expect(put.status).toBe(400);
+  });
 });
 
 describe('GET /api/tasks/count', () => {

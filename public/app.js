@@ -647,15 +647,17 @@
     activeFilter = null; todayFilter = false;
 
     [boardMembers, categories] = await Promise.all([
-      fetch('/api/boards/members' + boardParam()).then(r => r.json()),
-      fetch('/api/categories' + boardParam()).then(r => r.json()),
+      fetch('/api/boards/members' + boardParam()).then(r => r.json()).catch(() => []),
+      fetch('/api/categories' + boardParam()).then(r => r.json()).catch(() => []),
     ]);
+    if (!Array.isArray(boardMembers)) boardMembers = [];
+    if (!Array.isArray(categories)) categories = [];
     renderFilterBar();
     renderBoardMenu();
     renderSidebarBoards();
 
-    const tasks = await (await fetch('/api/tasks' + boardParam())).json();
-    tasks.forEach(t => createTaskCard(t));
+    const tasks = await fetch('/api/tasks' + boardParam()).then(r => r.json()).catch(() => []);
+    (Array.isArray(tasks) ? tasks : []).forEach(t => createTaskCard(t));
     updateCounts();
     loadArchivedCount();
   }
@@ -1775,7 +1777,7 @@
     const catsHtml = cats.length ? cats.map(c => `
       <div class="breakdown-row">
         <span class="breakdown-label" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span>
-        <div class="breakdown-track"><div class="breakdown-fill" style="width:${Math.round((Number(c.count)/maxC)*100)}%;background:${c.color}"></div></div>
+        <div class="breakdown-track"><div class="breakdown-fill" style="width:${Math.round((Number(c.count)/maxC)*100)}%;background:${safeColor(c.color)}"></div></div>
         <span class="breakdown-count">${c.count}</span>
       </div>`).join('') : '<div class="dash-empty">No categories yet</div>';
 

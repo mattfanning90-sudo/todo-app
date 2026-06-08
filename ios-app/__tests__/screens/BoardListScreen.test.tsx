@@ -14,9 +14,15 @@ jest.mock('../../src/auth/AuthContext', () => ({
   }),
 }));
 
-jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
-}));
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  // Mirror the focus-based loading the other screen tests use (screen now loads
+  // via useFocusEffect), so we don't need a NavigationContainer.
+  return {
+    useFocusEffect: (fn: () => unknown) => React.useEffect(() => { fn(); }, []),
+    useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
+  };
+});
 
 const boards = [
   { id: 1, owner_user_id: 1, name: 'Work', slug: 'work' },
