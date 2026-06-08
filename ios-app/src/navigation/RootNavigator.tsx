@@ -1,127 +1,100 @@
 import React from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Text, View } from 'react-native';
 import {
-  NavigationContainer,
-  DarkTheme,
-  DefaultTheme,
-  useNavigation,
-  type NavigationProp,
+  NavigationContainer, DarkTheme, DefaultTheme,
 } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
-  type NativeStackNavigationProp,
 } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useColorScheme } from 'react-native';
 import { useAuth } from '@/auth/AuthContext';
+import { useTheme } from '@/theme';
+
+// ── Type imports from the canonical types file ───────────────────────────────
+import type {
+  TodayStackParams,
+  BoardStackParams,
+  ProfileStackParams,
+} from '@/navigation/types';
+
+// Re-export so existing code that imports from RootNavigator still works.
+export type { TodayStackParams, BoardStackParams, ProfileStackParams } from '@/navigation/types';
+export type { RootStackParamList, Nav } from '@/navigation/types';
+
+// ── Screen imports ──────────────────────────────────────────────────────────
 import { LoginScreen } from '@/screens/LoginScreen';
-import { BoardListScreen } from '@/screens/BoardListScreen';
+import { TodayScreen } from '@/screens/TodayScreen';
 import { BoardScreen } from '@/screens/BoardScreen';
+import { ProfileScreen } from '@/screens/ProfileScreen';
 import { TaskDetailScreen } from '@/screens/TaskDetailScreen';
-import { DashboardScreen } from '@/screens/DashboardScreen';
-import { SettingsScreen } from '@/screens/SettingsScreen';
 import { SearchScreen } from '@/screens/SearchScreen';
+import { NotificationsScreen } from '@/screens/NotificationsScreen';
 import { ArchivedScreen } from '@/screens/ArchivedScreen';
 import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
-import { NotificationsScreen } from '@/screens/NotificationsScreen';
-import { useTheme } from '@/theme';
-import type { Board, Task } from '@/api/types';
+import { SettingsScreen } from '@/screens/SettingsScreen';
+import { BoardListScreen } from '@/screens/BoardListScreen';
 
-export type RootStackParamList = {
-  Login: undefined;
-  BoardList: undefined;
-  Board: { board: Board };
-  TaskDetail: { board: Board; task: Task | null };
-  Dashboard: undefined;
-  Settings: undefined;
-  Search: undefined;
-  Archived: { board: Board };
-  BoardMembers: { board: Board };
-  Notifications: undefined;
-};
+// ── Stack / tab navigator instances ─────────────────────────────────────────
+const TodayStack = createNativeStackNavigator<TodayStackParams>();
+const BoardStack = createNativeStackNavigator<BoardStackParams>();
+const ProfileStack = createNativeStackNavigator<ProfileStackParams>();
+const Tab = createBottomTabNavigator();
+const AuthStack = createNativeStackNavigator<{ Login: undefined }>();
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
-export type Nav = NativeStackNavigationProp<RootStackParamList>;
+// ── Tab icon helper (plain text glyphs — no native icon dep needed) ──────────
+function TabIcon({ label, focused, color }: { label: string; focused: boolean; color: string }) {
+  const icons: Record<string, string> = { Today: '◷', Board: '⊞', Profile: '◉' };
+  return <Text style={{ fontSize: focused ? 20 : 18, color }}>{icons[label] ?? '•'}</Text>;
+}
 
-function BoardListWrapper() {
-  const nav = useNavigation<Nav>();
+// ── Per-tab stack navigators ─────────────────────────────────────────────────
+function TodayNav() {
   return (
-    <BoardListScreen
-      onOpenBoard={(board) => nav.navigate('Board', { board })}
-      onOpenDashboard={() => nav.navigate('Dashboard')}
-      onOpenSettings={() => nav.navigate('Settings')}
-      onOpenSearch={() => nav.navigate('Search')}
-      onOpenNotifications={() => nav.navigate('Notifications')}
-    />
+    <TodayStack.Navigator screenOptions={{ headerShown: false }}>
+      <TodayStack.Screen name="Today" component={TodayScreen} />
+      <TodayStack.Screen name="Search" component={SearchScreen} />
+      <TodayStack.Screen name="Notifications" component={NotificationsScreen} />
+      <TodayStack.Screen
+        name="TaskDetail"
+        component={TaskDetailScreen}
+        options={{ presentation: 'modal' }}
+      />
+    </TodayStack.Navigator>
   );
 }
 
-function SettingsWrapper() {
-  const nav = useNavigation<Nav>();
-  return <SettingsScreen onBack={() => nav.goBack()} />;
-}
-
-function SearchWrapper() {
-  const nav = useNavigation<Nav>();
+function BoardNav() {
   return (
-    <SearchScreen
-      onBack={() => nav.goBack()}
-      onOpenBoard={(board) => {
-        nav.goBack();
-        setTimeout(() => nav.navigate('Board', { board }), 0);
-      }}
-    />
+    <BoardStack.Navigator screenOptions={{ headerShown: false }}>
+      <BoardStack.Screen name="Board" component={BoardScreen} />
+      <BoardStack.Screen
+        name="TaskDetail"
+        component={TaskDetailScreen}
+        options={{ presentation: 'modal' }}
+      />
+      <BoardStack.Screen name="Archived" component={ArchivedScreen} />
+      <BoardStack.Screen name="BoardMembers" component={BoardMembersScreen} />
+      <BoardStack.Screen name="Search" component={SearchScreen} />
+      <BoardStack.Screen name="Notifications" component={NotificationsScreen} />
+      <BoardStack.Screen name="BoardList" component={BoardListScreen} />
+    </BoardStack.Navigator>
   );
 }
 
-function BoardWrapper({ route }: { route: { params: { board: Board } } }) {
-  const nav = useNavigation<Nav>();
-  const { board } = route.params;
+function ProfileNav() {
   return (
-    <BoardScreen
-      board={board}
-      onBack={() => nav.goBack()}
-      onOpenTask={(task) => nav.navigate('TaskDetail', { board, task })}
-      onOpenArchived={() => nav.navigate('Archived', { board })}
-      onOpenMembers={() => nav.navigate('BoardMembers', { board })}
-    />
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="Profile" component={ProfileScreen} />
+      <ProfileStack.Screen name="Settings" component={SettingsScreen} />
+      <ProfileStack.Screen name="BoardList" component={BoardListScreen} />
+      <ProfileStack.Screen name="Search" component={SearchScreen} />
+      <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
+    </ProfileStack.Navigator>
   );
 }
 
-function TaskDetailWrapper({
-  route,
-}: {
-  route: { params: { board: Board; task: Task | null } };
-}) {
-  const nav = useNavigation<Nav>();
-  return (
-    <TaskDetailScreen
-      board={route.params.board}
-      task={route.params.task}
-      onClose={() => nav.goBack()}
-    />
-  );
-}
-
-function DashboardWrapper() {
-  const nav = useNavigation<NavigationProp<RootStackParamList>>();
-  return <DashboardScreen onBack={() => nav.goBack()} />;
-}
-
-function ArchivedWrapper({ route }: { route: { params: { board: Board } } }) {
-  const nav = useNavigation<Nav>();
-  return <ArchivedScreen board={route.params.board} onBack={() => nav.goBack()} />;
-}
-
-function BoardMembersWrapper({ route }: { route: { params: { board: Board } } }) {
-  const nav = useNavigation<Nav>();
-  return <BoardMembersScreen board={route.params.board} onBack={() => nav.goBack()} />;
-}
-
-function NotificationsWrapper() {
-  const nav = useNavigation<Nav>();
-  return <NotificationsScreen onBack={() => nav.goBack()} />;
-}
-
+// ── Root navigator ───────────────────────────────────────────────────────────
 export function RootNavigator() {
   const { user, loading } = useAuth();
   const scheme = useColorScheme();
@@ -129,8 +102,8 @@ export function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={t.accent} />
+      <View style={{ flex: 1, backgroundColor: t.tk.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={t.tk.accent} />
       </View>
     );
   }
@@ -143,40 +116,34 @@ export function RootNavigator() {
         ...navTheme,
         colors: {
           ...navTheme.colors,
-          background: t.bg,
-          card: t.surface,
-          text: t.text,
-          border: t.border,
-          primary: t.accent,
+          background: t.tk.bg,
+          card: t.tk.card,
+          text: t.tk.text,
+          border: t.tk.line,
+          primary: t.tk.accent,
         },
       }}
     >
-      <Stack.Navigator
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: t.bg },
-        }}
-      >
-        {user ? (
-          <>
-            <Stack.Screen name="BoardList" component={BoardListWrapper} />
-            <Stack.Screen name="Board" component={BoardWrapper} />
-            <Stack.Screen name="Dashboard" component={DashboardWrapper} />
-            <Stack.Screen name="Settings" component={SettingsWrapper} />
-            <Stack.Screen name="Search" component={SearchWrapper} />
-            <Stack.Screen name="Archived" component={ArchivedWrapper} />
-            <Stack.Screen name="BoardMembers" component={BoardMembersWrapper} />
-            <Stack.Screen name="Notifications" component={NotificationsWrapper} />
-            <Stack.Screen
-              name="TaskDetail"
-              component={TaskDetailWrapper}
-              options={{ presentation: 'modal' }}
-            />
-          </>
-        ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
-        )}
-      </Stack.Navigator>
+      {user ? (
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            headerShown: false,
+            tabBarActiveTintColor: t.tk.accent,
+            tabBarInactiveTintColor: t.tk.muted,
+            tabBarStyle: { backgroundColor: t.tk.card, borderTopColor: t.tk.line },
+            tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) =>
+              <TabIcon label={route.name} focused={focused} color={color} />,
+          })}
+        >
+          <Tab.Screen name="Today" component={TodayNav} />
+          <Tab.Screen name="Board" component={BoardNav} />
+          <Tab.Screen name="Profile" component={ProfileNav} />
+        </Tab.Navigator>
+      ) : (
+        <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+          <AuthStack.Screen name="Login" component={LoginScreen} />
+        </AuthStack.Navigator>
+      )}
     </NavigationContainer>
   );
 }

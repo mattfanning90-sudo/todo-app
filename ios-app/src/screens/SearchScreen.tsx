@@ -8,19 +8,24 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api, ApiError } from '@/api/client';
 import type { Board, SearchHit } from '@/api/types';
+import type { Nav } from '@/navigation/types';
 
 interface Props {
-  onBack: () => void;
-  onOpenBoard: (board: Board) => void;
+  onBack?: () => void;
+  onOpenBoard?: (board: Board) => void;
 }
 
 const DEBOUNCE_MS = 280;
 
 export function SearchScreen({ onBack, onOpenBoard }: Props) {
+  const nav = useNavigation<Nav>();
+  const goBack = onBack ?? (() => nav.goBack());
+  const openBoard = onOpenBoard ?? ((board: Board) => nav.navigate('Board', { board }));
   const t = useTheme();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchHit[]>([]);
@@ -77,13 +82,13 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
       name: hit.board_name,
       slug: '',
     };
-    onOpenBoard(board);
+    openBoard(board);
   };
 
   return (
     <Screen>
       <View style={styles.topBar}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
         </Pressable>
         <Text style={[styles.title, { color: t.text }]}>Search</Text>

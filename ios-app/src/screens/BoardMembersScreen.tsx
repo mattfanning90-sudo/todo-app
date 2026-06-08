@@ -9,7 +9,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { Nav, BoardStackParams } from '@/navigation/types';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
@@ -19,11 +21,15 @@ import { useAuth } from '@/auth/AuthContext';
 import type { Board, BoardInvite, BoardMember } from '@/api/types';
 
 interface Props {
-  board: Board;
-  onBack: () => void;
+  board?: Board;
+  onBack?: () => void;
 }
 
-export function BoardMembersScreen({ board, onBack }: Props) {
+export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<BoardStackParams, 'BoardMembers'>>();
+  const board = boardProp ?? route.params?.board;
+  const goBack = onBack ?? (() => nav.goBack());
   const t = useTheme();
   const { user } = useAuth();
   const isOwner = user?.id === board.owner_user_id;
@@ -137,7 +143,7 @@ export function BoardMembersScreen({ board, onBack }: Props) {
     <Screen padded={false}>
       {/* Header */}
       <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
         </Pressable>
         <Text style={[styles.headerTitle, { color: t.text }]}>Members</Text>

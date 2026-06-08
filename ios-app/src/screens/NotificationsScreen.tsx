@@ -7,14 +7,15 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { Nav } from '@/navigation/types';
 import { Screen } from '@/components/Screen';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { Notification } from '@/api/types';
 
 interface Props {
-  onBack: () => void;
+  onBack?: () => void;
 }
 
 function formatDate(iso: string): string {
@@ -23,6 +24,8 @@ function formatDate(iso: string): string {
 }
 
 export function NotificationsScreen({ onBack }: Props) {
+  const nav = useNavigation<Nav>();
+  const goBack = onBack ?? (() => nav.goBack());
   const t = useTheme();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +68,7 @@ export function NotificationsScreen({ onBack }: Props) {
     <Screen>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: t.border }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
         </Pressable>
         <Text style={[styles.title, { color: t.text }]}>Notifications</Text>

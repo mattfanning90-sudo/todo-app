@@ -15,8 +15,11 @@ import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
 import { useTheme, radius, spacing, font } from '@/theme';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '@/api/client';
 import type { Board, Category, Priority, Stage, Task, UserSearchResult } from '@/api/types';
+import type { Nav, RootStackParamList } from '@/navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 const PRIORITIES: Priority[] = ['none', 'low', 'medium', 'high'];
@@ -27,12 +30,17 @@ const CATEGORY_COLORS = [
 ];
 
 interface Props {
-  board: Board;
-  task: Task | null;
-  onClose: (changed: boolean) => void;
+  board?: Board;
+  task?: Task | null;
+  onClose?: (changed: boolean) => void;
 }
 
-export function TaskDetailScreen({ board, task, onClose }: Props) {
+export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: Props) {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<RootStackParamList, 'TaskDetail'>>();
+  const board = boardProp ?? route.params?.board;
+  const task = taskProp !== undefined ? taskProp : (route.params?.task ?? null);
+  const close = onClose ?? ((_changed: boolean) => nav.goBack());
   const t = useTheme();
   const editing = task !== null;
 
@@ -127,7 +135,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         await api.createTask(payload);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      onClose(true);
+      close(true);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       Alert.alert('Could not save task', String(err));
@@ -211,7 +219,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
           try {
             await api.updateTask(task.id, { board_id: board.id, archived: true });
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            onClose(true);
+            close(true);
           } catch (err) {
             Alert.alert('Could not archive', String(err));
           }
@@ -230,7 +238,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         onPress: async () => {
           try {
             await api.deleteTask(task.id, board.id);
-            onClose(true);
+            close(true);
           } catch (err) {
             Alert.alert('Could not delete', String(err));
           }
@@ -246,7 +254,7 @@ export function TaskDetailScreen({ board, task, onClose }: Props) {
         style={{ flex: 1 }}
       >
         <View style={styles.topBar}>
-          <Pressable onPress={() => onClose(false)} hitSlop={10}>
+          <Pressable onPress={() => close(false)} hitSlop={10}>
             <Text style={{ color: t.accent, fontSize: font.size.md }}>Cancel</Text>
           </Pressable>
           <Text style={[styles.title, { color: t.text }]}>

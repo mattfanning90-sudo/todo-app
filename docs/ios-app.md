@@ -14,6 +14,16 @@ A React Native / Expo client that hits the same `/api/*` endpoints the web app u
 | EAS Owner | `mfanning90` |
 | Production API | `https://todo-app-production-a338.up.railway.app` |
 
+### Pre-build checklist — prove it boots first (build 16 shipped a launch crash)
+
+Build 16 crashed on launch yet passed tsc **and** the full jest suite — the suite mocks `@react-navigation` away, so it never boots the app. Root cause: `npm install @react-navigation/bottom-tabs` pulled v7 while the rest of react-navigation was v6; mixing react-navigation majors crashes on mount.
+
+- Install Expo/native deps with **`npx expo install <pkg>`**, never plain `npm install <pkg>` (it grabs `latest`). Keep all `@react-navigation/*` on one major.
+- Before every `eas build`, run all three:
+  1. `npx expo-doctor` — flags SDK / version / peer mismatches.
+  2. `npm test` — now includes `__tests__/nav-version-alignment.test.ts` (asserts the react-navigation packages share a major) and `__tests__/boot.test.tsx` (mounts the **real** `RootNavigator`; a version mismatch or any mount-time throw fails it).
+  3. `npx expo run:ios` (simulator) — a 30-second launch check beats the 40-min build → TestFlight → device loop.
+
 ### Build + submit pipeline
 ```bash
 cd ios-app

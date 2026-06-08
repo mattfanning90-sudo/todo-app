@@ -47,3 +47,9 @@ Merging a PR auto-deploys to Railway. Confirm env-var prereqs and migration plan
 ### Frontend handlers go through `data-action`
 
 CSP blocks inline `onclick=`. Adding a new inline handler will be silently rejected by the browser. Use `data-action="funcName"` and register the function in `app.js`'s `__actions` object. See `docs/frontend.md`.
+
+### iOS: `expo install` (not `npm install`), and prove it boots before `eas build`
+
+`ios-app/` is an Expo SDK project. Install native/Expo deps with `npx expo install <pkg>` — it pins SDK-compatible versions. Plain `npm install <pkg>` grabs `latest`, which silently shipped a prod crash: build 16 crashed on launch because `@react-navigation/bottom-tabs` installed at v7 while the rest of react-navigation was v6 (mixing react-navigation majors crashes on mount). tsc + the mocked jest suite were both green — they never boot the app.
+
+Before any `eas build`, run all three: `npx expo-doctor`, `npm test` (now includes `__tests__/nav-version-alignment.test.ts` + `__tests__/boot.test.tsx`, which mount the real navigator), and ideally a simulator launch (`npx expo run:ios`) — a 30-second boot check beats a 40-min build → TestFlight → device loop. Keep all `@react-navigation/*` on one major. See `docs/ios-app.md`.

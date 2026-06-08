@@ -11,6 +11,7 @@ import type {
   Notification,
   SearchHit,
   Task,
+  TodayTask,
   User,
   UserSearchResult,
 } from './types';
@@ -193,6 +194,7 @@ export const api = {
     }),
 
   dashboard: () => request<DashboardData>('/api/dashboard'),
+  todayTasks: () => request<TodayTask[]>('/api/tasks/today'),
   search: (q: string, signal?: AbortSignal) =>
     request<SearchHit[]>(`/api/search?q=${encodeURIComponent(q)}`, { signal }),
 

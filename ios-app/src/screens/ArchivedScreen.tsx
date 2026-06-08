@@ -8,7 +8,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { Nav, BoardStackParams } from '@/navigation/types';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { useTheme, radius, spacing, font } from '@/theme';
@@ -16,8 +18,8 @@ import { api } from '@/api/client';
 import type { Board, Task } from '@/api/types';
 
 interface Props {
-  board: Board;
-  onBack: () => void;
+  board?: Board;
+  onBack?: () => void;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -29,7 +31,11 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-export function ArchivedScreen({ board, onBack }: Props) {
+export function ArchivedScreen({ board: boardProp, onBack }: Props) {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<BoardStackParams, 'Archived'>>();
+  const board = boardProp ?? route.params?.board;
+  const goBack = onBack ?? (() => nav.goBack());
   const t = useTheme();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -97,7 +103,7 @@ export function ArchivedScreen({ board, onBack }: Props) {
     <Screen padded={false}>
       {/* Header */}
       <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
+        <Pressable onPress={goBack} hitSlop={10}>
           <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
         </Pressable>
         <Text style={[styles.headerTitle, { color: t.text }]}>Archived</Text>

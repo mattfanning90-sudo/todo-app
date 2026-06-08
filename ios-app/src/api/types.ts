@@ -70,6 +70,7 @@ export interface DashboardData {
   byPriority: Record<Priority, number>;
   byCategory: { name: string; color: string; count: number }[];
   counts: { open: number; inProgress: number; overdue: number };
+  stats?: { done_total: number; completed_week: number; open: number; overdue: number };
 }
 
 export interface SearchHit {
@@ -105,4 +106,18 @@ export interface UserSearchResult {
   name: string | null;
   email: string;
   username: string;
+}
+
+export interface TodayTask {
+  id: number;
+  text: string;
+  stage: Stage;
+  due_date: string;          // YYYY-MM-DD
+  priority: Priority;
+  status: string;
+  board_id: number;
+  board_name: string;
+  cat_name: string | null;
+  cat_color: string | null;
+  completed_at: string | null;
 }

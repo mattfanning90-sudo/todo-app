@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { DropProvider, Draggable, Droppable } from 'react-native-reanimated-dnd';
 import { Screen } from '@/components/Screen';
@@ -19,6 +19,8 @@ import { useTheme, radius, spacing, font } from '@/theme';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
 import type { Board, Category, Stage, Task } from '@/api/types';
+import type { Nav, BoardStackParams } from '@/navigation/types';
+import type { RouteProp } from '@react-navigation/native';
 
 const STAGES: { key: Stage; label: string }[] = [
   { key: 'backlog', label: 'Backlog' },
@@ -55,17 +57,51 @@ function isOverdue(dateStr: string | null): boolean {
 }
 
 interface Props {
-  board: Board;
-  onBack: () => void;
-  onOpenTask: (task: Task | null) => void;
-  onOpenArchived: () => void;
-  onOpenMembers: () => void;
+  board?: Board;
+  onBack?: () => void;
+  onOpenTask?: (task: Task | null) => void;
+  onOpenArchived?: () => void;
+  onOpenMembers?: () => void;
 }
 
-export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenMembers }: Props) {
+export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchived, onOpenMembers }: Props) {
+  const nav = useNavigation<Nav>();
+  const route = useRoute<RouteProp<BoardStackParams, 'Board'>>();
+
   const t = useTheme();
   const { user } = useAuth();
-  const isOwner = user?.id === board.owner_user_id;
+
+  // ─── Board switcher state ────────────────────────────────────────────────────
+  const [allBoards, setAllBoards] = useState<Board[]>([]);
+  const [currentBoard, setCurrentBoard] = useState<Board | undefined>(
+    boardProp ?? (route.params?.board as Board | undefined)
+  );
+
+  // Load board list once on mount; default to first board if none pre-selected.
+  useEffect(() => {
+    Promise.all([api.boards(), api.memberships()]).then(([owned, shared]) => {
+      const combined: Board[] = [...owned, ...shared];
+      setAllBoards(combined);
+      if (!currentBoard && combined.length > 0) setCurrentBoard(combined[0]);
+    }).catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const isOwner = user?.id === currentBoard?.owner_user_id;
+
+  const openTask = onOpenTask ?? ((task: Task | null) => {
+    if (!currentBoard) return;
+    nav.navigate('TaskDetail', { board: currentBoard, task });
+  });
+  const openArchived = onOpenArchived ?? (() => {
+    if (!currentBoard) return;
+    nav.navigate('Archived', { board: currentBoard });
+  });
+  const openMembers = onOpenMembers ?? (() => {
+    if (!currentBoard) return;
+    nav.navigate('BoardMembers', { board: currentBoard });
+  });
+
   const [tasks, setTasks] = useState<Task[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -79,10 +115,11 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const [dragging, setDragging] = useState<{ id: number; stage: Stage } | null>(null);
 
   const load = useCallback(async () => {
+    if (!currentBoard) return;
     try {
       const [ts, cs] = await Promise.all([
-        api.tasks(board.id),
-        api.categories(board.id),
+        api.tasks(currentBoard.id),
+        api.categories(currentBoard.id),
       ]);
       setTasks(ts);
       setCategories(cs);
@@ -92,7 +129,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       setLoading(false);
       setRefreshing(false);
     }
-  }, [board.id]);
+  }, [currentBoard]);
 
   useFocusEffect(
     useCallback(() => {
@@ -137,14 +174,84 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
     return c;
   }, [tasks]);
 
+  // ─── % done pill ─────────────────────────────────────────────────────────────
+  const donePct = tasks.length
+    ? Math.round((tasks.filter((tk) => tk.stage === 'done').length / tasks.length) * 100)
+    : 0;
+
+  // ─── Board switcher ──────────────────────────────────────────────────────────
+  function openBoardSwitcher() {
+    const options = [...allBoards.map((b) => b.name), 'New board', 'Cancel'];
+    ActionSheetIOS.showActionSheetWithOptions(
+      { options, cancelButtonIndex: options.length - 1 },
+      (idx) => {
+        if (idx < allBoards.length) {
+          setCurrentBoard(allBoards[idx]);
+        } else if (idx === allBoards.length) {
+          // New board
+          Alert.prompt('New Board', 'Name', async (name) => {
+            if (!name?.trim()) return;
+            const b = await api.createBoard(name.trim());
+            setAllBoards((prev) => [...prev, b]);
+            setCurrentBoard(b);
+          });
+        }
+      }
+    );
+  }
+
+  // ─── Overflow menu ───────────────────────────────────────────────────────────
+  function openOverflow() {
+    ActionSheetIOS.showActionSheetWithOptions(
+      {
+        options: ['Members', 'Archived', 'Rename board', 'Delete board', 'Cancel'],
+        cancelButtonIndex: 4,
+        destructiveButtonIndex: 3,
+      },
+      async (idx) => {
+        if (!currentBoard) return;
+        if (idx === 0) nav.navigate('BoardMembers', { board: currentBoard });
+        if (idx === 1) nav.navigate('Archived', { board: currentBoard });
+        if (idx === 2) {
+          Alert.prompt(
+            'Rename',
+            'New name',
+            async (name) => {
+              if (!name?.trim()) return;
+              await api.renameBoard(currentBoard.id, name.trim());
+              setCurrentBoard((b) => (b ? { ...b, name: name.trim() } : b));
+            },
+            'plain-text',
+            currentBoard.name
+          );
+        }
+        if (idx === 3) {
+          Alert.alert('Delete board', `Delete "${currentBoard.name}"?`, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                await api.deleteBoard(currentBoard.id);
+                const remaining = allBoards.filter((b) => b.id !== currentBoard.id);
+                setAllBoards(remaining);
+                setCurrentBoard(remaining[0]);
+              },
+            },
+          ]);
+        }
+      }
+    );
+  }
+
   // ─── Actions ────────────────────────────────────────────────────────────────
 
   const submitQuickAdd = async () => {
     const text = quickText.trim();
-    if (!text || quickSaving) return;
+    if (!text || quickSaving || !currentBoard) return;
     setQuickSaving(true);
     try {
-      const created = await api.createTask({ board_id: board.id, text, stage: quickStage });
+      const created = await api.createTask({ board_id: currentBoard.id, text, stage: quickStage });
       setTasks((prev) => [...prev, created]);
       setQuickText('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -158,32 +265,33 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 
   const toggleDone = useCallback(
     async (task: Task) => {
+      if (!currentBoard) return;
       const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
       setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       try {
-        await api.updateTask(task.id, { board_id: board.id, stage: newStage });
+        await api.updateTask(task.id, { board_id: currentBoard.id, stage: newStage });
       } catch (err) {
         Alert.alert('Could not update task', String(err));
         load();
       }
     },
-    [board.id, load]
+    [currentBoard, load]
   );
 
   const moveToStage = useCallback(
     async (task: Task, newStage: Stage) => {
-      if (task.stage === newStage) return;
+      if (task.stage === newStage || !currentBoard) return;
       setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       try {
-        await api.updateTask(task.id, { board_id: board.id, stage: newStage });
+        await api.updateTask(task.id, { board_id: currentBoard.id, stage: newStage });
       } catch (err) {
         Alert.alert('Could not move task', String(err));
         load();
       }
     },
-    [board.id, load]
+    [currentBoard, load]
   );
 
   // ─── Stage section header ────────────────────────────────────────────────────
@@ -191,7 +299,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
   const StageHeader = ({ stage, label }: { stage: Stage; label: string }) => {
     const stageColor = t.stage[stage];
     return (
-      <View style={[styles.stageHeader, { backgroundColor: t.bg }]}>
+      <View style={[styles.stageHeader, { backgroundColor: t.tk.bg }]}>
         <View style={[styles.stageHeaderInner, { borderLeftColor: stageColor }]}>
           <View style={styles.stageTitleRow}>
             <Text style={[styles.stageTitle, { color: stageColor }]}>{label}</Text>
@@ -215,33 +323,37 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 
   return (
     <Screen padded={false}>
-      {/* ── Top bar ─────────────────────────────────────────────────────── */}
-      <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Boards</Text>
-        </Pressable>
-        <Text style={[styles.boardName, { color: t.text }]} numberOfLines={1}>
-          {board.name}
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-          <Pressable onPress={() => onOpenTask(null)} hitSlop={10}>
-            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '600' }}>+</Text>
+      {/* ── Taskly board header ──────────────────────────────────────────── */}
+      <View style={[styles.boardHead, { backgroundColor: t.tk.card, borderBottomColor: t.tk.line }]}>
+        <View>
+          <Pressable style={styles.boardSwitch} onPress={openBoardSwitcher}>
+            <Text style={[styles.boardSwitchLabel, { color: t.tk.text }]}>
+              {currentBoard?.name ?? 'Board'}
+            </Text>
+            <Text style={{ color: t.tk.muted }}>  ▾</Text>
+          </Pressable>
+          <Text style={[styles.boardH1, { color: t.tk.muted }]}>Board</Text>
+        </View>
+        <View style={styles.boardHeadRight}>
+          <View style={[styles.donePill, { backgroundColor: t.tk.accent + '22' }]}>
+            <Text style={[styles.donePillLabel, { color: t.tk.accent }]}>{donePct}% done</Text>
+          </View>
+          <Pressable
+            onPress={() => nav.navigate('Search')}
+            hitSlop={10}
+            testID="search-btn"
+          >
+            <Text style={{ fontSize: 20, color: t.tk.muted }}>⌕</Text>
           </Pressable>
           <Pressable
-            onPress={() => {
-              const options = ['Archived tasks', ...(isOwner ? ['Members'] : []), 'Cancel'];
-              const cancelIdx = options.length - 1;
-              ActionSheetIOS.showActionSheetWithOptions(
-                { options, cancelButtonIndex: cancelIdx, title: board.name },
-                (idx) => {
-                  if (options[idx] === 'Archived tasks') onOpenArchived();
-                  else if (options[idx] === 'Members') onOpenMembers();
-                }
-              );
-            }}
+            onPress={() => nav.navigate('Notifications')}
             hitSlop={10}
+            testID="bell-btn"
           >
-            <Text style={{ color: t.textMuted, fontSize: 20, lineHeight: 24 }}>•••</Text>
+            <Text style={{ fontSize: 20, color: t.tk.muted }}>🔔</Text>
+          </Pressable>
+          <Pressable onPress={openOverflow} style={styles.overflowBtn} hitSlop={10}>
+            <Text style={{ fontSize: 20, color: t.tk.muted }}>⋯</Text>
           </Pressable>
         </View>
       </View>
@@ -250,7 +362,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.filterBar, { backgroundColor: t.bg }]}
+        style={[styles.filterBar, { backgroundColor: t.tk.bg }]}
         contentContainerStyle={styles.filterScroll}
       >
         {FILTERS.map((f) => {
@@ -261,10 +373,10 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               onPress={() => setFilter(f.key)}
               style={[
                 styles.filterPill,
-                { backgroundColor: active ? t.accent : t.surface, borderColor: active ? t.accent : t.border },
+                { backgroundColor: active ? t.tk.accent : t.tk.card, borderColor: active ? t.tk.accent : t.tk.line },
               ]}
             >
-              <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.textMuted }}>
+              <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.tk.muted }}>
                 {f.label}
               </Text>
             </Pressable>
@@ -273,7 +385,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       </ScrollView>
 
       {/* ── Quick-add bar ────────────────────────────────────────────────── */}
-      <View style={[styles.quickAddOuter, { backgroundColor: t.bg, borderBottomColor: t.border }]}>
+      <View style={[styles.quickAddOuter, { backgroundColor: t.tk.bg, borderBottomColor: t.tk.line }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickStageRow}>
           {STAGES.map((s) => {
             const active = quickStage === s.key;
@@ -284,10 +396,10 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                 onPress={() => setQuickStage(s.key)}
                 style={[
                   styles.quickStagePill,
-                  { backgroundColor: active ? stageColor + '22' : t.surface, borderColor: active ? stageColor : t.border },
+                  { backgroundColor: active ? stageColor + '22' : t.tk.card, borderColor: active ? stageColor : t.tk.line },
                 ]}
               >
-                <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.textMuted }}>
+                <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.tk.muted }}>
                   {s.label}
                 </Text>
               </Pressable>
@@ -295,18 +407,18 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
           })}
         </ScrollView>
 
-        <View style={[styles.quickAddRow, { backgroundColor: t.surface, borderColor: t.border }]}>
+        <View style={[styles.quickAddRow, { backgroundColor: t.tk.card, borderColor: t.tk.line }]}>
           <TextInput
             ref={quickInputRef}
             value={quickText}
             onChangeText={setQuickText}
             onSubmitEditing={submitQuickAdd}
             placeholder={`Add to ${STAGES.find((s) => s.key === quickStage)?.label ?? ''}…`}
-            placeholderTextColor={t.textLight}
+            placeholderTextColor={t.tk.muted}
             returnKeyType="done"
             blurOnSubmit={false}
             editable={!quickSaving}
-            style={[styles.quickInput, { color: t.text }]}
+            style={[styles.quickInput, { color: t.tk.text }]}
           />
           <Pressable
             onPress={submitQuickAdd}
@@ -314,7 +426,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
             hitSlop={10}
             style={({ pressed }) => ({ opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1 })}
           >
-            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
+            <Text style={{ color: t.tk.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
       </View>
@@ -329,7 +441,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               setRefreshing(true);
               load();
             }}
-            tintColor={t.textMuted}
+            tintColor={t.tk.muted}
           />
         }
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.xxl * 2 }}
@@ -337,7 +449,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
       >
         <DropProvider>
           {!loading && tasks.length === 0 && (
-            <Text style={[styles.empty, { color: t.textMuted }]}>No tasks yet. Tap + to add one.</Text>
+            <Text style={[styles.empty, { color: t.tk.muted }]}>No tasks yet. Tap + to add one.</Text>
           )}
 
           {STAGES.map((s) => (
@@ -351,7 +463,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
               <StageHeader stage={s.key} label={s.label} />
               {stageData[s.key].length === 0 ? (
                 <View style={styles.stageEmpty}>
-                  <Text style={[styles.stageEmptyText, { color: t.textLight }]}>Drop a task here</Text>
+                  <Text style={[styles.stageEmptyText, { color: t.tk.muted }]}>Drop a task here</Text>
                 </View>
               ) : (
                 stageData[s.key].map((task) => (
@@ -366,7 +478,7 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
                     <TaskCard
                       task={task}
                       category={task.category_id ? categoriesById.get(task.category_id) : undefined}
-                      onPress={() => onOpenTask(task)}
+                      onPress={() => openTask(task)}
                       onToggleDone={() => toggleDone(task)}
                       onMoveStage={(target) => moveToStage(task, target)}
                     />
@@ -382,24 +494,53 @@ export function BoardScreen({ board, onBack, onOpenTask, onOpenArchived, onOpenM
 }
 
 const styles = StyleSheet.create({
-  topBar: {
-    height: 56,
+  // ── Taskly board header ──────────────────────────────────────────────────────
+  boardHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.sm,
     borderBottomWidth: 1,
   },
-  boardName: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: font.size.md,
-    fontWeight: font.weight.bold,
-    marginHorizontal: spacing.md,
+  boardSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  boardSwitchLabel: {
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
+  },
+  boardH1: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.medium,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 2,
+  },
+  boardHeadRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  donePill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.xl,
+  },
+  donePillLabel: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+  },
+  overflowBtn: {
+    // no extra padding needed; hitSlop handles it
+  },
+  // ── Filter pills ─────────────────────────────────────────────────────────────
   filterBar: { flexGrow: 0, paddingVertical: spacing.sm },
   filterScroll: { paddingHorizontal: spacing.lg, gap: spacing.sm, alignItems: 'center' },
   filterPill: { paddingHorizontal: spacing.md, paddingVertical: 5, borderRadius: radius.xl, borderWidth: 1 },
+  // ── Quick-add ────────────────────────────────────────────────────────────────
   quickAddOuter: {
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
