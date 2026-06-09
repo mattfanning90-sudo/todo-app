@@ -108,6 +108,9 @@ const authLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 
 const searchLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false });
 const usernameLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 const apiLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false });
+// Invites send email to an arbitrary address — tighter cap than the general API
+// limiter to blunt email-bomb / SMTP-reputation abuse.
+const inviteLimiter = isTest ? passthroughLimiter : rateLimit({ windowMs: 60 * 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 
 app.use(passport.initialize());
 app.use(passport.session());
@@ -205,6 +208,20 @@ async function assertCategoryOnBoard(categoryId, boardId) {
     'SELECT 1 FROM categories WHERE id = $1 AND board_id = $2', [categoryId, boardId]
   );
   if (!rows[0]) throw Object.assign(new Error('Invalid category for this board'), { status: 400 });
+}
+
+// Reject a user that isn't the board owner or a member. Used to constrain task
+// assignment and task-sharing to collaborators on the board, so a client can't
+// push a task/notification to an arbitrary user id (spam / content injection).
+// A null/absent user clears the field and is always allowed.
+async function assertUserOnBoard(userId, boardId) {
+  if (userId == null) return;
+  const { rows } = await pool.query(
+    `SELECT 1 FROM boards WHERE id = $1 AND owner_user_id = $2
+     UNION SELECT 1 FROM board_members WHERE board_id = $1 AND member_user_id = $2`,
+    [boardId, userId]
+  );
+  if (!rows[0]) throw Object.assign(new Error('User is not a member of this board'), { status: 400 });
 }
 
 /* ── User seeding ── */
@@ -648,7 +665,7 @@ app.get('/api/boards/members', requireAuth, wrap(async (req, res) => {
   res.json(rows);
 }));
 
-app.post('/api/boards/invite', requireAuth, wrap(async (req, res) => {
+app.post('/api/boards/invite', requireAuth, inviteLimiter, wrap(async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required' });
   const { boardId } = await getBoardContext(req);
@@ -772,7 +789,8 @@ app.post('/api/categories', requireAuth, wrap(async (req, res) => {
 }));
 
 app.delete('/api/categories/:id', requireAuth, wrap(async (req, res) => {
-  const { boardId } = await getBoardContext(req);
+  const { boardId, ownerId } = await getBoardContext(req);
+  if (ownerId !== req.user.id) return res.status(403).json({ error: 'Only the board owner can delete categories' });
   const { rows } = await pool.query('SELECT * FROM categories WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   await pool.query('UPDATE tasks SET category_id = NULL WHERE category_id = $1', [rows[0].id]);
@@ -840,6 +858,7 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
   if (!rawText) return res.status(400).json({ error: 'Text required' });
   if (rawText.length > 2000) return res.status(400).json({ error: 'Text too long' });
   await assertCategoryOnBoard(category_id, boardId);
+  await assertUserOnBoard(assigned_to_user_id, boardId);
 
   let due_date = explicitDue, text = rawText;
   if (!explicitDue) {
@@ -886,6 +905,9 @@ app.put('/api/tasks/:id', requireAuth, wrap(async (req, res) => {
 
   if (Object.prototype.hasOwnProperty.call(req.body, 'category_id')) {
     await assertCategoryOnBoard(req.body.category_id, boardId);
+  }
+  if (Object.prototype.hasOwnProperty.call(req.body, 'assigned_to_user_id')) {
+    await assertUserOnBoard(req.body.assigned_to_user_id, boardId);
   }
 
   // Partial-update semantics: only fields present in the request body are
@@ -984,6 +1006,8 @@ app.post('/api/tasks/:id/share', requireAuth, wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM tasks WHERE id = $1 AND board_id = $2', [req.params.id, boardId]);
   if (!rows[0]) return res.status(404).json({ error: 'Not found' });
   const t = rows[0];
+  // Only share with a collaborator on this board — not an arbitrary user id.
+  await assertUserOnBoard(recipient_user_id, boardId);
   const recipientBoard = await ensureDefaultBoard(recipient_user_id);
   const maxPos = await pool.query('SELECT MAX(position) as m FROM tasks WHERE board_id = $1', [recipientBoard.id]);
   const position = (maxPos.rows[0].m ?? -1) + 1;
@@ -1043,6 +1067,7 @@ app.get('/api/export', requireAuth, wrap(async (req, res) => {
 app.post('/api/import', requireAuth, wrap(async (req, res) => {
   const { tasks: importTasks = [], categories: importCategories = [] } = req.body;
   if (!Array.isArray(importTasks)) return res.status(400).json({ error: 'Invalid data' });
+  if (importTasks.length > 2000) return res.status(400).json({ error: 'Too many tasks (max 2000 per import)' });
   const board = await ensureDefaultBoard(req.user.id);
   const client = await pool.connect();
   try {
@@ -1091,17 +1116,20 @@ app.get('/api/dashboard', requireAuth, wrap(async (req, res) => {
   const boardIds = boardRows.map(r => r.id);
   if (!boardIds.length) return res.json({ stats: {}, trend: [], priorities: [], categories: [] });
 
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD; due_date is TEXT
   const [statsRes, trendRes, priorityRes, categoryRes] = await Promise.all([
     pool.query(`
       SELECT
         COUNT(*) FILTER (WHERE stage != 'done' AND (archived IS NULL OR archived = false)) AS open,
         COUNT(*) FILTER (WHERE stage = 'in_progress' AND (archived IS NULL OR archived = false)) AS in_progress,
         COUNT(*) FILTER (WHERE stage = 'done' AND (archived IS NULL OR archived = false)) AS done_total,
-        COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND stage != 'done' AND (archived IS NULL OR archived = false)) AS overdue,
+        -- due_date is TEXT (default ''); compare as text against today and guard the
+        -- '' default — text < CURRENT_DATE has no operator (mirrors /api/tasks/today).
+        COUNT(*) FILTER (WHERE due_date <> '' AND due_date < $2 AND stage != 'done' AND (archived IS NULL OR archived = false)) AS overdue,
         COUNT(*) FILTER (WHERE completed_at IS NOT NULL AND completed_at >= NOW() - INTERVAL '7 days') AS completed_week,
         COUNT(*) FILTER (WHERE archived = true) AS archived_count
       FROM tasks WHERE board_id = ANY($1)
-    `, [boardIds]),
+    `, [boardIds, today]),
     pool.query(`
       SELECT DATE(completed_at) AS day, COUNT(*) AS count
       FROM tasks WHERE board_id = ANY($1)

@@ -53,6 +53,7 @@ pg-mem can't model:
 - `pg_advisory_lock` semantics (we stub it).
 - The full `LATERAL` join used in the batched digest query (executes but with reduced fidelity).
 - The `ALTER COLUMN ... TYPE jsonb USING` migration (skipped — pg-mem rejects the parser; logged once on first run).
+- `COUNT(*) FILTER (WHERE …)` — pg-mem **ignores the FILTER predicate** and returns the unfiltered `COUNT(*)`. So aggregate endpoints like `/api/dashboard` can't have their counts asserted here, and a count test may pass against pg-mem while the real query is wrong (or vice-versa). Validate count logic against real Postgres.
 - Real concurrency / lock contention.
 
 For those you need real Postgres. The next layer would be `docker-compose.yml` + Postgres in CI; not built yet.
