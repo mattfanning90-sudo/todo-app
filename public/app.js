@@ -359,6 +359,7 @@
     task.subtasks = subs;
     persistSheet({ subtasks: subs });
     openTaskSheet(taskSheetId);
+    document.querySelector('#task-sheet .tk-sheet-subinput')?.focus();
   }
   function toggleSheetSub(subId) {
     const task = todayTasks.find(t => t.id === taskSheetId);

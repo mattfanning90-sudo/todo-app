@@ -965,7 +965,7 @@
 .tk-check.on { background:var(--tk-accent); border:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E");
   background-repeat:no-repeat; background-position:center; }
-.tk-task-main { flex:1; min-width:0; }
+.tk-task-main { flex:1; min-width:0; cursor:pointer; }
 .tk-task-title { font-size:15px; font-weight:500; color:var(--tk-text);
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tk-task-row.is-done .tk-task-title { text-decoration:line-through; }
@@ -1120,4 +1120,3 @@
 .tk-sheet-addsub { display:flex; align-items:center; gap:8px; margin-top:8px; border-top:1px solid rgba(30,30,46,.07); padding-top:10px; }
 .tk-sheet-addsub input { flex:1; border:1px solid rgba(30,30,46,.12); border-radius:9px; padding:8px 10px; font-size:12.5px; }
 .tk-sheet-subadd { width:28px; height:28px; flex-shrink:0; border:none; border-radius:8px; background:rgba(255,107,71,.12); color:#FF6B47; font-weight:700; cursor:pointer; }
-.tk-task-main { cursor:pointer; }
