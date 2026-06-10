@@ -39,5 +39,6 @@ describe('GET /api/tasks/today', () => {
     expect(due).toHaveProperty('board_name');
     expect(due).toHaveProperty('cat_color'); // null is fine; key must exist
     expect(due).toHaveProperty('priority');
+    expect(due).toHaveProperty('subtasks'); // sheet needs subtasks (pg-mem returns the column fine)
   });
 });
