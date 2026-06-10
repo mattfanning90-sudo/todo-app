@@ -21,7 +21,6 @@ A self-hosted kanban + todo app. Single-user or shared boards, three sign-in met
 | **Email digest** | Optional daily / weekly / fortnightly summary. Off by default. |
 | **Mobile** | Header collapses to an avatar-only account menu; touch-drag with haptics; pull-to-refresh. |
 | **iOS app** | Native client under `ios-app/`. Same `/api/*` endpoints. Google sign-in via `expo-auth-session`. |
-| **Local mode** | `/local.html` is a no-account version that stores everything in `localStorage`. Useful for trial / offline drafts. |
 
 ## Run it locally
 
@@ -52,11 +51,10 @@ One Express app, one Postgres pool, one node-cron scheduler. Every endpoint is a
 
 ### Web client (`public/`)
 
-Three static pages served by `express.static('public')`:
+Two static pages served by `express.static('public')`:
 
 - `index.html` — authenticated app (kanban + sidebar)
 - `login.html` — sign in / sign up
-- `local.html` — no-account local mode
 
 After slice C (PR #11), the inline `<script>` and `<style>` blocks from `index.html` were extracted to `app.js` / `app.css`. All `onclick=` handlers were converted to `data-action="…"` so CSP can ban inline JS entirely.
 
