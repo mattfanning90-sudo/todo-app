@@ -54,7 +54,7 @@ app.use(helmet({
       scriptSrc: ["'self'"],
       scriptSrcAttr: ["'none'"],
       // Inline styles are a much smaller XSS surface than inline scripts and
-      // login.html / local.html still ship inline <style> blocks.
+      // login.html still ships inline <style> blocks.
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],

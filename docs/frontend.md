@@ -1,12 +1,11 @@
 # Frontend
 
-No build step, no framework. Three static pages served by `express.static('public')`:
+No build step, no framework. Two static pages served by `express.static('public')`:
 
 | Page | Purpose | Inline blocks |
 |---|---|---|
 | `public/index.html` | Authenticated kanban app | none — loads `/app.css` + `/app.js` |
 | `public/login.html` | Sign in / sign up | inline `<style>` still; script extracted to `/login.js` |
-| `public/local.html` | Local-only mode (no account) | inline `<style>`; script extracted to `/local.js` |
 
 `index.html` at the repo root is leftover and not served.
 
@@ -24,7 +23,7 @@ frame-ancestors 'none'
 base-uri 'self'
 ```
 
-`style-src` keeps `'unsafe-inline'` because `login.html` and `local.html` still ship inline CSS. Everything else is strict.
+`style-src` keeps `'unsafe-inline'` because `login.html` still ships inline CSS. Everything else is strict.
 
 ## Event delegation (replaces inline `onclick`)
 
