@@ -271,7 +271,7 @@
     return `<div class="tk-task-row ${done ? 'is-done' : ''}">
       <button class="tk-check ${done ? 'on' : ''}" style="${done ? '' : 'border-color:' + prioColor(t.priority)}"
         data-action="toggleTaskDone" data-args='[${t.id},"${done ? 'backlog' : 'done'}",${t.board_id}]'></button>
-      <div class="tk-task-main">
+      <div class="tk-task-main" data-action="openTaskSheet" data-args='[${t.id}]'>
         <div class="tk-task-title">${escapeHtml(t.text)}</div>
         <div class="tk-task-meta">
           <span class="tk-due ${overdue ? 'overdue' : ''}">${t.due_date ? formatDueDate(t.due_date) : ''}</span>
@@ -284,6 +284,113 @@
   }
 
   function setTodayFilter(mode) { todayFilterMode = mode; paintToday(); }
+
+  let taskSheetId = null;
+  const normSubs = s => Array.isArray(s) ? s : (() => { try { return JSON.parse(s || '[]'); } catch { return []; } })();
+
+  function openTaskSheet(id) {
+    const task = todayTasks.find(t => t.id === id);
+    if (!task) return;
+    taskSheetId = id;
+    const subs = normSubs(task.subtasks);
+    const prios = ['none', 'low', 'medium', 'high'];
+    const body = document.querySelector('#task-sheet .tk-sheet-body');
+    body.innerHTML = `
+      <div class="tk-sheet-head">
+        <div class="tk-sheet-title">${escapeHtml(task.text)}</div>
+        <button class="tk-sheet-x" data-action="closeTaskSheet" aria-label="Close">×</button>
+      </div>
+      <div class="tk-sheet-chips">
+        <span class="tk-sheet-chip">${escapeHtml(task.board_name || '')}</span>
+        ${tagChip(task.cat_name, task.cat_color)}
+      </div>
+      <div class="tk-sheet-field has-due">
+        <span class="tk-sheet-label">Due</span>
+        <input type="hidden" class="due-date-input" value="${task.due_date || ''}">
+        <button class="date-trigger ${task.due_date ? '' : 'empty'}" data-action="openDatePicker">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span class="date-trigger-label">${task.due_date ? formatTriggerDate(task.due_date) : 'Set due date…'}</span>
+          <span class="date-clear-x" data-action="clearDueDate"${task.due_date ? '' : ' hidden'}>×</span>
+        </button>
+      </div>
+      <div class="tk-sheet-field">
+        <span class="tk-sheet-label">Priority</span>
+        <div class="tk-prio-seg">
+          ${prios.map(p => `<button class="tk-prio-opt ${task.priority === p ? 'active' : ''}" data-action="setSheetPriority" data-args='["${p}"]'>${p}</button>`).join('')}
+        </div>
+      </div>
+      <div class="tk-sheet-field">
+        <span class="tk-sheet-label">Note</span>
+        <input type="text" class="tk-sheet-note" placeholder="Add a note…" value="${escapeHtml(task.status || '')}">
+      </div>
+      <div class="tk-sheet-subs">
+        <p class="tk-sheet-label">Subtasks · ${subs.filter(s => s.done).length}/${subs.length}</p>
+        <div class="tk-sheet-sublist">${subs.map(sheetSubRow).join('')}</div>
+        <div class="tk-sheet-addsub">
+          <input type="text" class="tk-sheet-subinput" placeholder="Add subtask…">
+          <button class="tk-sheet-subadd" data-action="addSheetSub">+</button>
+        </div>
+      </div>`;
+    const due = body.querySelector('.due-date-input');
+    due.addEventListener('change', () => persistSheet({ due_date: due.value }));
+    const note = body.querySelector('.tk-sheet-note');
+    note.addEventListener('change', () => persistSheet({ status: note.value }));
+    const si = body.querySelector('.tk-sheet-subinput');
+    si.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addSheetSub(); } });
+    document.getElementById('task-sheet').style.display = 'flex';
+  }
+  function closeTaskSheet() { document.getElementById('task-sheet').style.display = 'none'; taskSheetId = null; }
+  function sheetSubRow(s) {
+    return `<div class="tk-sheet-sub ${s.done ? 'done' : ''}">
+      <button class="tk-sheet-sub-check" data-action="toggleSheetSub" data-args='[${s.id}]'></button>
+      <span>${escapeHtml(s.text)}</span>
+      <button class="tk-sheet-sub-x" data-action="removeSheetSub" data-args='[${s.id}]'>×</button>
+    </div>`;
+  }
+
+  function addSheetSub() {
+    const input = document.querySelector('#task-sheet .tk-sheet-subinput');
+    const text = input.value.trim();
+    if (!text) return;
+    const task = todayTasks.find(t => t.id === taskSheetId);
+    const subs = normSubs(task.subtasks);
+    const maxId = subs.length ? Math.max(...subs.map(s => s.id)) : 0;
+    subs.push({ id: maxId + 1, text, done: false });
+    task.subtasks = subs;
+    persistSheet({ subtasks: subs });
+    openTaskSheet(taskSheetId);
+    document.querySelector('#task-sheet .tk-sheet-subinput')?.focus();
+  }
+  function toggleSheetSub(subId) {
+    const task = todayTasks.find(t => t.id === taskSheetId);
+    const subs = normSubs(task.subtasks);
+    const s = subs.find(x => x.id === subId); if (!s) return;
+    s.done = !s.done;
+    task.subtasks = subs;
+    persistSheet({ subtasks: subs });
+    openTaskSheet(taskSheetId);
+  }
+  function removeSheetSub(subId) {
+    const task = todayTasks.find(t => t.id === taskSheetId);
+    const subs = normSubs(task.subtasks).filter(x => x.id !== subId);
+    task.subtasks = subs;
+    persistSheet({ subtasks: subs });
+    openTaskSheet(taskSheetId);
+  }
+
+  async function persistSheet(patch) {
+    const task = todayTasks.find(t => t.id === taskSheetId);
+    if (!task) return;
+    Object.assign(task, patch);
+    await apiPut(`/api/tasks/${task.id}?board=${task.board_id}`, { ...patch, boardId: task.board_id });
+    paintToday();
+  }
+  function setSheetPriority(p) {
+    const task = todayTasks.find(t => t.id === taskSheetId);
+    if (!task) return;
+    persistSheet({ priority: p });
+    openTaskSheet(taskSheetId);
+  }
 
   async function toggleTaskDone(taskId, newStage, boardId) {
     await apiPut(`/api/tasks/${taskId}?board=${boardId}`, { stage: newStage, boardId });
@@ -864,12 +971,11 @@
   }
 
   /* ── Import ── */
-  function toggleImport() {
-    const panel = document.getElementById('import-panel');
-    const btn = document.getElementById('import-toggle-btn');
-    panel.classList.toggle('open');
-    btn.classList.toggle('active', panel.classList.contains('open'));
+  function openImport() {
+    const m = document.getElementById('tk-overflow-menu'); if (m) m.style.display = 'none';
+    document.getElementById('import-modal').style.display = 'flex';
   }
+  function closeImport() { document.getElementById('import-modal').style.display = 'none'; }
 
   function clearImport() {
     document.getElementById('import-json').value = '';
@@ -1483,7 +1589,7 @@
       ? this : (e && e.target.closest('.date-trigger'));
     if (!trigger) return;
     dpTrigger = trigger;
-    dpInput = trigger.closest('.task-card').querySelector('.due-date-input');
+    dpInput = trigger.closest('.task-card, #task-sheet').querySelector('.due-date-input');
     const cur = dpInput.value ? dpParse(dpInput.value) : new Date();
     dpMonth = { y: cur.getFullYear(), m: cur.getMonth() };
     renderCalendar();
@@ -1533,7 +1639,7 @@
   function clearDueDate() {
     const t = (this && this.closest && this.closest('.date-trigger')) || dpTrigger;
     if (!t) return;
-    const input = t.closest('.task-card').querySelector('.due-date-input');
+    const input = t.closest('.task-card, #task-sheet').querySelector('.due-date-input');
     input.value = '';
     input.dispatchEvent(new Event('change'));
     t.classList.add('empty');
@@ -1686,7 +1792,7 @@
     document.getElementById('nav-today').classList.remove('active');
     document.getElementById('nav-archived').classList.add('active');
     document.querySelector('.board-scroll').style.display = 'none';
-    document.querySelector('.content-top').style.display = 'none';
+    document.querySelector('.tk-quick-add').style.display = 'none';
     const archivedView = document.getElementById('archived-view');
     archivedView.classList.add('active');
 
@@ -1728,7 +1834,7 @@
     viewingArchived = false;
     document.getElementById('nav-archived').classList.remove('active');
     document.querySelector('.board-scroll').style.display = '';
-    document.querySelector('.content-top').style.display = '';
+    document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('archived-view').classList.remove('active');
   }
 
@@ -1799,7 +1905,7 @@
     viewingDashboard = false;
     document.getElementById('nav-dashboard').classList.remove('active');
     document.querySelector('.board-scroll').style.display = '';
-    document.querySelector('.content-top').style.display = '';
+    document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('dashboard-view').classList.remove('active');
   }
 
@@ -1812,7 +1918,7 @@
     document.getElementById('nav-archived').classList.remove('active');
     document.getElementById('nav-dashboard').classList.add('active');
     document.querySelector('.board-scroll').style.display = 'none';
-    document.querySelector('.content-top').style.display = 'none';
+    document.querySelector('.tk-quick-add').style.display = 'none';
     document.getElementById('dashboard-view').classList.add('active');
     await renderDashboard();
   }
@@ -2063,7 +2169,7 @@
     toggleTheme, toggleNotifications, toggleAccountMenu, closeAccountMenu,
     openSearch, openHelpModal, closeHelpModal,
     clearTodayFilter, setFilter, filterToday, viewDashboard, viewArchived,
-    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, toggleImport,
+    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, openImport, closeImport,
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
@@ -2075,6 +2181,7 @@
     clearTodayAndFilter: () => { clearTodayFilter(); setFilter(null); },
     closeAccountAndOpenSearch: () => { closeAccountMenu(); openSearch(); },
     closeAccountAndOpenHelp: () => { closeAccountMenu(); openHelpModal(); },
+    openTaskSheet, closeTaskSheet, setSheetPriority, addSheetSub, toggleSheetSub, removeSheetSub,
     openDatePicker, clearDueDate, pickDate,
     dpPrev: () => dpNav(-1),
     dpNext: () => dpNav(1),

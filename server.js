@@ -829,7 +829,8 @@ app.get('/api/tasks/count', requireAuth, wrap(async (req, res) => {
 app.get('/api/tasks/today', requireAuth, wrap(async (req, res) => {
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const { rows } = await pool.query(
-    `SELECT DISTINCT t.id, t.text, t.stage, t.due_date, t.priority, t.status,
+    `SELECT DISTINCT t.id, t.text, t.stage, t.due_date, t.priority, t.status, t.subtasks,
+            t.category_id, t.recurrence, t.assigned_to_user_id, t.cal_start, t.cal_end,
             t.board_id, b.name AS board_name,
             c.name AS cat_name, c.color AS cat_color, t.completed_at
        FROM tasks t

@@ -225,19 +225,21 @@
     </div>
     <div class="tk-board-bar"><div class="tk-board-bar-fill" id="tk-board-bar-fill"></div></div>
     <div class="tk-overflow-menu" id="tk-overflow-menu" style="display:none">
+      <button class="tk-overflow-item" data-action="openImport">Import</button>
       <button class="tk-overflow-item" data-action="openMembersModal">Members</button>
       <button class="tk-overflow-item" data-action="viewArchived">Archived</button>
       <button class="tk-overflow-item" data-action="renameCurrentBoard">Rename board</button>
       <button class="tk-overflow-item danger" data-action="deleteCurrentBoard">Delete board</button>
     </div>
-    <div class="content-top">
-      <div class="add-task-row">
-        <input id="task-input" type="text" placeholder="Add a task… (try 'dentist Thursday 2pm')" />
-        <button class="btn-add-task" data-action="addTask">Add Task</button>
-        <button class="import-toggle-btn" id="import-toggle-btn" data-action="toggleImport">Import</button>
-      </div>
-      <div class="import-panel" id="import-panel">
-        <h3>Import from Claude</h3>
+    <div class="tk-quick-add">
+      <input id="task-input" type="text" aria-label="New task" placeholder="Add a task… (try 'dentist Thursday 2pm')" />
+      <button class="tk-quick-add-btn" data-action="addTask" aria-label="Add task">+</button>
+    </div>
+
+    <div class="tk-modal-backdrop" id="import-modal" style="display:none" data-action="closeImport">
+      <div class="import-panel" id="import-panel" data-action="stop">
+        <div class="import-modal-head"><h3>Import from Claude</h3>
+          <button class="tk-sheet-x" data-action="closeImport" aria-label="Close">×</button></div>
         <p>Ask Claude: <em>"Send these tasks to my to-do app in this format:"</em></p>
         <code>[
   { "text": "Book flight", "status": "Check dates first", "owner": "alice@gmail.com" },
@@ -269,6 +271,7 @@
       <div class="board">
         <div class="column" data-stage="backlog">
           <div class="column-header">
+            <span class="column-dot"></span>
             <span class="column-title">Backlog</span>
             <span class="column-count" id="count-backlog">0</span>
           </div>
@@ -276,6 +279,7 @@
         </div>
         <div class="column" data-stage="in_progress">
           <div class="column-header">
+            <span class="column-dot"></span>
             <span class="column-title">In Progress</span>
             <span class="column-count" id="count-in_progress">0</span>
           </div>
@@ -283,6 +287,7 @@
         </div>
         <div class="column" data-stage="done">
           <div class="column-header">
+            <span class="column-dot"></span>
             <span class="column-title">Done</span>
             <span class="column-count" id="count-done">0</span>
           </div>
@@ -433,6 +438,10 @@
     <span>Profile</span>
   </button>
 </nav>
+
+<div class="tk-modal-backdrop" id="task-sheet" style="display:none" data-action="closeTaskSheet">
+  <div class="tk-sheet" data-action="stop"><div class="tk-sheet-body"></div></div>
+</div>
 
 <div class="modal-overlay" id="quickadd-modal" style="display:none" data-action="closeQuickAdd">
   <div class="modal tk-card" data-action="stop" style="max-width:440px;padding:24px;">

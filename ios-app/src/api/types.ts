@@ -118,6 +118,12 @@ export interface TodayTask {
   due_date: string;          // YYYY-MM-DD
   priority: Priority;
   status: string;
+  subtasks: { id?: number; text: string; done: boolean }[] | null;
+  category_id: number | null;
+  recurrence: string | null;
+  assigned_to_user_id: number | null;
+  cal_start: string | null;
+  cal_end: string | null;
   board_id: number;
   board_name: string;
   cat_name: string | null;
