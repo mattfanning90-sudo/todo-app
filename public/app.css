@@ -779,8 +779,9 @@
       }
       .sidebar-overlay.visible { display: block; }
 
-      /* Keep the add-task input pinned below the header so it's always
+      /* Keep the quick-add bar pinned below the header so it's always
          one tap away while scrolling a long column. */
+      .tk-quick-add { position: sticky; top: var(--header-h); z-index: 40; }
 
       /* Stage jump-nav: sticky tab strip below the add-task bar. Tapping a
          tab smooth-scrolls to that column. All three stage sections render
@@ -1007,18 +1008,18 @@
 .tk-quick-add input::placeholder { color:var(--tk-muted,rgba(30,30,46,.45)); }
 .tk-quick-add-btn { width:32px; height:32px; flex-shrink:0; border:none; border-radius:9px; background:var(--tk-accent,#FF6B47); color:#fff; font-size:20px; font-weight:600; line-height:1; cursor:pointer; }
 .tk-modal-backdrop { position:fixed; inset:0; background:rgba(30,30,46,.35); z-index:1000; align-items:flex-start; justify-content:center; padding:60px 16px; }
-.tk-modal-backdrop .import-panel { display:block; max-width:520px; width:100%; background:var(--tk-card,#fff); border-radius:16px; box-shadow:0 16px 50px rgba(30,30,46,.2); padding:18px; }
+.tk-modal-backdrop .import-panel { display:block; max-width:520px; width:100%; background:var(--tk-card,#fff); border-radius:16px; box-shadow:0 16px 50px rgba(30,30,46,.2); padding:18px; border:none; margin-top:0; }
+.tk-sheet-x { border:none; background:none; font-size:20px; line-height:1; color:var(--tk-muted,rgba(30,30,46,.45)); cursor:pointer; }
 .import-modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
 
 /* Board: 3 columns on desktop/iPad, vertical stack on phone */
 #screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
 #screen-board .board { display:grid; grid-template-columns:repeat(3, minmax(300px, 1fr)); gap:18px; align-items:start; min-width:0; height:auto; }
 #screen-board .column { background:rgba(30,30,46,.025); border:1px solid rgba(30,30,46,.06); border-radius:16px; padding:14px 12px; width:auto; max-width:none; min-width:0; }
-#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:2px 4px 12px; }
+#screen-board .column-header { display:flex; align-items:center; gap:8px; padding:2px 4px 12px; border-top:none; }
 #screen-board .column-header::after { content:none; }
 #screen-board .column-title { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
 #screen-board .task-list { display:flex; flex-direction:column; gap:10px; min-height:24px; }
-#screen-board .column-header { border-top:none; }
 .column-dot { width:8px; height:8px; border-radius:99px; flex-shrink:0; }
 .column[data-stage="backlog"] .column-dot { background:#64748B; }
 .column[data-stage="in_progress"] .column-dot { background:#FF6B47; }
