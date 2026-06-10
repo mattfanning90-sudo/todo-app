@@ -1536,6 +1536,50 @@
     ownerPreview.textContent = emails.length ? '👤 ' + emails.join(', ') : '';
   }
 
+  function splitCalValue(v) {
+    if (!v) return { date: '', time: '' };
+    const [date, time] = v.split('T');
+    return { date: date || '', time: time ? time.slice(0, 5) : '' };
+  }
+  function combineCalDateTime(date, time) {
+    if (!date) return '';
+    return time ? `${date}T${time}` : date;
+  }
+  function addDaysYmd(ymd, n) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+  function icsEscape(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  }
+  function icsStamp(v) {
+    return v.includes('T') ? v.replace(/[-:]/g, '') + '00' : v.replace(/-/g, '');
+  }
+  function buildICS({ id, title, notes, calStart, calEnd, guests }) {
+    const allDay = !calStart.includes('T');
+    const dtStart = allDay ? `DTSTART;VALUE=DATE:${icsStamp(calStart)}` : `DTSTART:${icsStamp(calStart)}`;
+    let endStamp;
+    if (calEnd) endStamp = icsStamp(calEnd);
+    else if (allDay) endStamp = icsStamp(addDaysYmd(calStart, 1));
+    else { const d = new Date(calStart); d.setMinutes(d.getMinutes() + 60); endStamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}00`; }
+    const dtEnd = allDay ? `DTEND;VALUE=DATE:${endStamp}` : `DTEND:${endStamp}`;
+    const now = new Date();
+    const dtstamp = `${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}T${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}${String(now.getUTCSeconds()).padStart(2,'0')}Z`;
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Taskly//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:taskly-${id}-${now.getTime()}@taskly`,`DTSTAMP:${dtstamp}`,dtStart,dtEnd,`SUMMARY:${icsEscape(title)}`];
+    if (notes) lines.push(`DESCRIPTION:${icsEscape(notes)}`);
+    (guests || []).forEach(g => lines.push(`ATTENDEE;CN=${icsEscape(g)}:mailto:${g}`));
+    lines.push('END:VEVENT','END:VCALENDAR');
+    return lines.join('\r\n');
+  }
+  function downloadICS(filename, ics) {
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(a.href);
+  }
   function toGCalDate(dtLocal, addMinutes = 0) {
     const d = new Date(dtLocal);
     d.setMinutes(d.getMinutes() + addMinutes);
