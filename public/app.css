@@ -368,46 +368,6 @@
     /* ── Main content ── */
     .main-content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
-    .content-top {
-      background: var(--bg-header);
-      border-bottom: 1px solid var(--border);
-      padding: 12px 20px;
-      flex-shrink: 0;
-      transition: background 0.2s, border-color 0.2s;
-    }
-
-    .add-task-row { display: flex; gap: 8px; align-items: center; }
-
-    .add-task-row input {
-      flex: 1; padding: 9px 14px;
-      border: 1.5px solid var(--border-input);
-      border-radius: var(--r-md);
-      font-size: 0.9rem; outline: none;
-      background: var(--bg-input); color: var(--text);
-      font-family: inherit;
-      transition: border-color 0.15s, background 0.2s;
-    }
-    .add-task-row input:focus { border-color: var(--primary); background: var(--bg-card); }
-    .add-task-row input::placeholder { color: var(--text-light); }
-
-    .btn-add-task {
-      padding: 9px 18px; background: var(--primary); color: #fff;
-      border: none; border-radius: var(--r-md);
-      font-size: 0.88rem; font-weight: 600; cursor: pointer;
-      transition: background 0.15s; font-family: inherit; white-space: nowrap;
-    }
-    .btn-add-task:hover { background: var(--primary-hover); }
-
-    .import-toggle-btn {
-      padding: 6px 12px; background: none;
-      border: 1px solid var(--border); border-radius: var(--r-sm);
-      font-size: 0.78rem; font-weight: 500; color: var(--text-muted);
-      cursor: pointer; transition: all 0.15s; font-family: inherit; white-space: nowrap;
-    }
-    .import-toggle-btn:hover, .import-toggle-btn.active {
-      border-color: var(--primary); color: var(--primary); background: var(--primary-bg);
-    }
-
     .import-panel {
       display: none; background: var(--bg-hover);
       border: 1px solid var(--border); border-radius: var(--r-md);
@@ -822,18 +782,9 @@
 
       /* Keep the add-task input pinned below the header so it's always
          one tap away while scrolling a long column. */
-      .content-top {
-        position: sticky;
-        top: var(--header-h);
-        z-index: 40;
-        background: var(--bg);
-        padding: 8px 12px;
-        border-bottom: 1px solid var(--border);
-      }
-
       /* The Import flow is a paste-JSON-from-Claude workflow that's
-         desktop-oriented; suppress it on phones to reduce clutter. */
-      .import-toggle-btn, .import-panel { display: none !important; }
+         desktop-oriented; suppress its toggle button on phones to reduce clutter. */
+      .import-toggle-btn { display: none !important; }
 
       /* Stage jump-nav: sticky tab strip below the add-task bar. Tapping a
          tab smooth-scrolls to that column. All three stage sections render
@@ -892,7 +843,6 @@
       .account-btn .account-caret { display: none; }
       .account-btn { padding: 3px; border-radius: 50%; }
       .account-dropdown { width: calc(100vw - 32px); max-width: 320px; }
-      .add-task-row { flex-wrap: wrap; }
       .dash-stats { grid-template-columns: 1fr 1fr; }
       .dash-panels { grid-template-columns: 1fr; }
     }
@@ -1056,6 +1006,14 @@
   background:none; cursor:pointer; font:inherit; font-size:14px; color:var(--tk-text); border-radius:8px; }
 .tk-overflow-item.danger { color:#DC2626; }
 
+.tk-quick-add { display:flex; gap:8px; align-items:center; background:var(--tk-card,#fff); border:1px solid rgba(30,30,46,.10); border-radius:12px; padding:8px 10px 8px 14px; margin:0 0 16px; }
+.tk-quick-add input { flex:1; border:none; background:none; outline:none; font-size:14px; color:var(--tk-text,#1E1E2E); }
+.tk-quick-add input::placeholder { color:var(--tk-muted,rgba(30,30,46,.45)); }
+.tk-quick-add-btn { width:32px; height:32px; flex-shrink:0; border:none; border-radius:9px; background:var(--tk-accent,#FF6B47); color:#fff; font-size:20px; font-weight:600; line-height:1; cursor:pointer; }
+.tk-modal-backdrop { position:fixed; inset:0; background:rgba(30,30,46,.35); z-index:1000; align-items:flex-start; justify-content:center; padding:60px 16px; }
+.tk-modal-backdrop .import-panel { display:block; max-width:520px; width:100%; background:var(--tk-card,#fff); border-radius:16px; box-shadow:0 16px 50px rgba(30,30,46,.2); padding:18px; }
+.import-modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
+
 /* Board: 3 columns on desktop/iPad, vertical stack on phone */
 #screen-board { position:relative; }  /* anchor for the absolute .tk-overflow-menu */
 #screen-board .board { display:grid; grid-template-columns:repeat(3, minmax(300px, 1fr)); gap:18px; align-items:start; min-width:0; height:auto; }
@@ -1064,6 +1022,15 @@
 #screen-board .column-header::after { content:none; }
 #screen-board .column-title { font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; }
 #screen-board .task-list { display:flex; flex-direction:column; gap:10px; min-height:24px; }
+#screen-board .column-header { border-top:none; }
+.column-dot { width:8px; height:8px; border-radius:99px; flex-shrink:0; }
+.column[data-stage="backlog"] .column-dot { background:#64748B; }
+.column[data-stage="in_progress"] .column-dot { background:#FF6B47; }
+.column[data-stage="done"] .column-dot { background:#10B981; }
+.column[data-stage="backlog"] .column-title { color:#64748B; }
+.column[data-stage="in_progress"] .column-title { color:#FF6B47; }
+.column[data-stage="done"] .column-title { color:#10B981; }
+#screen-board .column-count { margin-left:auto; }
 @media (max-width: 760px) {
   #screen-board .board { grid-template-columns:1fr; gap:14px; }
 }

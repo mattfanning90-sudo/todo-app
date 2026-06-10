@@ -864,12 +864,11 @@
   }
 
   /* ── Import ── */
-  function toggleImport() {
-    const panel = document.getElementById('import-panel');
-    const btn = document.getElementById('import-toggle-btn');
-    panel.classList.toggle('open');
-    btn.classList.toggle('active', panel.classList.contains('open'));
+  function openImport() {
+    const m = document.getElementById('tk-overflow-menu'); if (m) m.style.display = 'none';
+    document.getElementById('import-modal').style.display = 'flex';
   }
+  function closeImport() { document.getElementById('import-modal').style.display = 'none'; }
 
   function clearImport() {
     document.getElementById('import-json').value = '';
@@ -2063,7 +2062,7 @@
     toggleTheme, toggleNotifications, toggleAccountMenu, closeAccountMenu,
     openSearch, openHelpModal, closeHelpModal,
     clearTodayFilter, setFilter, filterToday, viewDashboard, viewArchived,
-    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, toggleImport,
+    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, openImport, closeImport,
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
