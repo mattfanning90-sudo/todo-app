@@ -7,12 +7,15 @@
     "ios": "expo run:ios",
     "android": "expo run:android",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest --forceExit",
+    "test:ci": "jest --forceExit --runInBand",
     "test:watch": "jest --watch",
     "generate-icon": "node scripts/generate-icon.mjs"
   },
   "jest": {
     "preset": "jest-expo",
+    "maxWorkers": 2,
+    "testTimeout": 15000,
     "setupFiles": [
       "./jest.setup.js"
     ],
