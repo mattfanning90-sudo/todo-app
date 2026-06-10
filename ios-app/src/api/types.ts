@@ -40,7 +40,7 @@ export interface Task {
   due_date: string | null;
   priority: Priority;
   recurrence: string | null;
-  subtasks: { text: string; done: boolean }[] | null;
+  subtasks: { id?: number; text: string; done: boolean }[] | null;
   assigned_to_user_id: number | null;
   // Joined from the assignee on GET /api/tasks (absent on POST/INSERT responses).
   assigned_to_name?: string | null;
