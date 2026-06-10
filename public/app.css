@@ -418,10 +418,6 @@
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
-    .column[data-stage="backlog"] .column-header { border-top: 3px solid var(--col-backlog); }
-    .column[data-stage="in_progress"] .column-header { border-top: 3px solid var(--col-progress); }
-    .column[data-stage="done"] .column-header { border-top: 3px solid var(--col-done); }
-
     .column-title { font-size: 0.8rem; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.06em; flex: 1; }
     .column-count { background: var(--bg-hover); color: var(--text-muted); border-radius: 10px; padding: 2px 8px; font-size: 0.72rem; font-weight: 600; }
 
@@ -1082,7 +1078,7 @@
 .date-trigger { display:flex; align-items:center; gap:9px; width:100%; padding:10px 12px; border:1px solid rgba(30,30,46,.12); border-radius:10px; background:#fff; cursor:pointer; font:inherit; font-size:14px; color:var(--tk-text); text-align:left; }
 .date-trigger.empty .date-trigger-label { color:rgba(30,30,46,.4); }
 .date-clear-x { margin-left:auto; color:rgba(30,30,46,.35); font-size:16px; padding:0 4px; }
-.dp-pop { z-index:300; width:300px; background:#fff; border:1px solid rgba(30,30,46,.10); border-radius:16px; box-shadow:0 12px 40px rgba(30,30,46,.16); padding:14px; }
+.dp-pop { z-index:1010;width:300px; background:#fff; border:1px solid rgba(30,30,46,.10); border-radius:16px; box-shadow:0 12px 40px rgba(30,30,46,.16); padding:14px; }
 .dp-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
 .dp-title { font-size:14px; font-weight:700; color:var(--tk-text); }
 .dp-nav { width:30px; height:30px; border-radius:8px; border:none; background:rgba(30,30,46,.05); cursor:pointer; color:rgba(30,30,46,.6); font-size:16px; }
