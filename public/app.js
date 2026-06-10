@@ -1589,7 +1589,7 @@
       ? this : (e && e.target.closest('.date-trigger'));
     if (!trigger) return;
     dpTrigger = trigger;
-    dpInput = trigger.closest('.task-card, #task-sheet').querySelector('.due-date-input');
+    dpInput = trigger.closest('.task-card, #task-sheet').querySelector(trigger.dataset.dpTarget || '.due-date-input');
     const cur = dpInput.value ? dpParse(dpInput.value) : new Date();
     dpMonth = { y: cur.getFullYear(), m: cur.getMonth() };
     renderCalendar();
@@ -1639,7 +1639,7 @@
   function clearDueDate() {
     const t = (this && this.closest && this.closest('.date-trigger')) || dpTrigger;
     if (!t) return;
-    const input = t.closest('.task-card, #task-sheet').querySelector('.due-date-input');
+    const input = t.closest('.task-card, #task-sheet').querySelector(t.dataset.dpTarget || '.due-date-input');
     input.value = '';
     input.dispatchEvent(new Event('change'));
     t.classList.add('empty');
