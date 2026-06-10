@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '@/api/client';
-import type { TodayTask } from '@/api/types';
+import type { Board, Task, TodayTask } from '@/api/types';
 import { useTheme, spacing, font, radius } from '@/theme';
 import { ProgressRing } from '@/components/ProgressRing';
 import { TagChip } from '@/components/TagChip';
@@ -130,6 +130,30 @@ export function TodayScreen({ navigation }: Props) {
   const renderItem = ({ item }: { item: TodayTask }) => {
     const done = item.stage === 'done';
     const overdue = !done && item.due_date && item.due_date < todayStr;
+
+    // Construct minimal Board/Task shapes required by TaskDetailScreen.
+    // board.id is all TaskDetailScreen needs (for api.categories); owner_user_id/slug
+    // are not used by that screen so we set safe placeholder values.
+    const board: Board = { id: item.board_id, owner_user_id: 0, name: item.board_name, slug: '' };
+    const task: Task = {
+      id: item.id,
+      text: item.text,
+      stage: item.stage,
+      priority: item.priority,
+      status: item.status,
+      due_date: item.due_date ?? null,
+      board_id: item.board_id,
+      category_id: null,
+      recurrence: null,
+      subtasks: null,
+      assigned_to_user_id: null,
+      cal_start: null,
+      cal_end: null,
+      archived_at: null,
+      completed_at: item.completed_at,
+      position: 0,
+    };
+
     return (
       <View style={s.row}>
         <Pressable
@@ -140,7 +164,11 @@ export function TodayScreen({ navigation }: Props) {
           onPress={() => toggleDone(item)}
           testID={`check-${item.id}`}
         />
-        <View style={{ flex: 1 }}>
+        <Pressable
+          style={{ flex: 1 }}
+          onPress={() => navigation.navigate('TaskDetail', { board, task })}
+          testID={`row-${item.id}`}
+        >
           <Text style={[s.taskTitle, done && s.taskTitleDone]}>{item.text}</Text>
           <View style={s.taskMeta}>
             {overdue ? (
@@ -151,7 +179,7 @@ export function TodayScreen({ navigation }: Props) {
             {item.cat_name && <TagChip name={item.cat_name} color={item.cat_color ?? '#9CA3AF'} />}
             <Text style={s.boardName}>{item.board_name}</Text>
           </View>
-        </View>
+        </Pressable>
         <View style={[s.prioDot, { backgroundColor: prioColor(item.priority) }]} />
       </View>
     );

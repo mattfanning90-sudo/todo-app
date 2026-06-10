@@ -56,6 +56,12 @@ LoginScreen
 | **Task sharing** | Share any task into another user's board | Low | `POST /api/tasks/:id/share` not yet in iOS |
 | **Import JSON** | Paste a JSON array to bulk-import tasks | Low | No API call for this exists |
 
+### Closed in feat/taskly-web-overhaul (2026-06-10)
+
+| Feature | Status |
+|---|---|
+| Today → task detail (subtasks) | ✅ Tapping a Today task row now navigates to `TaskDetailScreen` (modal), which renders subtasks. The checkbox remains a separate `Pressable` that still toggles done without navigating. `TodayStackParams` already included `TaskDetail`; only `TodayScreen.renderItem` needed wiring. |
+
 ### Closed in card-badges sprint (2026-05-28)
 
 | Feature | Status |
