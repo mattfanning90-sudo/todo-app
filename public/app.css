@@ -450,6 +450,11 @@
     .task-card.dragging { opacity: 0.4; transform: rotate(1deg); box-shadow: var(--shadow-lg); }
     .task-card.drag-over { border-color: var(--primary); background: var(--primary-muted); transform: scale(1.01); transition: transform 0.1s; }
     .task-card.completing { opacity: 0; transform: translateX(24px); }
+    /* SortableJS forceFallback positions the drag clone via an inline transform
+       updated on every pointermove; the base .task-card `transition: transform`
+       would animate each update, making the clone lag/trail the cursor. Pin it
+       1:1 while dragging (clone-only — normal cards keep their transitions). */
+    .sortable-fallback, .sortable-drag { transition: none !important; }
 
     .task-item { padding: 10px 12px; }
 
