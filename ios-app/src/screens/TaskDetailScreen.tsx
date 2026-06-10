@@ -73,7 +73,7 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
   const [calEnd, setCalEnd] = useState<string>(task?.cal_end ?? '');
 
   // Subtasks
-  const [subtasks, setSubtasks] = useState<{ text: string; done: boolean }[]>(
+  const [subtasks, setSubtasks] = useState<{ id?: number; text: string; done: boolean }[]>(
     task?.subtasks ?? []
   );
   const [newSubtaskText, setNewSubtaskText] = useState('');
@@ -151,7 +151,11 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
   const addSubtask = () => {
     const st = newSubtaskText.trim();
     if (!st) return;
-    setSubtasks((prev) => [...prev, { text: st, done: false }]);
+    setSubtasks((prev) => {
+      const ids = prev.map((s) => s.id).filter((x): x is number => Number.isFinite(x as number));
+      const nextId = (ids.length ? Math.max(...ids) : 0) + 1;
+      return [...prev, { id: nextId, text: st, done: false }];
+    });
     setNewSubtaskText('');
     subtaskInputRef.current?.focus();
   };

@@ -13,6 +13,7 @@
   let todayFilter = false;
   let selectedColor = COLOR_PALETTE[0];
   let myId = null;
+  let isDragging = false;
   let myName = '';
   let boardMembers = [];
   let memberships = [];
@@ -97,10 +98,10 @@
       headers,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {})
     });
-    if (!res.ok && method === 'POST') throw new Error(`Request failed: ${res.status}`);
     if (method !== 'GET' && (url.startsWith('/api/tasks') || url.startsWith('/api/categories'))) {
       try { localStorage.removeItem(BOOT_CACHE_KEY); } catch {}
     }
+    if (method !== 'GET' && !res.ok) throw new Error('HTTP ' + res.status);
     return (method === 'POST') ? res.json() : null;
   }
 
@@ -286,7 +287,14 @@
   function setTodayFilter(mode) { todayFilterMode = mode; paintToday(); }
 
   let taskSheetId = null;
-  const normSubs = s => Array.isArray(s) ? s : (() => { try { return JSON.parse(s || '[]'); } catch { return []; } })();
+  const normSubs = s => {
+    let arr;
+    if (Array.isArray(s)) arr = s;
+    else { try { arr = JSON.parse(s || '[]'); } catch { arr = []; } }
+    if (!Array.isArray(arr)) arr = [];
+    let next = arr.reduce((m, x) => (Number.isFinite(x.id) ? Math.max(m, x.id) : m), 0);
+    return arr.map(x => Number.isFinite(x.id) ? x : { ...x, id: ++next });
+  };
 
   function openTaskSheet(id) {
     const task = todayTasks.find(t => t.id === id);
@@ -354,7 +362,8 @@
     if (!text) return;
     const task = todayTasks.find(t => t.id === taskSheetId);
     const subs = normSubs(task.subtasks);
-    const maxId = subs.length ? Math.max(...subs.map(s => s.id)) : 0;
+    const ids = subs.map(s => s.id).filter(Number.isFinite);
+    const maxId = ids.length ? Math.max(...ids) : 0;
     subs.push({ id: maxId + 1, text, done: false });
     task.subtasks = subs;
     persistSheet({ subtasks: subs });
@@ -381,9 +390,11 @@
   async function persistSheet(patch) {
     const task = todayTasks.find(t => t.id === taskSheetId);
     if (!task) return;
+    const before = {}; Object.keys(patch).forEach(k => before[k] = task[k]);
     Object.assign(task, patch);
-    await apiPut(`/api/tasks/${task.id}?board=${task.board_id}`, { ...patch, boardId: task.board_id });
     paintToday();
+    try { await apiPut(`/api/tasks/${task.id}?board=${task.board_id}`, { ...patch, boardId: task.board_id }); }
+    catch { Object.assign(task, before); paintToday(); if (taskSheetId === task.id) openTaskSheet(task.id); }
   }
   function setSheetPriority(p) {
     const task = todayTasks.find(t => t.id === taskSheetId);
@@ -791,6 +802,7 @@
 
   /* ── Members modal ── */
   async function openMembersModal() {
+    const m=document.getElementById('tk-overflow-menu'); if(m) m.style.display='none';
     document.getElementById('members-modal').style.display = 'flex';
     document.getElementById('invite-msg').textContent = '';
     document.getElementById('invite-email').value = '';
@@ -973,6 +985,7 @@
   /* ── Import ── */
   function openImport() {
     const m = document.getElementById('tk-overflow-menu'); if (m) m.style.display = 'none';
+    clearImport();
     document.getElementById('import-modal').style.display = 'flex';
   }
   function closeImport() { document.getElementById('import-modal').style.display = 'none'; }
@@ -1218,7 +1231,7 @@
     textarea.value = task.status || '';
     seedCal('start', task.cal_start);
     seedCal('end', task.cal_end);
-    calSection.classList.toggle('cal-on', !!task.cal_start);
+    calSection.classList.toggle('cal-on', !!(task.cal_start || task.cal_end));
     (task.owners || []).forEach(email => addOwnerChip(email, chipsEl, ownerPreview));
     renderCatSelector(catSelector, card);
     updateCardBadge(card);
@@ -1332,10 +1345,12 @@
     const archiveBtn = card.querySelector('.archive-btn');
     archiveBtn.addEventListener('click', async e => {
       e.stopPropagation();
-      await apiPut(`/api/tasks/${task.id}`, { ...getCardPayload(card), archived: true });
-      card.remove();
-      updateCounts();
-      loadArchivedCount();
+      try {
+        await apiPut(`/api/tasks/${task.id}`, { ...getCardPayload(card), archived: true });
+        card.remove();
+        updateCounts();
+        loadArchivedCount();
+      } catch { announce('Could not archive — please try again.'); }
     });
 
     // Inline new category
@@ -1406,7 +1421,8 @@
       const text = subtaskInput.value.trim();
       if (!text) return;
       const subtasks = JSON.parse(card.dataset.subtasks || '[]');
-      const maxId = subtasks.length ? Math.max(...subtasks.map(s => s.id)) : 0;
+      const ids = subtasks.map(s => s.id).filter(Number.isFinite);
+      const maxId = ids.length ? Math.max(...ids) : 0;
       subtasks.push({ id: maxId + 1, text, done: false });
       card.dataset.subtasks = JSON.stringify(subtasks);
       subtaskInput.value = '';
@@ -1470,7 +1486,7 @@
       const dateInput = card.querySelector(`.cal-${prefix}-date`);
       const timeInput = card.querySelector(`.cal-${prefix}-time`);
       const combined = card.querySelector(`.cal-${prefix}`);
-      const recompute = () => { combined.value = combineCalDateTime(dateInput.value, timeInput.value); apiPut(`/api/tasks/${task.id}`, getCardPayload(card)); };
+      const recompute = () => { if (!dateInput.value && timeInput.value) timeInput.value = ''; combined.value = combineCalDateTime(dateInput.value, timeInput.value); apiPut(`/api/tasks/${task.id}`, getCardPayload(card)); };
       dateInput.addEventListener('change', recompute);
       timeInput.addEventListener('change', recompute);
     });
@@ -1503,7 +1519,7 @@
         const allDay = !calStart.includes('T');
         let endG;
         if (allDay) {
-          const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1);
+          const endDate = addDaysYmd(calEnd ? calEnd.split('T')[0] : calStart, 1);
           endG = endDate.replace(/-/g, '');
         } else if (calEnd) {
           const [ed, et] = calEnd.split('T');
@@ -1568,7 +1584,8 @@
         preventOnFilter: false,
         forceFallback: true,
         fallbackOnBody: true,
-        onEnd: handleSortEnd,
+        onStart: () => { isDragging = true; },
+        onEnd: (evt) => { isDragging = false; handleSortEnd(evt); },
       });
     });
   }
@@ -1648,7 +1665,7 @@
     const dtStart = allDay ? `DTSTART;VALUE=DATE:${icsStamp(calStart)}` : `DTSTART:${icsStamp(calStart)}`;
     let dtEnd;
     if (allDay) {
-      const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1); // exclusive next day
+      const endDate = addDaysYmd(calEnd ? calEnd.split('T')[0] : calStart, 1); // exclusive next day
       dtEnd = `DTEND;VALUE=DATE:${endDate.replace(/-/g, '')}`;
     } else {
       let endVal;
@@ -1929,6 +1946,7 @@
   }
 
   async function viewArchived() {
+    const m=document.getElementById('tk-overflow-menu'); if(m) m.style.display='none';
     closeSidebarMobile();
     viewingArchived = true;
     document.getElementById('nav-all').classList.remove('active');
@@ -1936,6 +1954,7 @@
     document.getElementById('nav-archived').classList.add('active');
     document.querySelector('.board-scroll').style.display = 'none';
     document.querySelector('.tk-quick-add').style.display = 'none';
+    const st=document.getElementById('mobile-stage-tabs'); if(st) st.style.display='none';
     const archivedView = document.getElementById('archived-view');
     archivedView.classList.add('active');
 
@@ -1961,14 +1980,21 @@
 
   async function restoreTask(id) {
     const btn = this;
+    const orig = btn.textContent;
     btn.textContent = '…';
     btn.disabled = true;
-    await apiPut(`/api/tasks/${id}`, { archived: false, ...boardBody() });
-    btn.closest('.archived-item').remove();
-    loadArchivedCount();
-    const list = document.getElementById('archived-list');
-    if (!list.querySelector('.archived-item')) {
-      list.innerHTML = '<div class="archived-empty">No archived tasks yet.</div>';
+    try {
+      await apiPut(`/api/tasks/${id}`, { archived: false, ...boardBody() });
+      btn.closest('.archived-item').remove();
+      loadArchivedCount();
+      const list = document.getElementById('archived-list');
+      if (!list.querySelector('.archived-item')) {
+        list.innerHTML = '<div class="archived-empty">No archived tasks yet.</div>';
+      }
+    } catch {
+      btn.textContent = orig;
+      btn.disabled = false;
+      announce('Could not restore — please try again.');
     }
   }
 
@@ -1979,6 +2005,7 @@
     document.querySelector('.board-scroll').style.display = '';
     document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('archived-view').classList.remove('active');
+    const st=document.getElementById('mobile-stage-tabs'); if(st) st.style.display='';
   }
 
   /* ── Pull to refresh ── */
@@ -1988,7 +2015,7 @@
     const THRESHOLD = 70;
 
     document.addEventListener('touchstart', e => {
-      if (window.scrollY === 0 && !document.querySelector('.task-card.dragging')) {
+      if (window.scrollY === 0 && !isDragging) {
         startY = e.touches[0].clientY;
         pulling = true;
         triggered = false;
@@ -2050,6 +2077,7 @@
     document.querySelector('.board-scroll').style.display = '';
     document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('dashboard-view').classList.remove('active');
+    const st=document.getElementById('mobile-stage-tabs'); if(st) st.style.display='';
   }
 
   async function viewDashboard() {
@@ -2063,6 +2091,7 @@
     document.querySelector('.board-scroll').style.display = 'none';
     document.querySelector('.tk-quick-add').style.display = 'none';
     document.getElementById('dashboard-view').classList.add('active');
+    const st=document.getElementById('mobile-stage-tabs'); if(st) st.style.display='none';
     await renderDashboard();
   }
 

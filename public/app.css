@@ -916,9 +916,9 @@
 
 /* ── Taskly shell ── */
 .screen { display:none; }
-.screen.active { display:block; flex:1 1 auto; min-height:0; overflow-y:auto; }
+.screen.active { display:block; flex:1 1 auto; min-height:0; overflow-y:auto; padding:24px 28px; }
 /* board screen owns vertical scroll; board-scroll scrolls columns horizontally when they don't fit */
-#screen-board .board-scroll { overflow-x:auto; flex:none; }
+#screen-board .board-scroll { overflow-x:auto; flex:none; padding:0; }
 .tk-wordmark { display:flex; align-items:center; gap:10px; padding:24px 20px 16px;
   font-size:18px; font-weight:700; color:var(--tk-text); }
 .tk-wordmark-icon { width:32px; height:32px; border-radius:10px; background:var(--tk-accent);
@@ -1009,7 +1009,7 @@
 .tk-quick-add input::placeholder { color:var(--tk-muted,rgba(30,30,46,.45)); }
 .tk-quick-add-btn { width:32px; height:32px; flex-shrink:0; border:none; border-radius:9px; background:var(--tk-accent,#FF6B47); color:#fff; font-size:20px; font-weight:600; line-height:1; cursor:pointer; }
 .tk-modal-backdrop { position:fixed; inset:0; background:rgba(30,30,46,.35); z-index:1000; align-items:flex-start; justify-content:center; padding:60px 16px; }
-.tk-modal-backdrop .import-panel { display:block; max-width:520px; width:100%; background:var(--tk-card,#fff); border-radius:16px; box-shadow:0 16px 50px rgba(30,30,46,.2); padding:18px; border:none; margin-top:0; }
+.tk-modal-backdrop .import-panel { display:block; max-width:520px; width:100%; background:var(--tk-card,#fff); border-radius:16px; box-shadow:0 16px 50px rgba(30,30,46,.2); padding:18px; border:none; margin-top:0; max-height:84vh; overflow-y:auto; }
 .tk-sheet-x { border:none; background:none; font-size:20px; line-height:1; color:var(--tk-muted,rgba(30,30,46,.45)); cursor:pointer; }
 .import-modal-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; }
 
@@ -1029,9 +1029,10 @@
 .column[data-stage="in_progress"] .column-title { color:#FF6B47; }
 .column[data-stage="done"] .column-title { color:#10B981; }
 #screen-board .column-count { margin-left:auto; }
-@media (max-width: 760px) {
+@media (max-width: 768px) {
   #screen-board .board { grid-template-columns:1fr; gap:14px; }
 }
+@media (max-width:768px){ #screen-board .board-scroll{ overflow-x:visible; } }
 
 /* Card restyle to Taskly (shell only — internal card DOM unchanged) */
 #screen-board .task-card { background:var(--tk-card); border:1px solid var(--tk-line); border-radius:14px;
