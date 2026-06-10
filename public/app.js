@@ -1499,9 +1499,35 @@
       let url = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
       url += '&text=' + encodeURIComponent(taskTitle);
       if (status) url += '&details=' + encodeURIComponent(status);
-      if (calStartEl.value) url += '&dates=' + toGCalDate(calStartEl.value) + '/' + (calEndEl.value ? toGCalDate(calEndEl.value) : toGCalDate(calStartEl.value, 60));
+      const calStart = card.querySelector('.cal-start').value;
+      const calEnd = card.querySelector('.cal-end').value;
+      if (calStart) {
+        const allDay = !calStart.includes('T');
+        let end;
+        if (calEnd) end = toGCalDate(calEnd);
+        else if (allDay) end = toGCalDate(addDaysYmd(calStart, 1));
+        else end = toGCalDate(calStart, 60);
+        url += '&dates=' + toGCalDate(calStart) + '/' + end;
+      }
       if (guestEmails.length) url += '&add=' + guestEmails.map(encodeURIComponent).join(',');
       window.open(url, '_blank');
+    });
+
+    card.querySelector('.dl-ics-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const calStart = card.querySelector('.cal-start').value;
+      if (!calStart) return;
+      const guests = [...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.email);
+      const ics = buildICS({
+        id: Number(card.dataset.taskId),
+        title: card.querySelector('.task-text').textContent,
+        notes: textarea.value.trim(),
+        calStart,
+        calEnd: card.querySelector('.cal-end').value,
+        guests,
+      });
+      const slug = (card.querySelector('.task-text').textContent || 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+      downloadICS(`${slug}.ics`, ics);
     });
 
     list.appendChild(card);
@@ -1636,10 +1662,12 @@
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(a.href);
   }
-  function toGCalDate(dtLocal, addMinutes = 0) {
-    const d = new Date(dtLocal);
+  function toGCalDate(calVal, addMinutes = 0) {
+    if (!calVal) return '';
+    if (!calVal.includes('T')) return calVal.replace(/-/g, '');      // all-day -> YYYYMMDD
+    const d = new Date(calVal);
     d.setMinutes(d.getMinutes() + addMinutes);
-    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; // timed -> UTC basic
   }
 
   function escapeHtml(str) {
