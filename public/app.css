@@ -373,7 +373,6 @@
       border: 1px solid var(--border); border-radius: var(--r-md);
       padding: 14px; margin-top: 10px;
     }
-    .import-panel.open { display: block; }
     .import-panel h3 { font-size: 0.85rem; font-weight: 700; color: var(--text); margin-bottom: 4px; }
     .import-panel p { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 8px; line-height: 1.5; }
     .import-panel code {
@@ -782,9 +781,6 @@
 
       /* Keep the add-task input pinned below the header so it's always
          one tap away while scrolling a long column. */
-      /* The Import flow is a paste-JSON-from-Claude workflow that's
-         desktop-oriented; suppress its toggle button on phones to reduce clutter. */
-      .import-toggle-btn { display: none !important; }
 
       /* Stage jump-nav: sticky tab strip below the add-task bar. Tapping a
          tab smooth-scrolls to that column. All three stage sections render

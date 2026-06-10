@@ -1685,7 +1685,7 @@
     document.getElementById('nav-today').classList.remove('active');
     document.getElementById('nav-archived').classList.add('active');
     document.querySelector('.board-scroll').style.display = 'none';
-    document.querySelector('.content-top').style.display = 'none';
+    document.querySelector('.tk-quick-add').style.display = 'none';
     const archivedView = document.getElementById('archived-view');
     archivedView.classList.add('active');
 
@@ -1727,7 +1727,7 @@
     viewingArchived = false;
     document.getElementById('nav-archived').classList.remove('active');
     document.querySelector('.board-scroll').style.display = '';
-    document.querySelector('.content-top').style.display = '';
+    document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('archived-view').classList.remove('active');
   }
 
@@ -1798,7 +1798,7 @@
     viewingDashboard = false;
     document.getElementById('nav-dashboard').classList.remove('active');
     document.querySelector('.board-scroll').style.display = '';
-    document.querySelector('.content-top').style.display = '';
+    document.querySelector('.tk-quick-add').style.display = '';
     document.getElementById('dashboard-view').classList.remove('active');
   }
 
@@ -1811,7 +1811,7 @@
     document.getElementById('nav-archived').classList.remove('active');
     document.getElementById('nav-dashboard').classList.add('active');
     document.querySelector('.board-scroll').style.display = 'none';
-    document.querySelector('.content-top').style.display = 'none';
+    document.querySelector('.tk-quick-add').style.display = 'none';
     document.getElementById('dashboard-view').classList.add('active');
     await renderDashboard();
   }
