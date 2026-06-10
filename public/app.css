@@ -1116,3 +1116,21 @@
 .tk-sheet-addsub { display:flex; align-items:center; gap:8px; margin-top:8px; border-top:1px solid rgba(30,30,46,.07); padding-top:10px; }
 .tk-sheet-addsub input { flex:1; border:1px solid rgba(30,30,46,.12); border-radius:9px; padding:8px 10px; font-size:12.5px; }
 .tk-sheet-subadd { width:28px; height:28px; flex-shrink:0; border:none; border-radius:8px; background:rgba(255,107,71,.12); color:#FF6B47; font-weight:700; cursor:pointer; }
+
+.cal-section { border:1px solid rgba(30,30,46,.10); border-radius:12px; padding:11px 12px; margin-top:6px; }
+.cal-toggle-row { display:flex; align-items:center; justify-content:space-between; }
+.cal-toggle-label { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--tk-text,#1E1E2E); }
+.cal-toggle-label svg { stroke:var(--tk-accent,#FF6B47); }
+.cal-switch { width:40px; height:23px; border-radius:99px; border:none; background:rgba(30,30,46,.15); position:relative; cursor:pointer; transition:.15s; flex-shrink:0; }
+.cal-switch::after { content:""; position:absolute; top:2px; left:2px; width:19px; height:19px; border-radius:99px; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.2); transition:.15s; }
+.cal-on .cal-switch { background:var(--tk-accent,#FF6B47); }
+.cal-on .cal-switch::after { left:19px; }
+.cal-body { display:none; margin-top:12px; border-top:1px solid rgba(30,30,46,.07); padding-top:12px; }
+.cal-on .cal-body { display:block; }
+.cal-field { margin-bottom:10px; }
+.cal-field > label { display:block; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--tk-muted,rgba(30,30,46,.45)); margin-bottom:5px; }
+.cal-dt { display:flex; gap:8px; align-items:center; }
+.cal-dt .cal-trig { flex:1; }
+.cal-start-time, .cal-end-time { width:120px; border:1px solid rgba(30,30,46,.12); border-radius:9px; padding:7px 9px; font-size:13px; }
+.cal-actions { display:flex; gap:9px; margin-top:6px; }
+.open-cal-btn, .dl-ics-btn { flex:1; font-size:12.5px; font-weight:600; padding:9px 0; border-radius:10px; border:1px solid rgba(30,30,46,.12); background:#fff; color:var(--tk-text,#1E1E2E); cursor:pointer; }

@@ -1126,27 +1126,60 @@
         <label>Notes</label>
         <textarea class="status-area" placeholder="Add notes or a status update…" rows="2"></textarea>
 
-        <label>Calendar guests (Gmail)</label>
-        <div class="owner-row">
-          <input type="email" class="owner-input" placeholder="name@gmail.com" />
-          <button class="owner-add-btn">+ Add</button>
-        </div>
-        <div class="owner-chips"></div>
-
         <label>Share to someone's board</label>
         <div class="user-search-wrap">
           <input type="text" class="share-search" placeholder="Search @username or email…" autocomplete="off" />
           <div class="user-search-results share-results" style="display:none"></div>
         </div>
 
-        <label>Add to Google Calendar</label>
-        <div class="cal-row">
-          <div class="field"><label>Start</label><input type="datetime-local" class="cal-start" /></div>
-          <div class="field"><label>End</label><input type="datetime-local" class="cal-end" /></div>
-          <button type="button" class="open-cal-btn">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4h-1V2h-2v2H8V2H6v2H5C3.9 4 3 4.9 3 6v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
-            Calendar
-          </button>
+        <div class="cal-section" data-cal>
+          <div class="cal-toggle-row">
+            <span class="cal-toggle-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              Add to calendar
+            </span>
+            <button type="button" class="cal-switch" data-action="toggleAddToCalendar" aria-label="Toggle add to calendar"></button>
+          </div>
+          <div class="cal-body">
+            <div class="cal-field">
+              <label>Start</label>
+              <div class="cal-dt">
+                <input type="hidden" class="cal-start-date">
+                <input type="hidden" class="cal-start">
+                <button type="button" class="date-trigger cal-trig empty" data-action="openDatePicker" data-dp-target=".cal-start-date">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span class="date-trigger-label">Set date…</span>
+                  <span class="date-clear-x" data-action="clearDueDate" data-dp-target=".cal-start-date" hidden>×</span>
+                </button>
+                <input type="time" class="cal-start-time" />
+              </div>
+            </div>
+            <div class="cal-field">
+              <label>End</label>
+              <div class="cal-dt">
+                <input type="hidden" class="cal-end-date">
+                <input type="hidden" class="cal-end">
+                <button type="button" class="date-trigger cal-trig empty" data-action="openDatePicker" data-dp-target=".cal-end-date">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                  <span class="date-trigger-label">Set date…</span>
+                  <span class="date-clear-x" data-action="clearDueDate" data-dp-target=".cal-end-date" hidden>×</span>
+                </button>
+                <input type="time" class="cal-end-time" />
+              </div>
+            </div>
+            <div class="cal-field">
+              <label>Guests</label>
+              <div class="owner-row">
+                <input type="email" class="owner-input" placeholder="name@email.com" />
+                <button class="owner-add-btn">+ Add</button>
+              </div>
+              <div class="owner-chips"></div>
+            </div>
+            <div class="cal-actions">
+              <button type="button" class="open-cal-btn">Google Calendar</button>
+              <button type="button" class="dl-ics-btn">Download .ics</button>
+            </div>
+          </div>
         </div>
 
         <div class="panel-save-row">
@@ -1164,13 +1197,28 @@
     const ownerInput = card.querySelector('.owner-input');
     const ownerAddBtn = card.querySelector('.owner-add-btn');
     const chipsEl = card.querySelector('.owner-chips');
-    const calStartEl = card.querySelector('.cal-start');
-    const calEndEl = card.querySelector('.cal-end');
     const catSelector = card.querySelector('.cat-selector');
+    const calSection = card.querySelector('.cal-section');
+
+    function seedCal(prefix, value) {
+      const { date, time } = splitCalValue(value);
+      const dateInput = card.querySelector(`.cal-${prefix}-date`);
+      const combined = card.querySelector(`.cal-${prefix}`);
+      const trig = card.querySelector(`[data-dp-target=".cal-${prefix}-date"]`).closest('.cal-trig');
+      const timeInput = card.querySelector(`.cal-${prefix}-time`);
+      dateInput.value = date;
+      timeInput.value = time;
+      combined.value = value || '';
+      const label = trig.querySelector('.date-trigger-label');
+      const clearX = trig.querySelector('.date-clear-x');
+      if (date) { trig.classList.remove('empty'); label.textContent = formatTriggerDate(date); if (clearX) clearX.hidden = false; }
+      else { trig.classList.add('empty'); label.textContent = 'Set date…'; if (clearX) clearX.hidden = true; }
+    }
 
     textarea.value = task.status || '';
-    calStartEl.value = task.cal_start || '';
-    calEndEl.value = task.cal_end || '';
+    seedCal('start', task.cal_start);
+    seedCal('end', task.cal_end);
+    calSection.classList.toggle('cal-on', !!task.cal_start);
     (task.owners || []).forEach(email => addOwnerChip(email, chipsEl, ownerPreview));
     renderCatSelector(catSelector, card);
     updateCardBadge(card);
@@ -1418,8 +1466,14 @@
     }
 
     textarea.addEventListener('input', () => { updateStatusPreview(); debouncedSave(); });
-    calStartEl.addEventListener('change', () => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)));
-    calEndEl.addEventListener('change', () => apiPut(`/api/tasks/${task.id}`, getCardPayload(card)));
+    ['start', 'end'].forEach(prefix => {
+      const dateInput = card.querySelector(`.cal-${prefix}-date`);
+      const timeInput = card.querySelector(`.cal-${prefix}-time`);
+      const combined = card.querySelector(`.cal-${prefix}`);
+      const recompute = () => { combined.value = combineCalDateTime(dateInput.value, timeInput.value); apiPut(`/api/tasks/${task.id}`, getCardPayload(card)); };
+      dateInput.addEventListener('change', recompute);
+      timeInput.addEventListener('change', recompute);
+    });
 
     function doAddOwner() {
       const email = ownerInput.value.trim().toLowerCase();
@@ -1443,9 +1497,41 @@
       let url = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
       url += '&text=' + encodeURIComponent(taskTitle);
       if (status) url += '&details=' + encodeURIComponent(status);
-      if (calStartEl.value) url += '&dates=' + toGCalDate(calStartEl.value) + '/' + (calEndEl.value ? toGCalDate(calEndEl.value) : toGCalDate(calStartEl.value, 60));
+      const calStart = card.querySelector('.cal-start').value;
+      const calEnd = card.querySelector('.cal-end').value;
+      if (calStart) {
+        const allDay = !calStart.includes('T');
+        let endG;
+        if (allDay) {
+          const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1);
+          endG = endDate.replace(/-/g, '');
+        } else if (calEnd) {
+          const [ed, et] = calEnd.split('T');
+          endG = toGCalDate(`${ed}T${et || calStart.split('T')[1]}`);
+        } else {
+          endG = toGCalDate(calStart, 60);
+        }
+        url += '&dates=' + toGCalDate(calStart) + '/' + endG;
+      }
       if (guestEmails.length) url += '&add=' + guestEmails.map(encodeURIComponent).join(',');
       window.open(url, '_blank');
+    });
+
+    card.querySelector('.dl-ics-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const calStart = card.querySelector('.cal-start').value;
+      if (!calStart) return;
+      const guests = [...chipsEl.querySelectorAll('.chip')].map(c => c.dataset.email);
+      const ics = buildICS({
+        id: Number(card.dataset.taskId),
+        title: card.querySelector('.task-text').textContent,
+        notes: textarea.value.trim(),
+        calStart,
+        calEnd: card.querySelector('.cal-end').value,
+        guests,
+      });
+      const slug = (card.querySelector('.task-text').textContent || 'event').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+      downloadICS(`${slug}.ics`, ics);
     });
 
     list.appendChild(card);
@@ -1536,10 +1622,62 @@
     ownerPreview.textContent = emails.length ? '👤 ' + emails.join(', ') : '';
   }
 
-  function toGCalDate(dtLocal, addMinutes = 0) {
-    const d = new Date(dtLocal);
+  function splitCalValue(v) {
+    if (!v) return { date: '', time: '' };
+    const [date, time] = v.split('T');
+    return { date: date || '', time: time ? time.slice(0, 5) : '' };
+  }
+  function combineCalDateTime(date, time) {
+    if (!date) return '';
+    return time ? `${date}T${time}` : date;
+  }
+  function addDaysYmd(ymd, n) {
+    const [y, m, d] = ymd.split('-').map(Number);
+    const dt = new Date(y, m - 1, d + n);
+    return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  }
+  function icsEscape(s) {
+    return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  }
+  function icsStamp(v) {
+    return v.includes('T') ? v.replace(/[-:]/g, '') + '00' : v.replace(/-/g, '');
+  }
+  function buildICS({ id, title, notes, calStart, calEnd, guests }) {
+    const allDay = !calStart.includes('T');
+    const startTime = allDay ? '' : calStart.split('T')[1];
+    const dtStart = allDay ? `DTSTART;VALUE=DATE:${icsStamp(calStart)}` : `DTSTART:${icsStamp(calStart)}`;
+    let dtEnd;
+    if (allDay) {
+      const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1); // exclusive next day
+      dtEnd = `DTEND;VALUE=DATE:${endDate.replace(/-/g, '')}`;
+    } else {
+      let endVal;
+      if (calEnd) { const [ed, et] = calEnd.split('T'); endVal = `${ed}T${et || startTime}`; } // date-only end -> use start's time
+      else { const d = new Date(calStart); d.setMinutes(d.getMinutes() + 60); endVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+      dtEnd = `DTEND:${icsStamp(endVal)}`;
+    }
+    const now = new Date();
+    const dtstamp = `${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}T${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}${String(now.getUTCSeconds()).padStart(2,'0')}Z`;
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Taskly//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:taskly-${id}-${now.getTime()}@taskly`,`DTSTAMP:${dtstamp}`,dtStart,dtEnd,`SUMMARY:${icsEscape(title)}`];
+    if (notes) lines.push(`DESCRIPTION:${icsEscape(notes)}`);
+    (guests || []).forEach(g => lines.push(`ATTENDEE;CN=${icsEscape(g)}:mailto:${g}`));
+    lines.push('END:VEVENT','END:VCALENDAR');
+    return lines.join('\r\n') + '\r\n';
+  }
+  function downloadICS(filename, ics) {
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a); URL.revokeObjectURL(a.href);
+  }
+  function toGCalDate(calVal, addMinutes = 0) {
+    if (!calVal) return '';
+    if (!calVal.includes('T')) return calVal.replace(/-/g, '');      // all-day -> YYYYMMDD
+    const d = new Date(calVal);
     d.setMinutes(d.getMinutes() + addMinutes);
-    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; // timed -> UTC basic
   }
 
   function escapeHtml(str) {
@@ -1589,7 +1727,7 @@
       ? this : (e && e.target.closest('.date-trigger'));
     if (!trigger) return;
     dpTrigger = trigger;
-    dpInput = trigger.closest('.task-card, #task-sheet').querySelector('.due-date-input');
+    dpInput = trigger.closest('.task-card, #task-sheet').querySelector(trigger.dataset.dpTarget || '.due-date-input');
     const cur = dpInput.value ? dpParse(dpInput.value) : new Date();
     dpMonth = { y: cur.getFullYear(), m: cur.getMonth() };
     renderCalendar();
@@ -1639,11 +1777,16 @@
   function clearDueDate() {
     const t = (this && this.closest && this.closest('.date-trigger')) || dpTrigger;
     if (!t) return;
-    const input = t.closest('.task-card, #task-sheet').querySelector('.due-date-input');
+    const input = t.closest('.task-card, #task-sheet').querySelector(t.dataset.dpTarget || '.due-date-input');
     input.value = '';
     input.dispatchEvent(new Event('change'));
+    if (t.dataset.dpTarget && /\.cal-(start|end)-date/.test(t.dataset.dpTarget)) {
+      const timeSel = t.dataset.dpTarget.replace('-date', '-time');
+      const timeInput = t.closest('.task-card, #task-sheet').querySelector(timeSel);
+      if (timeInput) { timeInput.value = ''; timeInput.dispatchEvent(new Event('change')); }
+    }
     t.classList.add('empty');
-    t.querySelector('.date-trigger-label').textContent = 'Set due date…';
+    t.querySelector('.date-trigger-label').textContent = t.dataset.dpTarget ? 'Set date…' : 'Set due date…';
     const x = t.querySelector('.date-clear-x'); if (x) x.hidden = true;
     closeDatePicker();
   }
@@ -2163,6 +2306,24 @@
     location.reload();
   }
 
+  function toggleAddToCalendar() {
+    const card = this.closest('.task-card');
+    const section = card.querySelector('.cal-section');
+    const on = section.classList.toggle('cal-on');
+    if (!on) {
+      ['start', 'end'].forEach(p => {
+        card.querySelector(`.cal-${p}-date`).value = '';
+        card.querySelector(`.cal-${p}-time`).value = '';
+        card.querySelector(`.cal-${p}`).value = '';
+        const trig = card.querySelector(`[data-dp-target=".cal-${p}-date"]`).closest('.cal-trig');
+        trig.classList.add('empty');
+        trig.querySelector('.date-trigger-label').textContent = 'Set date…';
+        const x = trig.querySelector('.date-clear-x'); if (x) x.hidden = true;
+      });
+      apiPut(`/api/tasks/${Number(card.dataset.taskId)}`, getCardPayload(card));
+    }
+  }
+
   const __actions = {
     gotoTab,
     toggleSidebar, toggleBoardMenu, switchBoard, closeBoardMenu, openMembersModal,
@@ -2182,7 +2343,7 @@
     closeAccountAndOpenSearch: () => { closeAccountMenu(); openSearch(); },
     closeAccountAndOpenHelp: () => { closeAccountMenu(); openHelpModal(); },
     openTaskSheet, closeTaskSheet, setSheetPriority, addSheetSub, toggleSheetSub, removeSheetSub,
-    openDatePicker, clearDueDate, pickDate,
+    openDatePicker, clearDueDate, pickDate, toggleAddToCalendar,
     dpPrev: () => dpNav(-1),
     dpNext: () => dpNav(1),
     dpToday: () => dpQuick('today'),
