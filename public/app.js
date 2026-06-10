@@ -1197,8 +1197,6 @@
     const ownerInput = card.querySelector('.owner-input');
     const ownerAddBtn = card.querySelector('.owner-add-btn');
     const chipsEl = card.querySelector('.owner-chips');
-    const calStartEl = card.querySelector('.cal-start');
-    const calEndEl = card.querySelector('.cal-end');
     const catSelector = card.querySelector('.cat-selector');
     const calSection = card.querySelector('.cal-section');
 
@@ -1503,11 +1501,17 @@
       const calEnd = card.querySelector('.cal-end').value;
       if (calStart) {
         const allDay = !calStart.includes('T');
-        let end;
-        if (calEnd) end = toGCalDate(calEnd);
-        else if (allDay) end = toGCalDate(addDaysYmd(calStart, 1));
-        else end = toGCalDate(calStart, 60);
-        url += '&dates=' + toGCalDate(calStart) + '/' + end;
+        let endG;
+        if (allDay) {
+          const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1);
+          endG = endDate.replace(/-/g, '');
+        } else if (calEnd) {
+          const [ed, et] = calEnd.split('T');
+          endG = toGCalDate(`${ed}T${et || calStart.split('T')[1]}`);
+        } else {
+          endG = toGCalDate(calStart, 60);
+        }
+        url += '&dates=' + toGCalDate(calStart) + '/' + endG;
       }
       if (guestEmails.length) url += '&add=' + guestEmails.map(encodeURIComponent).join(',');
       window.open(url, '_blank');
@@ -1640,19 +1644,25 @@
   }
   function buildICS({ id, title, notes, calStart, calEnd, guests }) {
     const allDay = !calStart.includes('T');
+    const startTime = allDay ? '' : calStart.split('T')[1];
     const dtStart = allDay ? `DTSTART;VALUE=DATE:${icsStamp(calStart)}` : `DTSTART:${icsStamp(calStart)}`;
-    let endStamp;
-    if (calEnd) endStamp = icsStamp(calEnd);
-    else if (allDay) endStamp = icsStamp(addDaysYmd(calStart, 1));
-    else { const d = new Date(calStart); d.setMinutes(d.getMinutes() + 60); endStamp = `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}00`; }
-    const dtEnd = allDay ? `DTEND;VALUE=DATE:${endStamp}` : `DTEND:${endStamp}`;
+    let dtEnd;
+    if (allDay) {
+      const endDate = calEnd ? calEnd.split('T')[0] : addDaysYmd(calStart, 1); // exclusive next day
+      dtEnd = `DTEND;VALUE=DATE:${endDate.replace(/-/g, '')}`;
+    } else {
+      let endVal;
+      if (calEnd) { const [ed, et] = calEnd.split('T'); endVal = `${ed}T${et || startTime}`; } // date-only end -> use start's time
+      else { const d = new Date(calStart); d.setMinutes(d.getMinutes() + 60); endVal = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+      dtEnd = `DTEND:${icsStamp(endVal)}`;
+    }
     const now = new Date();
     const dtstamp = `${now.getUTCFullYear()}${String(now.getUTCMonth()+1).padStart(2,'0')}${String(now.getUTCDate()).padStart(2,'0')}T${String(now.getUTCHours()).padStart(2,'0')}${String(now.getUTCMinutes()).padStart(2,'0')}${String(now.getUTCSeconds()).padStart(2,'0')}Z`;
     const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Taskly//EN','CALSCALE:GREGORIAN','BEGIN:VEVENT',`UID:taskly-${id}-${now.getTime()}@taskly`,`DTSTAMP:${dtstamp}`,dtStart,dtEnd,`SUMMARY:${icsEscape(title)}`];
     if (notes) lines.push(`DESCRIPTION:${icsEscape(notes)}`);
     (guests || []).forEach(g => lines.push(`ATTENDEE;CN=${icsEscape(g)}:mailto:${g}`));
     lines.push('END:VEVENT','END:VCALENDAR');
-    return lines.join('\r\n');
+    return lines.join('\r\n') + '\r\n';
   }
   function downloadICS(filename, ics) {
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
@@ -1770,8 +1780,13 @@
     const input = t.closest('.task-card, #task-sheet').querySelector(t.dataset.dpTarget || '.due-date-input');
     input.value = '';
     input.dispatchEvent(new Event('change'));
+    if (t.dataset.dpTarget && /\.cal-(start|end)-date/.test(t.dataset.dpTarget)) {
+      const timeSel = t.dataset.dpTarget.replace('-date', '-time');
+      const timeInput = t.closest('.task-card, #task-sheet').querySelector(timeSel);
+      if (timeInput) { timeInput.value = ''; timeInput.dispatchEvent(new Event('change')); }
+    }
     t.classList.add('empty');
-    t.querySelector('.date-trigger-label').textContent = 'Set due date…';
+    t.querySelector('.date-trigger-label').textContent = t.dataset.dpTarget ? 'Set date…' : 'Set due date…';
     const x = t.querySelector('.date-clear-x'); if (x) x.hidden = true;
     closeDatePicker();
   }
