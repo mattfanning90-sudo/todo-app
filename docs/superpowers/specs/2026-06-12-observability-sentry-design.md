@@ -49,11 +49,19 @@ if (process.env.SENTRY_DSN && process.env.NODE_ENV !== 'test') {
     release: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',  // SHA only present on GitHub-triggered deploys
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
     sendDefaultPii: false,                          // docs quickstart sets true — we keep it false
-    beforeSend(event) { /* strip cookie / authorization headers */ return event; },
+    // The default http+requestData integrations attach the request BODY, parsed
+    // COOKIES, and QUERY_STRING to events regardless of sendDefaultPii — so a 5xx
+    // during /auth/login would otherwise ship the plaintext password + session id.
+    // Disable body capture at the source AND scrub on the way out (defence in depth):
+    integrations: [Sentry.httpIntegration({ maxIncomingRequestBodySize: 'none' })],
+    beforeSend: scrubEvent,            // exported, unit-tested
+    beforeSendTransaction: scrubEvent, // delete request.data / .cookies / .query_string / sensitive headers
   });
 }
 module.exports = Sentry;
+module.exports.scrubEvent = scrubEvent;
 ```
+> **Security note (caught by the PR1 adversarial review):** `sendDefaultPii: false` is **not** sufficient — `@sentry/node`'s default integrations still attach `event.request.data` (body), `event.request.cookies` (parsed `connect.sid`), and `event.request.query_string` (the `?secret=`). `scrubEvent` deletes all three plus any sensitive-named header, and `maxIncomingRequestBodySize: 'none'` stops body capture at the source. Regression-tested in `tests/observability.test.js`.
 No `--import` flag needed (that's ESM-only); `require('./instrument')` is correct for CommonJS.
 
 **Wiring in `server.js`:**
