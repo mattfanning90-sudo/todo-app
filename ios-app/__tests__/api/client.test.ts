@@ -133,9 +133,16 @@ describe('Sentry error capture', () => {
     expect(Sentry.addBreadcrumb).toHaveBeenCalled();
   });
 
-  test('a network failure is captured as an exception', async () => {
-    fetchMock.mockRejectOnce(new Error('Network request failed'));
-    await expect(api.boards()).rejects.toThrow('Network request failed');
+  test('an unexpected network error (non-offline) is captured as an exception', async () => {
+    fetchMock.mockRejectOnce(new Error('TLS handshake failed'));
+    await expect(api.boards()).rejects.toThrow('TLS handshake failed');
     expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  test('offline (TypeError: Network request failed) is a breadcrumb, not an exception', async () => {
+    fetchMock.mockRejectOnce(new TypeError('Network request failed'));
+    await expect(api.boards()).rejects.toThrow('Network request failed');
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(Sentry.addBreadcrumb).toHaveBeenCalled();
   });
 });

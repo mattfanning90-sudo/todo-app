@@ -66,6 +66,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   if (cookie) headers.Cookie = cookie;
 
   const method = opts.method ?? 'GET';
+  // Strip the query string before anything reaches Sentry — `q=` carries
+  // user-typed search terms, and other params carry board IDs.
+  const route = path.split('?')[0];
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, {
@@ -75,9 +78,16 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
       signal: opts.signal,
     });
   } catch (err) {
-    // Network failure (offline, DNS, TLS). An intentional abort is expected, not an error.
-    if (!(err instanceof Error && err.name === 'AbortError')) {
-      Sentry.captureException(err, { tags: { kind: 'network', path } });
+    // An intentional abort is expected. Offline/connectivity loss is also an
+    // expected state — breadcrumb, not an event — else a single offline session
+    // bursts dozens of events into the shared quota. Capture only the unexpected
+    // (TLS/DNS/etc.).
+    const isAbort = err instanceof Error && err.name === 'AbortError';
+    const isOffline = err instanceof TypeError && /network request failed/i.test(err.message);
+    if (isOffline) {
+      Sentry.addBreadcrumb({ category: 'network', level: 'warning', message: `offline ${method} ${route}` });
+    } else if (!isAbort) {
+      Sentry.captureException(err, { tags: { kind: 'network', route } });
     }
     throw err;
   }
@@ -96,7 +106,7 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     // possibly-transient failure into a permanent one. The session is cleared
     // only on an explicit logout (api.logout). Callers surface the 401.
     // Breadcrumb (not an event) — 401s are expected and must not page.
-    Sentry.addBreadcrumb({ category: 'auth', level: 'info', message: `401 ${method} ${path}` });
+    Sentry.addBreadcrumb({ category: 'auth', level: 'info', message: `401 ${method} ${route}` });
     throw new ApiError('Unauthorized', 401);
   }
   if (!res.ok) {
@@ -105,9 +115,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     // Capture only real failures (5xx). 4xx (validation, not-found, conflict)
     // are expected outcomes — breadcrumb them to keep off the error quota.
     if (res.status >= 500) {
-      Sentry.captureException(apiErr, { tags: { kind: 'http', path, status: String(res.status) } });
+      Sentry.captureException(apiErr, { tags: { kind: 'http', route, status: String(res.status) } });
     } else {
-      Sentry.addBreadcrumb({ category: 'http', level: 'warning', message: `${res.status} ${method} ${path}` });
+      Sentry.addBreadcrumb({ category: 'http', level: 'warning', message: `${res.status} ${method} ${route}` });
     }
     throw apiErr;
   }

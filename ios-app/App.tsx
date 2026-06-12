@@ -21,6 +21,14 @@ if (dsn) {
     environment: __DEV__ ? 'development' : 'production',
     tracesSampleRate: 0, // errors only — conserve the free-tier quota
     sendDefaultPii: false,
+    // The default fetch breadcrumb records full URLs; strip query strings so
+    // search terms (?q=) and board IDs don't ride along on captured events.
+    beforeBreadcrumb(crumb) {
+      if (crumb.category === 'fetch' && crumb.data?.url) {
+        crumb.data.url = String(crumb.data.url).split('?')[0];
+      }
+      return crumb;
+    },
   });
 }
 
@@ -37,6 +45,7 @@ function App() {
   );
 }
 
-// Sentry.wrap adds the error boundary + touch/navigation context. In tests the
-// mock makes this the identity function, so boot.test still mounts the real App.
+// Sentry.wrap adds the error boundary + touch/navigation context. The jest mock
+// keeps wrap as the identity function so App stays the real component. (Note:
+// boot.test mounts RootNavigator directly, so it doesn't execute this line.)
 export default Sentry.wrap(App);
