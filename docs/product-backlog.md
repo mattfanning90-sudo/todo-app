@@ -14,11 +14,11 @@ Living list of planned work. Priorities reflect both research signal (deep-resea
 
 | # | Item | Why it's P0 | Effort | Status |
 |---|---|---|---|---|
-| B1 | **Fix iOS TestFlight session/auth** — can't see boards or tasks | Live build is broken. Login succeeds but the next API call 401s ("Could not load boards"); web is unaffected → iOS `X-Session-Cookie` capture/replay path. | TBD (root-cause in progress) | 🔧 Debugging |
+| B1 | **Fix iOS TestFlight session/auth** — can't see boards or tasks | Login succeeds but the next API call 401s ("Could not load boards"); web is unaffected → iOS `X-Session-Cookie` capture/replay path. | S (resilience shipped) | 🟡 Monitoring — not reproducing |
 
 > Blocks all iOS work. Fix lands as its own hotfix branch off `main`.
 >
-> **Update 2026-06-12 (branch `fix/b1-ios-session-diagnostics`):** investigation disproved the leading server-side theory — passport 0.7 saves the session before its login callback, and `tests/ios-session.test.js` (real `connect-pg-simple` on pg-mem) passes, so the server replay flow is sound and B1 isn't reproducible server-side. Shipped: client no longer hard-logs-out on a stray 401, gated `B1_DEBUG` server diagnostics, and a warn-only `SESSION_SECRET` guard. **Next:** flip `B1_DEBUG=1` in Railway + repro on TestFlight to read `[b1-auth]` logs and isolate the real cause. See `docs/architectural-backlog.md` → A1.
+> **Update 2026-06-12 (branch `fix/b1-ios-session-diagnostics`):** investigation disproved the leading server-side theory — passport 0.7 saves the session before its login callback, and `tests/ios-session.test.js` (real `connect-pg-simple` on pg-mem) passes, so the server replay flow is sound and B1 isn't reproducible server-side. Shipped: client no longer hard-logs-out on a stray 401, gated `B1_DEBUG` server diagnostics, and a warn-only `SESSION_SECRET` guard. **Stood down 2026-06-12:** after #58 merged + deployed (process restart), B1 **stopped reproducing** — boards load fine on TestFlight. Since the auth code is verified sound, the restart most likely cleared an environmental/state cause. Not chasing further for now. Monitoring is **staged** (`B1_DEBUG=1` set in Railway, inactive until the next deploy, then auto-logs `[b1-auth]` if it recurs) and the client-resilience fix (next iOS build) means any recurrence won't hard-log-out users. See `docs/architectural-backlog.md` → A1.
 
 ---
 
