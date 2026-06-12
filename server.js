@@ -90,6 +90,15 @@ app.get('/healthz', async (req, res) => {
   }
 });
 
+// Warn-only guard: a missing SESSION_SECRET in prod means sessions are signed
+// with a public default ('dev-secret-change-me') — forgeable, and invalidated
+// on every restart. Warn loudly rather than crash so we never crash-loop prod;
+// promote to a hard boot-refusal only after confirming the env var is set.
+if (isProd && !process.env.SESSION_SECRET) {
+  console.error('[startup] WARNING: SESSION_SECRET is not set in production. ' +
+    'Sessions use an insecure default and will break across restarts. Set SESSION_SECRET.');
+}
+
 app.use(session({
   store: new pgSession({ pool, createTableIfMissing: true, ttl: 30 * 24 * 60 * 60 }),
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
@@ -333,8 +342,54 @@ passport.deserializeUser(async (id, done) => {
   } catch (e) { done(e); }
 });
 
+// ── B1 mobile-session diagnostics ──────────────────────────────────────────
+// The iOS X-Session-Cookie replay path has been a recurring "login OK, next
+// call 401s" incident source, and the server unit flow tests green — so the
+// failure only shows on-device/real-prod. This logs PII-safe signals (sid
+// PREFIXES only — never signatures, never email) that pinpoint WHERE replay
+// breaks. OFF by default; set B1_DEBUG=1 in the environment to enable, repro on
+// the client, read the logs, then unset. No behaviour change when disabled.
+const b1Debug = () => process.env.B1_DEBUG === '1';
+
+// Parse the inbound connect.sid cookie and report whether its signature is
+// valid and which session id it carries — without trusting express-session's
+// own parse, so we can tell "cookie rejected → fresh session minted" apart from
+// "cookie accepted but the persisted session has no logged-in user".
+function inboundSessionInfo(req) {
+  const raw = req.headers.cookie || '';
+  const m = raw.match(/connect\.sid=([^;]+)/);
+  if (!m) return { present: false };
+  let val = decodeURIComponent(m[1]);
+  if (val.startsWith('s:')) val = val.slice(2);
+  const secret = process.env.SESSION_SECRET || 'dev-secret-change-me';
+  const unsigned = cookieSignature.unsign(val, secret);
+  return {
+    present: true,
+    sigValid: unsigned !== false,
+    sidPrefix: (unsigned || '').slice(0, 8) || null,
+  };
+}
+
+function logAuthDiag(tag, req) {
+  if (!b1Debug()) return;
+  const inb = inboundSessionInfo(req);
+  const loadedPrefix = req.sessionID ? req.sessionID.slice(0, 8) : null;
+  console.warn('[b1-auth] ' + tag, JSON.stringify({
+    path: req.path,
+    inboundCookie: inb.present,
+    sigValid: inb.present ? inb.sigValid : null,
+    inboundSidPrefix: inb.present ? inb.sidPrefix : null,
+    loadedSidPrefix: loadedPrefix,
+    // true  → express-session accepted the replayed cookie (session row exists)
+    // false → cookie rejected/missing, a fresh anonymous session was minted
+    sidMatched: inb.present && inb.sigValid ? inb.sidPrefix === loadedPrefix : false,
+    hasPassportUser: !!(req.session && req.session.passport && req.session.passport.user),
+  }));
+}
+
 function requireAuth(req, res, next) {
   if (req.isAuthenticated()) return next();
+  logAuthDiag('401', req);
   res.status(401).json({ error: 'Not authenticated' });
 }
 
@@ -351,6 +406,11 @@ function setMobileSessionHeader(req, res) {
   // JSON body — iOS native networking can swallow the header in standalone
   // builds, so the body is the reliable capture path. See ios-app client.ts.
   res.setHeader('X-Session-Cookie', cookie);
+  if (b1Debug()) {
+    console.warn('[b1-auth] issued', JSON.stringify({
+      path: req.path, sidPrefix: req.sessionID.slice(0, 8),
+    }));
+  }
   return cookie;
 }
 

@@ -17,6 +17,8 @@ Living list of planned work. Priorities reflect both research signal (deep-resea
 | B1 | **Fix iOS TestFlight session/auth** — can't see boards or tasks | Live build is broken. Login succeeds but the next API call 401s ("Could not load boards"); web is unaffected → iOS `X-Session-Cookie` capture/replay path. | TBD (root-cause in progress) | 🔧 Debugging |
 
 > Blocks all iOS work. Fix lands as its own hotfix branch off `main`.
+>
+> **Update 2026-06-12 (branch `fix/b1-ios-session-diagnostics`):** investigation disproved the leading server-side theory — passport 0.7 saves the session before its login callback, and `tests/ios-session.test.js` (real `connect-pg-simple` on pg-mem) passes, so the server replay flow is sound and B1 isn't reproducible server-side. Shipped: client no longer hard-logs-out on a stray 401, gated `B1_DEBUG` server diagnostics, and a warn-only `SESSION_SECRET` guard. **Next:** flip `B1_DEBUG=1` in Railway + repro on TestFlight to read `[b1-auth]` logs and isolate the real cause. See `docs/architectural-backlog.md` → A1.
 
 ---
 
