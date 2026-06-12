@@ -239,6 +239,10 @@
   </div>
 </div>
 
+<!-- Sentry error tracking: config → SDK → init, before login.js (defer preserves order). -->
+<script src="/config.js" defer></script>
+<script src="/vendor/sentry.min.js" defer></script>
+<script src="/sentry-boot.js" defer></script>
 <script src="/login.js" defer></script>
 </body>
 </html>
