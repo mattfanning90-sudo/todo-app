@@ -57,6 +57,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Derive the Sentry ingest origin from the browser DSN so the CSP connect-src
+// can allow event POSTs without hardcoding a region (us/de live in the DSN).
+// Null when SENTRY_BROWSER_DSN is unset → CSP is unchanged.
+const sentryIngestOrigin = (() => {
+  try {
+    return process.env.SENTRY_BROWSER_DSN ? new URL(process.env.SENTRY_BROWSER_DSN).origin : null;
+  } catch { return null; }
+})();
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -68,7 +77,9 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       imgSrc: ["'self'", 'data:', 'https:'],
-      connectSrc: ["'self'"],
+      // 'self' for the API; the Sentry ingest origin (when configured) for the
+      // browser SDK's event POSTs. The vendored SDK is same-origin (script-src 'self').
+      connectSrc: ["'self'", ...(sentryIngestOrigin ? [sentryIngestOrigin] : [])],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
     },
@@ -108,6 +119,20 @@ app.get('/healthz', async (req, res) => {
     if (!isProd) console.error('/healthz failed:', e.message);
     res.status(503).json({ ok: false, error: 'db_unreachable' });
   }
+});
+
+// Client runtime config (CSP-safe: served from our origin, no inline script).
+// The browser Sentry DSN is public by design. Read at request time so the value
+// tracks the current environment without rebuilding the static assets.
+app.get('/config.js', (req, res) => {
+  const cfg = {
+    sentryDsn: process.env.SENTRY_BROWSER_DSN || null,
+    environment: process.env.NODE_ENV || 'development',
+    release: process.env.RAILWAY_GIT_COMMIT_SHA || 'unknown',
+  };
+  res.type('application/javascript');
+  res.set('Cache-Control', 'no-store');
+  res.send('window.__APP_CONFIG__ = ' + JSON.stringify(cfg) + ';');
 });
 
 // Warn-only guard: a missing SESSION_SECRET in prod means sessions are signed

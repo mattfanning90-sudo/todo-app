@@ -470,6 +470,10 @@
     <button type="button" class="dp-chip danger" data-action="dpClear">No date</button>
   </div>
 </div>
+<!-- Sentry error tracking: config → SDK → init, before app.js (defer preserves order). -->
+<script src="/config.js" defer></script>
+<script src="/vendor/sentry.min.js" defer></script>
+<script src="/sentry-boot.js" defer></script>
 <script src="/vendor/Sortable.min.js" defer></script>
 <script src="/app.js?v=20260520d" defer></script>
 </body>
