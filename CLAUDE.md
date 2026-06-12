@@ -11,6 +11,7 @@ Short index. Detailed feature docs live in `docs/` — load only what you need f
 | Vitest + pg-mem harness, what it covers and doesn't | `docs/testing.md` |
 | Expo client, TestFlight pipeline, Google OAuth gotchas, bundle ID | `docs/ios-app.md` |
 | **Web + iOS feature parity, API contract, design tokens** | `docs/cross-platform.md` |
+| Architectural backlog (tech debt, risks, sequencing) | `docs/architectural-backlog.md` |
 | iOS feature parity status (living doc) | `docs/platform-parity-report.md` |
 | Cross-stage drag design spec | `docs/superpowers/specs/2026-05-30-cross-stage-drag-design.md` |
 | Cross-stage drag implementation plan | `docs/superpowers/plans/2026-05-30-cross-stage-drag.md` |
