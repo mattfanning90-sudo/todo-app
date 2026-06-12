@@ -4,10 +4,13 @@
  * fetch is mocked globally via jest-fetch-mock (set up in jest.setup.js).
  */
 import fetchMock from 'jest-fetch-mock';
+import * as Sentry from '@sentry/react-native';
 import { api, ApiError, setSessionCookie } from '../../src/api/client';
 
 beforeEach(() => {
   fetchMock.resetMocks();
+  (Sentry.captureException as jest.Mock).mockClear();
+  (Sentry.addBreadcrumb as jest.Mock).mockClear();
 });
 
 // ── Notifications ──────────────────────────────────────────────────────────────
@@ -105,5 +108,41 @@ describe('session cookie resilience', () => {
     const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
     expect((lastCall[1] as { headers: Record<string, string> }).headers.Cookie)
       .toBeUndefined();
+  });
+});
+
+// ── Sentry capture tuning (errors only; expected 4xx stay off the quota) ────────
+describe('Sentry error capture', () => {
+  test('captures a 5xx as an exception', async () => {
+    fetchMock.mockResponseOnce('boom', { status: 500 });
+    await expect(api.boards()).rejects.toBeInstanceOf(ApiError);
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  test('a 401 is a breadcrumb, not an exception (must not page)', async () => {
+    fetchMock.mockResponseOnce('', { status: 401 });
+    await expect(api.boards()).rejects.toBeInstanceOf(ApiError);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(Sentry.addBreadcrumb).toHaveBeenCalled();
+  });
+
+  test('an expected 4xx (404) is a breadcrumb, not an exception', async () => {
+    fetchMock.mockResponseOnce('nope', { status: 404 });
+    await expect(api.boards()).rejects.toBeInstanceOf(ApiError);
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(Sentry.addBreadcrumb).toHaveBeenCalled();
+  });
+
+  test('an unexpected network error (non-offline) is captured as an exception', async () => {
+    fetchMock.mockRejectOnce(new Error('TLS handshake failed'));
+    await expect(api.boards()).rejects.toThrow('TLS handshake failed');
+    expect(Sentry.captureException).toHaveBeenCalledTimes(1);
+  });
+
+  test('offline (TypeError: Network request failed) is a breadcrumb, not an exception', async () => {
+    fetchMock.mockRejectOnce(new TypeError('Network request failed'));
+    await expect(api.boards()).rejects.toThrow('Network request failed');
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+    expect(Sentry.addBreadcrumb).toHaveBeenCalled();
   });
 });
