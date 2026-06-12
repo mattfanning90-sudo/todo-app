@@ -1,4 +1,7 @@
 require('dotenv').config();
+// Sentry must init before express/pg are required (OTEL auto-instrumentation
+// patches them at require time). instrument.js is inert unless SENTRY_DSN is set.
+const Sentry = require('./instrument');
 const express = require('express');
 const session = require('express-session');
 const passport = require('passport');
@@ -38,12 +41,19 @@ if (isProd) {
 
 const APP_URL = process.env.APP_URL || `http://localhost:${process.env.PORT || 3000}`;
 
+// In-process SLI counters (A2 / observability). Cheap golden-signal tallies
+// exposed on the gated /metrics endpoint — deliberately NOT Sentry events, so
+// brute-force login traffic can't burn the org-wide error quota.
+const metrics = { auth: { loginSuccess: 0, loginFail: 0 } };
+
 const app = express();
 app.set('trust proxy', 1);
 
 app.use((req, res, next) => {
   req.id = crypto.randomBytes(8).toString('hex');
   res.setHeader('X-Request-Id', req.id);
+  // Correlate Sentry events with the request-id log lines (no-op when Sentry is inert).
+  Sentry.getCurrentScope().setTag('request_id', req.id);
   next();
 });
 
@@ -80,10 +90,20 @@ app.use(express.static('public', {
   },
 }));
 
+// Saturation signal: the `pg` Pool exposes these counts in prod; pg-mem (tests)
+// does not, so coalesce to null rather than undefined.
+function poolStats() {
+  return {
+    total: pool.totalCount ?? null,
+    idle: pool.idleCount ?? null,
+    waiting: pool.waitingCount ?? null,
+  };
+}
+
 app.get('/healthz', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ ok: true });
+    res.json({ ok: true, pool: poolStats() });
   } catch (e) {
     if (!isProd) console.error('/healthz failed:', e.message);
     res.status(503).json({ ok: false, error: 'db_unreachable' });
@@ -596,6 +616,7 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
     if (err) return next(err);
     const json = wantsJson(req);
     if (!user) {
+      metrics.auth.loginFail++;
       if (json) return res.status(401).json({ error: 'Invalid credentials' });
       return res.redirect('/login?error=invalid');
     }
@@ -603,6 +624,7 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
       if (sesErr) return next(sesErr);
       req.login(user, loginErr => {
         if (loginErr) return next(loginErr);
+        metrics.auth.loginSuccess++;
         if (req.body.remember) req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000;
         if (json) {
           const mobileSession = setMobileSessionHeader(req, res);
@@ -1110,6 +1132,17 @@ app.post('/api/admin/restore/:snapshotId', requireSecret, wrap(async (req, res) 
   res.json({ ok: true, restored: result });
 }));
 
+// Operational SLIs (A2). Gated by RESTORE_SECRET — operator-only, not user data.
+// Latency/throughput/error-rate live in Sentry Performance; these are the
+// cheap rate/saturation signals kept off Sentry's quota.
+app.get('/metrics', requireSecret, (req, res) => {
+  res.json({
+    auth: { ...metrics.auth },
+    pool: poolStats(),
+    uptimeSeconds: Math.round(process.uptime()),
+  });
+});
+
 /* ── Data export (backup) ── */
 app.get('/api/export', requireAuth, wrap(async (req, res) => {
   const { rows: boards } = await pool.query('SELECT * FROM boards WHERE owner_user_id = $1', [req.user.id]);
@@ -1270,6 +1303,11 @@ app.get('/api/users/search', requireAuth, searchLimiter, wrap(async (req, res) =
   );
   res.json(rows);
 }));
+
+// Sentry captures errors here (5xx only, by default) then calls next(err), so
+// our terminal handler below still owns the response shape. Must be registered
+// after the routes and before the terminal handler. Inert when Sentry isn't initialised.
+Sentry.setupExpressErrorHandler(app);
 
 app.use((err, req, res, next) => {
   console.error(`[${req.id}] ${req.method} ${req.path}`, err);

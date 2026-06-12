@@ -6,7 +6,9 @@ describe('GET /healthz', () => {
   it('returns 200 with ok:true when the DB is reachable', async () => {
     const res = await request(app).get('/healthz');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true });
+    expect(res.body.ok).toBe(true);
+    // /healthz now also carries pool saturation counts (A2 observability).
+    expect(res.body).toHaveProperty('pool');
   });
 });
 
