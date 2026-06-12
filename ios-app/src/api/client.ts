@@ -79,7 +79,11 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   if (newCookie) await setCookie(newCookie);
 
   if (res.status === 401) {
-    await setCookie(null);
+    // Do NOT wipe the stored session here. A single unrecognised 401 (the B1
+    // symptom: login succeeds, the next call 401s) would otherwise destroy the
+    // captured cookie and hard-log-out the user with no recovery — turning a
+    // possibly-transient failure into a permanent one. The session is cleared
+    // only on an explicit logout (api.logout). Callers surface the 401.
     throw new ApiError('Unauthorized', 401);
   }
   if (!res.ok) {

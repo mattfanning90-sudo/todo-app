@@ -4,7 +4,7 @@
  * fetch is mocked globally via jest-fetch-mock (set up in jest.setup.js).
  */
 import fetchMock from 'jest-fetch-mock';
-import { api } from '../../src/api/client';
+import { api, ApiError, setSessionCookie } from '../../src/api/client';
 
 beforeEach(() => {
   fetchMock.resetMocks();
@@ -71,5 +71,39 @@ describe('api.deleteCategory', () => {
       expect.stringContaining('/api/categories/7?board=3'),
       expect.objectContaining({ method: 'DELETE' })
     );
+  });
+});
+
+// ── Session resilience on 401 (B1) ──────────────────────────────────────────────
+// A single 401 must NOT destroy the stored session. The old behaviour wiped the
+// cookie on every 401, so one transient/unrecognised 401 (the B1 symptom: login
+// OK, next call 401s) hard-logged-out the user with no recovery path. The cookie
+// is cleared only on an explicit logout.
+describe('session cookie resilience', () => {
+  test('a 401 does NOT wipe the stored session cookie', async () => {
+    await setSessionCookie('connect.sid=s%3Aabc.def');
+
+    fetchMock.mockResponseOnce('', { status: 401 });
+    await expect(api.boards()).rejects.toBeInstanceOf(ApiError);
+
+    // The next request must still carry the cookie — the 401 didn't log us out.
+    fetchMock.mockResponseOnce(JSON.stringify([]));
+    await api.boards();
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect((lastCall[1] as { headers: Record<string, string> }).headers.Cookie)
+      .toBe('connect.sid=s%3Aabc.def');
+  });
+
+  test('logout clears the stored session cookie', async () => {
+    await setSessionCookie('connect.sid=s%3Aabc.def');
+
+    fetchMock.mockResponseOnce('', { status: 204 });
+    await api.logout();
+
+    fetchMock.mockResponseOnce(JSON.stringify([]));
+    await api.boards();
+    const lastCall = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    expect((lastCall[1] as { headers: Record<string, string> }).headers.Cookie)
+      .toBeUndefined();
   });
 });
