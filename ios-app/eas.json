@@ -13,12 +13,18 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "env": { "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://bab14ac676c443839f979d9ff5872c77@o4511552327974912.ingest.de.sentry.io/4511552350191696"
+      }
     },
     "production": {
       "autoIncrement": true,
       "channel": "production",
-      "env": { "SENTRY_DISABLE_AUTO_UPLOAD": "true" }
+      "env": {
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true",
+        "EXPO_PUBLIC_SENTRY_DSN": "https://bab14ac676c443839f979d9ff5872c77@o4511552327974912.ingest.de.sentry.io/4511552350191696"
+      }
     }
   },
   "submit": {
