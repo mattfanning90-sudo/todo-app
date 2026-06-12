@@ -132,7 +132,10 @@ app.get('/config.js', (req, res) => {
   };
   res.type('application/javascript');
   res.set('Cache-Control', 'no-store');
-  res.send('window.__APP_CONFIG__ = ' + JSON.stringify(cfg) + ';');
+  // Escape '<' so a value can never break out via </script> if reused inline.
+  // Values are operator-set env (not user input), so this is defence-in-depth.
+  const json = JSON.stringify(cfg).replace(/</g, '\\u003c');
+  res.send('window.__APP_CONFIG__ = ' + json + ';');
 });
 
 // Warn-only guard: a missing SESSION_SECRET in prod means sessions are signed

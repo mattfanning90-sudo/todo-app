@@ -54,3 +54,18 @@ describe('web observability: vendored SDK + boot are served', () => {
     expect(res.text).toContain('Sentry.init');
   });
 });
+
+describe('web observability: HTML wires the SDK via external scripts only', () => {
+  for (const page of ['/index.html', '/login.html']) {
+    it(`${page} references config.js + SDK + sentry-boot by src, with no inline script`, async () => {
+      const res = await request(app).get(page);
+      expect(res.status).toBe(200);
+      const html = res.text;
+      expect(html).toContain('src="/config.js"');
+      expect(html).toContain('src="/vendor/sentry.min.js"');
+      expect(html).toContain('src="/sentry-boot.js"');
+      // CSP/no-inline invariant: no <script> tag carries an inline body (all have src=).
+      expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>\s*\S/);
+    });
+  }
+});
