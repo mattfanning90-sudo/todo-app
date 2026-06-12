@@ -96,7 +96,7 @@ No `--import` flag needed (that's ESM-only); `require('./instrument')` is correc
 
 Highest-risk PR (native dep + real build).
 
-- **Install:** `npx expo install @sentry/react-native` — **never `npm install`** (the build-16 lesson). For Expo SDK 55 / RN 0.83 this must resolve **v8.x** (≥ 8.8.0 has the SDK-55 Metro import fix; latest 8.14.0). **Do not pin v7** — v8 carries the fix for the SDK-55 / Gradle-9 EAS build failure (expo#42494). Let `expo install` pick the version.
+- **Install:** `npx expo install @sentry/react-native` — **never `npm install`** (the build-16 lesson). **Build-time correction (2026-06-12):** the pre-build verification claimed v8.x is required, but Expo SDK 55's authoritative `bundledNativeModules` pins **`~7.11.0`** (its `react-native` peer is `>=0.65.0`, covering RN 0.83), and that's what `expo install` resolves and what Expo validated against this SDK. We use **7.11.0** — trust `expo install` / `expo-doctor` over the web-search synthesis. (If a real SDK-55 build issue with 7.11.0 surfaces, revisit per Expo's recommended-version guidance; not observed here.)
 - **Config plugin:** add `@sentry/react-native/expo` to `app.json` `plugins` (`{ organization, project }`). Put the auth token in the **env var, never** in plugin config.
 - **`metro.config.js` (REQUIRED, easy to miss):** replace the export with `getSentryExpoConfig(__dirname)` from `@sentry/react-native/metro` — this assigns Debug IDs to bundles/source maps. **Without it, source maps don't symbolicate** even though upload "succeeds."
 - **Init:** `Sentry.init({ dsn })` + `Sentry.wrap(App)`. DSN via `process.env.EXPO_PUBLIC_SENTRY_DSN` (inlined by Metro at build time) with `Constants.expoConfig?.extra` fallback. Inert without a DSN.

@@ -1,7 +1,10 @@
-const { getDefaultConfig } = require('expo/metro-config');
+// getSentryExpoConfig wraps Expo's default Metro config and assigns Debug IDs to
+// bundles/source maps — REQUIRED for Sentry symbolication of release builds.
+// Without it, uploaded source maps don't resolve. (Replaces getDefaultConfig.)
+const { getSentryExpoConfig } = require('@sentry/react-native/metro');
 const path = require('path');
 
-const config = getDefaultConfig(__dirname);
+const config = getSentryExpoConfig(__dirname);
 
 // Resolve `@/` imports to the `src/` directory.
 config.resolver.alias = {

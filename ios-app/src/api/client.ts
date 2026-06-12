@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import * as Sentry from '@sentry/react-native';
 import type {
   Board,
   BoardInvite,
@@ -64,12 +65,22 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   };
   if (cookie) headers.Cookie = cookie;
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: opts.method ?? 'GET',
-    headers,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-    signal: opts.signal,
-  });
+  const method = opts.method ?? 'GET';
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method,
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+      signal: opts.signal,
+    });
+  } catch (err) {
+    // Network failure (offline, DNS, TLS). An intentional abort is expected, not an error.
+    if (!(err instanceof Error && err.name === 'AbortError')) {
+      Sentry.captureException(err, { tags: { kind: 'network', path } });
+    }
+    throw err;
+  }
 
   // iOS native networking intercepts Set-Cookie before it reaches JS, so the
   // server also echoes the signed session value in X-Session-Cookie.
@@ -84,11 +95,21 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     // captured cookie and hard-log-out the user with no recovery — turning a
     // possibly-transient failure into a permanent one. The session is cleared
     // only on an explicit logout (api.logout). Callers surface the 401.
+    // Breadcrumb (not an event) — 401s are expected and must not page.
+    Sentry.addBreadcrumb({ category: 'auth', level: 'info', message: `401 ${method} ${path}` });
     throw new ApiError('Unauthorized', 401);
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new ApiError(text || res.statusText, res.status);
+    const apiErr = new ApiError(text || res.statusText, res.status);
+    // Capture only real failures (5xx). 4xx (validation, not-found, conflict)
+    // are expected outcomes — breadcrumb them to keep off the error quota.
+    if (res.status >= 500) {
+      Sentry.captureException(apiErr, { tags: { kind: 'http', path, status: String(res.status) } });
+    } else {
+      Sentry.addBreadcrumb({ category: 'http', level: 'warning', message: `${res.status} ${method} ${path}` });
+    }
+    throw apiErr;
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
