@@ -5,7 +5,9 @@ export default defineConfig({
     globals: true,
     // Scope to the server suite only. Without this, vitest's default glob
     // sweeps in ios-app/__tests__/* (jest + react-native), which it can't parse.
-    include: ['tests/**/*.test.js'],
+    // Non-recursive so the real-Postgres layer (tests/realpg/**, needs a real DB)
+    // is excluded from this fast pg-mem suite — it runs via vitest.realpg.config.js.
+    include: ['tests/*.test.js'],
     setupFiles: ['./tests/setup.js'],
     environment: 'node',
     pool: 'forks',

@@ -56,11 +56,27 @@ pg-mem can't model:
 - `COUNT(*) FILTER (WHERE …)` — pg-mem **ignores the FILTER predicate** and returns the unfiltered `COUNT(*)`. So aggregate endpoints like `/api/dashboard` can't have their counts asserted here, and a count test may pass against pg-mem while the real query is wrong (or vice-versa). Validate count logic against real Postgres.
 - Real concurrency / lock contention.
 
-For those you need real Postgres. The next layer would be `docker-compose.yml` + Postgres in CI; not built yet.
+For those you need real Postgres — see the real-Postgres layer below.
+
+## Real-Postgres layer (`tests/realpg/`)
+
+A second, smaller suite runs against a **real Postgres** (so migration 012's jsonb, `COUNT(*) FILTER`, `DATE()/INTERVAL`, and the digest `LATERAL` join are actually exercised). Separate config + setup; not part of `npm test`.
+
+- **Config:** `vitest.realpg.config.js` (includes only `tests/realpg/**`, setup `tests/realpg/setup.js`). The fast suite's `include` is non-recursive (`tests/*.test.js`) so it skips this layer.
+- **Setup:** `tests/realpg/setup.js` — no pg-mem; runs the **real** migrations via `init()`, truncates all app tables between tests, requires `DATABASE_URL`, and sets `DB_SSL=disable` (test/CI Postgres has no SSL — see `database.js#buildSsl`).
+- **Covers today:** `/api/dashboard` count correctness (FILTER works) + its `DashboardData` contract; the jsonb wire-shape contract (`subtasks`/`owners` are parsed arrays, the thing pg-mem can't show because it skips 012).
+
+Run it:
+```sh
+docker compose up -d db
+DATABASE_URL=postgres://todo:todo@localhost:5433/todo_realpg_test npm run test:realpg
+```
+Or against any throwaway Postgres (`DATABASE_URL=… npm run test:realpg`). CI runs it as the **`realpg`** job (a `postgres:16` service container).
 
 ## Running
 
-- `npm test` — one-shot, exits 0 / 1.
+- `npm test` — fast pg-mem suite, one-shot, exits 0 / 1.
+- `npm run test:realpg` — real-Postgres layer (needs `DATABASE_URL`).
 - `npm run test:watch` — re-runs on file changes.
 - `npx vitest run tests/auth.test.js` — single file.
 
