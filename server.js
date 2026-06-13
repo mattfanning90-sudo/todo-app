@@ -22,8 +22,13 @@ const {
 } = require('./backup');
 const cron = require('node-cron');
 const path = require('path');
+const fs = require('fs');
 
 const isProd = process.env.NODE_ENV === 'production';
+// Number of migration files shipped in this build — /readyz uses it to confirm
+// the pre-deploy migration step actually applied them before serving traffic.
+const MIGRATION_COUNT = fs.readdirSync(path.join(__dirname, 'migrations'))
+  .filter(f => f.endsWith('.sql')).length;
 const isTest = process.env.NODE_ENV === 'test';
 
 if (isProd) {
@@ -118,6 +123,31 @@ app.get('/healthz', async (req, res) => {
   } catch (e) {
     if (!isProd) console.error('/healthz failed:', e.message);
     res.status(503).json({ ok: false, error: 'db_unreachable' });
+  }
+});
+
+// Have all shipped migrations been applied? (recorded `_migrations` rows ≥ the
+// .sql files in this build). Exported for tests.
+async function migrationsApplied() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM _migrations');
+  return rows[0].n >= MIGRATION_COUNT;
+}
+
+// Readiness (distinct from /healthz liveness) — Railway's healthcheckPath points
+// here (railway.json): a deploy is only promoted once the instance can serve.
+// In A4a this is redundant with the boot-time migration fallback (the server
+// only listens after init() succeeds, which implies migrations applied); it
+// becomes the authoritative migration gate in A4b once boot migrations are removed.
+app.get('/readyz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    if (isProd && !(await migrationsApplied())) {
+      return res.status(503).json({ ready: false, reason: 'migrations_pending', expected: MIGRATION_COUNT });
+    }
+    res.json({ ready: true });
+  } catch (e) {
+    if (!isProd) console.error('/readyz failed:', e.message);
+    res.status(503).json({ ready: false, reason: 'db_unreachable' });
   }
 });
 
@@ -1465,7 +1495,7 @@ async function cleanupOldNotifications() {
   } catch (e) { console.error('Notification cleanup error:', e.message); }
 }
 
-module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, escapeHtml, isStrongPassword };
+module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, escapeHtml, isStrongPassword, migrationsApplied };
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;

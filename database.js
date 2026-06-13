@@ -51,6 +51,12 @@ async function init() {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Fail fast on lock contention instead of hanging the deploy: during the
+      // pre-deploy phase the OLD instance is still serving, so a migration that
+      // needs an exclusive lock could wait indefinitely. Bound that wait only —
+      // deliberately NO statement_timeout, so a legitimately long table rewrite
+      // (e.g. a 012-style jsonb retype on a large table) isn't aborted mid-flight.
+      await client.query("SET LOCAL lock_timeout = '10s'");
       await client.query(sql);
       await client.query('INSERT INTO _migrations (filename) VALUES ($1)', [file]);
       await client.query('COMMIT');
