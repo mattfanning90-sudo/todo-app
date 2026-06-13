@@ -126,19 +126,23 @@ app.get('/healthz', async (req, res) => {
   }
 });
 
+// Have all shipped migrations been applied? (recorded `_migrations` rows ≥ the
+// .sql files in this build). Exported for tests.
+async function migrationsApplied() {
+  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM _migrations');
+  return rows[0].n >= MIGRATION_COUNT;
+}
+
 // Readiness (distinct from /healthz liveness) — Railway's healthcheckPath points
-// here (railway.json), so a deploy is only promoted once the instance can serve:
-// DB reachable AND migrations applied. If the pre-deploy migration step didn't
-// run, _migrations is short of the shipped files → 503 → Railway keeps the old
-// deployment instead of routing traffic to a half-migrated instance.
+// here (railway.json): a deploy is only promoted once the instance can serve.
+// In A4a this is redundant with the boot-time migration fallback (the server
+// only listens after init() succeeds, which implies migrations applied); it
+// becomes the authoritative migration gate in A4b once boot migrations are removed.
 app.get('/readyz', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    if (isProd) {
-      const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM _migrations');
-      if (rows[0].n < MIGRATION_COUNT) {
-        return res.status(503).json({ ready: false, reason: 'migrations_pending', applied: rows[0].n, expected: MIGRATION_COUNT });
-      }
+    if (isProd && !(await migrationsApplied())) {
+      return res.status(503).json({ ready: false, reason: 'migrations_pending', expected: MIGRATION_COUNT });
     }
     res.json({ ready: true });
   } catch (e) {
@@ -1491,7 +1495,7 @@ async function cleanupOldNotifications() {
   } catch (e) { console.error('Notification cleanup error:', e.message); }
 }
 
-module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, escapeHtml, isStrongPassword };
+module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, escapeHtml, isStrongPassword, migrationsApplied };
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;

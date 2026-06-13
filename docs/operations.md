@@ -67,14 +67,15 @@ Auto-archive flips `archived = true` on any task with `stage = 'done'` whose `co
 
 ## Migrations
 
-`database.js#init()` runs every `migrations/*.sql` not yet recorded in `_migrations`, in numeric order. It now runs in Railway's **pre-deploy phase** (`scripts/migrate.js`, see Deploy lifecycle): a failing migration **fails the deploy and leaves the previous deployment serving** — no more crash-loop. Each migration runs with `lock_timeout = 10s` + `statement_timeout = 120s`, so one that can't take its lock (or runs away) aborts fast instead of hanging the deploy.
+`database.js#init()` runs every `migrations/*.sql` not yet recorded in `_migrations`, in numeric order. It now runs in Railway's **pre-deploy phase** (`scripts/migrate.js`, see Deploy lifecycle): a failing migration **fails the deploy and leaves the previous deployment serving** — no more crash-loop. Each migration runs with `lock_timeout = 10s` so one that can't take its lock (the old instance is still serving during pre-deploy) aborts fast instead of hanging the deploy. There is deliberately **no** `statement_timeout` — a legitimately long table rewrite shouldn't be aborted mid-flight.
 
 ### Rules
 
 - One numbered file per change; never edit a migration after it's been recorded.
 - If a migration was rolled back (so it's NOT in `_migrations`), editing the file in place is fine and intentional — the runner will retry on the next deploy. This was the recovery path for the original 012 crash.
 - Idempotent DDL (`IF NOT EXISTS`) only.
-- **Index migrations on a hot table:** plain `CREATE INDEX` takes a write-blocking lock and will trip `lock_timeout` under load. Use `CREATE INDEX CONCURRENTLY` — but it **can't run inside the runner's transaction**, so it needs its own non-transactional migration step (don't bundle it with other DDL).
+- **Long lock waits:** if a migration legitimately needs to wait longer than 10s for its lock, raise it in the file itself (`SET LOCAL lock_timeout = '…'` after the implicit BEGIN).
+- **`CREATE INDEX CONCURRENTLY` is NOT yet supported** — the runner wraps every migration in a transaction, and CONCURRENTLY can't run inside one. Adding a non-transactional migration path (e.g. a `*.notx.sql` convention) is future work; until then, index migrations take a brief write-blocking lock (fine while `tasks` is small).
 
 ### `ALTER COLUMN ... TYPE` gotcha
 
