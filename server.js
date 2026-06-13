@@ -22,8 +22,13 @@ const {
 } = require('./backup');
 const cron = require('node-cron');
 const path = require('path');
+const fs = require('fs');
 
 const isProd = process.env.NODE_ENV === 'production';
+// Number of migration files shipped in this build — /readyz uses it to confirm
+// the pre-deploy migration step actually applied them before serving traffic.
+const MIGRATION_COUNT = fs.readdirSync(path.join(__dirname, 'migrations'))
+  .filter(f => f.endsWith('.sql')).length;
 const isTest = process.env.NODE_ENV === 'test';
 
 if (isProd) {
@@ -118,6 +123,27 @@ app.get('/healthz', async (req, res) => {
   } catch (e) {
     if (!isProd) console.error('/healthz failed:', e.message);
     res.status(503).json({ ok: false, error: 'db_unreachable' });
+  }
+});
+
+// Readiness (distinct from /healthz liveness) — Railway's healthcheckPath points
+// here (railway.json), so a deploy is only promoted once the instance can serve:
+// DB reachable AND migrations applied. If the pre-deploy migration step didn't
+// run, _migrations is short of the shipped files → 503 → Railway keeps the old
+// deployment instead of routing traffic to a half-migrated instance.
+app.get('/readyz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    if (isProd) {
+      const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM _migrations');
+      if (rows[0].n < MIGRATION_COUNT) {
+        return res.status(503).json({ ready: false, reason: 'migrations_pending', applied: rows[0].n, expected: MIGRATION_COUNT });
+      }
+    }
+    res.json({ ready: true });
+  } catch (e) {
+    if (!isProd) console.error('/readyz failed:', e.message);
+    res.status(503).json({ ready: false, reason: 'db_unreachable' });
   }
 });
 

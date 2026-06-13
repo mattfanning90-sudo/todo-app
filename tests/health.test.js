@@ -12,6 +12,16 @@ describe('GET /healthz', () => {
   });
 });
 
+describe('GET /readyz', () => {
+  it('returns 200 ready:true when the DB is reachable (readiness gate)', async () => {
+    // Railway's healthcheckPath. Outside production the migrations-applied check
+    // is skipped, so this asserts the DB-reachable readiness path.
+    const res = await request(app).get('/readyz');
+    expect(res.status).toBe(200);
+    expect(res.body.ready).toBe(true);
+  });
+});
+
 describe('security headers', () => {
   it('sets a strict CSP without unsafe-inline on script-src', async () => {
     const res = await request(app).get('/healthz');

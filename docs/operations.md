@@ -4,6 +4,17 @@
 
 `main` auto-deploys to Railway. Merging a PR ships immediately — no separate deploy step. Treat every merge with the caution that implies.
 
+### Deploy lifecycle (`railway.json`)
+
+Config-as-code in `railway.json` (overrides the dashboard):
+
+- **`preDeployCommand: node scripts/migrate.js`** — migrations run in a **release phase before the new container serves**. If a migration fails, the deploy fails and the **previous deployment keeps serving** (no crash-loop, no downtime). `scripts/migrate.js` calls `database.js#init()` and exits non-zero on failure.
+- **`healthcheckPath: /readyz`** — Railway only promotes the new deployment once `/readyz` returns 200. `/readyz` (readiness, distinct from `/healthz` liveness) checks the DB is reachable **and**, in prod, that `_migrations` count ≥ the shipped migration files — so a half-migrated instance is never routed traffic.
+
+> Transitional (A4a): `server.js` boot **also** still runs migrations as an idempotent fallback. A follow-up (A4b) removes the boot path once the pre-deploy phase is confirmed in a real deploy.
+
+CI catches most bad migrations *before* merge: the **`realpg`** job (a required check) runs every migration against a fresh Postgres.
+
 ## Required env vars in production
 
 Server refuses to boot if any are missing or `SESSION_SECRET` is too short:
@@ -56,13 +67,14 @@ Auto-archive flips `archived = true` on any task with `stage = 'done'` whose `co
 
 ## Migrations
 
-`database.js#init()` runs every `migrations/*.sql` not yet recorded in `_migrations`, in numeric order. A failing migration aborts boot and exits the process — Railway crash-loops the container until it's fixed.
+`database.js#init()` runs every `migrations/*.sql` not yet recorded in `_migrations`, in numeric order. It now runs in Railway's **pre-deploy phase** (`scripts/migrate.js`, see Deploy lifecycle): a failing migration **fails the deploy and leaves the previous deployment serving** — no more crash-loop. Each migration runs with `lock_timeout = 10s` + `statement_timeout = 120s`, so one that can't take its lock (or runs away) aborts fast instead of hanging the deploy.
 
 ### Rules
 
 - One numbered file per change; never edit a migration after it's been recorded.
-- If a migration was rolled back (so it's NOT in `_migrations`), editing the file in place is fine and intentional — the runner will retry on next boot. This was the recovery path for the original 012 crash.
-- Idempotent DDL (`IF NOT EXISTS`) only; the runner's `BEGIN`/`COMMIT` go through `pool.query` and may not share a connection with the migration body. Treat each migration as if it might run outside a transaction.
+- If a migration was rolled back (so it's NOT in `_migrations`), editing the file in place is fine and intentional — the runner will retry on the next deploy. This was the recovery path for the original 012 crash.
+- Idempotent DDL (`IF NOT EXISTS`) only.
+- **Index migrations on a hot table:** plain `CREATE INDEX` takes a write-blocking lock and will trip `lock_timeout` under load. Use `CREATE INDEX CONCURRENTLY` — but it **can't run inside the runner's transaction**, so it needs its own non-transactional migration step (don't bundle it with other DDL).
 
 ### `ALTER COLUMN ... TYPE` gotcha
 
