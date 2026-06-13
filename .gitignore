@@ -4,3 +4,4 @@ todos.db
 sessions.db
 .superpowers/
 .claude/
+.vscode/
