@@ -2,7 +2,9 @@
 
 _Created 2026-06-12. Implements **A2** from `docs/architectural-backlog.md` (the highest-leverage reliability item). Motivated by B1: a prod failure that went unnoticed until a user hit it, because there is no error tracking, SLIs, or alerting today._
 
-> **Technical claims verified 2026-06-12** via a web-search-backed adversarial workflow against current Sentry/Expo/Railway docs. Key corrections folded in below: Sentry JS SDK is **v10** (not v9); `@sentry/react-native` must be **v8.x** for Expo SDK 55; `setupExpressErrorHandler` is **5xx-only** by default; Sentry free tier gives **unlimited projects + 1 uptime monitor** with **org-wide shared** quotas.
+> **✅ SHIPPED 2026-06-13** across all three surfaces — server + web live in prod (#59, #60), iOS built + submitted to TestFlight (#61, #62; bundle fix #71). Operator setup done: uptime monitor + spike protection. Remaining: optional iOS symbolication token (§ iOS). PRs #59–#62, #71.
+
+> **Technical claims verified 2026-06-12** via a web-search-backed adversarial workflow. Folded in below: Sentry JS SDK is **v10**; `setupExpressErrorHandler` is **5xx-only** by default; free tier gives **unlimited projects + 1 uptime monitor** with **org-wide shared** quotas. **Correction (2026-06-13):** the claim that `@sentry/react-native` needs **v8.x** for Expo 55 was WRONG — the SDK-bundled **7.11.0** works; the build failure was a missing `promise` direct dep, not the version (see § iOS).
 
 ## Problem
 

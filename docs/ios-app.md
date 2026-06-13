@@ -19,10 +19,11 @@ A React Native / Expo client that hits the same `/api/*` endpoints the web app u
 Build 16 crashed on launch yet passed tsc **and** the full jest suite — the suite mocks `@react-navigation` away, so it never boots the app. Root cause: `npm install @react-navigation/bottom-tabs` pulled v7 while the rest of react-navigation was v6; mixing react-navigation majors crashes on mount.
 
 - Install Expo/native deps with **`npx expo install <pkg>`**, never plain `npm install <pkg>` (it grabs `latest`). Keep all `@react-navigation/*` on one major.
-- Before every `eas build`, run all three:
+- Before every `eas build`, run all of:
   1. `npx expo-doctor` — flags SDK / version / peer mismatches.
   2. `npm test` — now includes `__tests__/nav-version-alignment.test.ts` (asserts the react-navigation packages share a major) and `__tests__/boot.test.tsx` (mounts the **real** `RootNavigator`; a version mismatch or any mount-time throw fails it).
-  3. `npx expo run:ios` (simulator) — a 30-second launch check beats the 40-min build → TestFlight → device loop.
+  3. **`npx expo export --platform ios`** — a real Metro bundle. Catches unresolved-import errors that doctor + the mocked jest suite **cannot** (they never bundle). This is what would have caught the `@sentry/react-native` → `promise/setimmediate/done` failure that broke a build on 2026-06-13 (see Sentry section below).
+  4. `npx expo run:ios` (simulator) — a 30-second launch check beats the 40-min build → TestFlight → device loop.
 
 ### Build + submit pipeline
 ```bash
@@ -67,6 +68,12 @@ The Google reversed-client-ID scheme is what makes `expo-auth-session` OAuth red
 
 ### Build number
 Managed by `autoIncrement: true` in `eas.json`. If a build is rejected by Apple for a duplicate build number, increment `ios.buildNumber` in `app.json` manually to skip past the used value.
+
+### Sentry error tracking (A2)
+Live as of build 23 (2026-06-13). Errors-only; symbolication is **deferred** (see below).
+- `@sentry/react-native@7.11.0` (Expo SDK 55's bundled pin — **not** v8; v8 was a red herring and adds an Xcode-16.4 native requirement). `Sentry.init` + `Sentry.wrap(App)` in `App.tsx`, capture tuned in `src/api/client.ts` (5xx + unexpected network → `captureException`; 401/4xx + offline → breadcrumb). DSN via `EXPO_PUBLIC_SENTRY_DSN` (wired in `eas.json` preview+production env). Inert without a DSN. `metro.config.js` uses `getSentryExpoConfig`; the `@sentry/react-native/expo` config plugin is in `app.json`. Jest mocks it via `__mocks__/@sentry/react-native.js` (`wrap` = identity).
+- **`promise` dep gotcha (broke build 22):** Sentry deep-imports `promise/setimmediate/done`, but `promise` is only nested under react-native, not hoisted → Metro "Unable to resolve". **Fix: `promise` is a direct dep** (`^8.3.0`). Don't remove it. (This is why `expo export` is now in the pre-build checklist.)
+- **`SENTRY_DISABLE_AUTO_UPLOAD: "true"`** is set in `eas.json` build profiles so the Sentry config plugin's source-map/dSYM **upload phase doesn't hard-fail** the build without a token. **To enable symbolicated JS stacks:** create a Sentry token with `project:releases` + `project:write`, set `SENTRY_AUTH_TOKEN` + `SENTRY_ORG=mf-ventures` + `SENTRY_PROJECT=<rn-slug>` as EAS env, then **remove** `SENTRY_DISABLE_AUTO_UPLOAD`.
 
 ---
 
