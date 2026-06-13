@@ -15,6 +15,24 @@ This is the technical/architectural counterpart to `docs/product-backlog.md` (fe
 
 ---
 
+## Progress (updated 2026-06-13)
+
+The whole **P1 tier is shipped**; the detailed analysis below is preserved as the original audit record.
+
+| # | Item | Status |
+|---|---|---|
+| **A1** | B1 iOS session | 🟡 **Monitoring** — stopped reproducing post-deploy; client 401-resilience + gated `B1_DEBUG` diagnostics shipped (#58), then stood down. See [[b1-ios-session-finding]]. |
+| **A2** | Observability (Sentry + SLIs) | ✅ **Shipped & live** — server + web Sentry in prod, iOS wired (#59, #60, #61, #62). Pending operator: uptime monitor, spike protection, iOS `eas build`. |
+| **A3** | API contract test | ✅ **Shipped** (#66) — `/api/tasks` + `/api/tasks/today` vs iOS types. |
+| **A4** | Deploy safety | ✅ **Shipped** (#68 + #69) — migrations run in Railway's pre-deploy phase; prod serving process no longer migrates; `/readyz` readiness gate. Crash-loop path gone. |
+| **A5** | Real-Postgres test layer | ✅ **Shipped** (#67) — now a **required** CI check; covers dashboard counts + jsonb wire-shape. |
+| **A6–A11** | P2 (correctness & debt) | ⬜ Not started. |
+| **A12–A16** | P3 (acceptable debt) | ⬜ Deferred, deliberately. |
+
+Also: tech-debt issue **#64** tracks the `auto-archive` test flake + the `express`/`qs` audit.
+
+---
+
 ## P0 — Critical (now)
 
 | # | Item | Lens | Effort | Door |
