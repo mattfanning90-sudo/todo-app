@@ -37,11 +37,28 @@ Server refuses to boot if any are missing or `SESSION_SECRET` is too short:
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `CALLBACK_URL` | Enable Google OAuth on web. Web local auth still works without these. |
 | `GOOGLE_IOS_CLIENT_ID`, `GOOGLE_ANDROID_CLIENT_ID` | Additional audiences for `/auth/google/mobile`. |
 | `SMTP_USER`, `SMTP_PASS` | Enable digest emails (Gmail SMTP). Without them digest cron runs but `sendEmail` is a no-op. |
-| `RESTORE_SECRET` | Required to call `/api/admin/backup`, `/api/admin/restore/:id`. |
+| `RESTORE_SECRET` | Required to call `/api/admin/backup`, `/api/admin/restore/:id`, and the SLI endpoint `/metrics`. |
+| `SENTRY_DSN`, `SENTRY_BROWSER_DSN` | Activate server / web error tracking (see Observability). Unset → inert. |
+| `SENTRY_TRACES_SAMPLE_RATE` | Server performance sampling, default `0.1`. |
+| `DB_SSL` | Set to `disable` to connect to a non-SSL Postgres (local dev / CI real-PG tests). **Ignored in production** (gated on `NODE_ENV !== 'production'`). |
 
 ## Health check
 
-`GET /healthz` runs `SELECT 1` and returns `{"ok": true}` on success, `503` with `{"ok": false, "error": "db_unreachable"}` on failure. Point your load balancer / orchestrator at it.
+`GET /healthz` (liveness) runs `SELECT 1` and returns `{"ok": true, "pool": {total, idle, waiting}}` on success, `503` with `{"ok": false, "error": "db_unreachable"}` on failure. `GET /readyz` (readiness — Railway's `healthcheckPath`) additionally asserts migrations are applied in prod (see Deploy lifecycle); a half-migrated instance 503s and isn't promoted.
+
+## Observability (Sentry) — A2
+
+Error tracking + SLIs across all three surfaces. Org `mf-ventures` (**EU/DE** region). Each surface is **inert without its DSN**, so nothing is sent from local/CI.
+
+| Surface | DSN env var | Where set | Notes |
+|---|---|---|---|
+| Server (`@sentry/node`) | `SENTRY_DSN` | Railway | 5xx/unhandled capture; p95/throughput via Performance (`SENTRY_TRACES_SAMPLE_RATE`, default 0.1). Init in `instrument.js` (required before `express`). `beforeSend` scrubs request body/cookies/query/secret headers. |
+| Web (`@sentry/browser`) | `SENTRY_BROWSER_DSN` | Railway | Served to the SPA via `GET /config.js`; CSP `connect-src` auto-derives the ingest host from the DSN. Vendored bundle in `public/vendor/sentry.min.js`. |
+| iOS (`@sentry/react-native`) | `EXPO_PUBLIC_SENTRY_DSN` | `ios-app/eas.json` | Build-time inline; see `docs/ios-app.md` (incl. the `promise` dep gotcha + symbolication). |
+
+- **SLIs:** login success/fail + pool saturation counters on a gated `GET /metrics` (`RESTORE_SECRET`); latency/throughput/error-rate from Sentry Performance.
+- **Alerting:** Sentry issue-alert email per project; a Sentry **uptime monitor** on `/healthz` (free tier: 1) catches total outages; per-project **spike protection** guards the org-wide quota (5k errors / 5M spans / mo, shared).
+- Free tier = 1 user, unlimited projects, 30-day retention. Org auth tokens can't list/manage projects via API/CLI (403) — DSNs come from the UI.
 
 ## Graceful shutdown
 

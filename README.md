@@ -60,11 +60,15 @@ After slice C (PR #11), the inline `<script>` and `<style>` blocks from `index.h
 
 ### iOS client (`ios-app/`)
 
-Expo SDK 51 + TypeScript. Talks to the same `/api/*` endpoints. See `docs/ios-app.md`.
+Expo SDK 55 + TypeScript. Talks to the same `/api/*` endpoints. See `docs/ios-app.md`.
+
+### Observability (`instrument.js`, Sentry)
+
+Error tracking + golden-signal SLIs on all three surfaces via Sentry (server `@sentry/node`, web `@sentry/browser`, iOS `@sentry/react-native`) — inert without a DSN. Latency/throughput/error-rate from Sentry Performance; login + pool-saturation counters on a gated `/metrics`; a `/readyz` readiness gate + a Sentry uptime monitor on `/healthz`. See `docs/operations.md` → Observability.
 
 ### Tests (`tests/`)
 
-Vitest + pg-mem. The server runs against an in-process Postgres clone, with a handful of helper functions stubbed (advisory locks, `to_regclass`, etc.). See `docs/testing.md`.
+Vitest + pg-mem for the fast suite (server against an in-process Postgres clone). A second **real-Postgres layer** (`tests/realpg/`, `npm run test:realpg`, its own CI job) covers what pg-mem can't model — `COUNT(*) FILTER`, date funcs, jsonb wire shape — plus a web↔iOS API-contract test. See `docs/testing.md`.
 
 ## Design choices
 
@@ -80,9 +84,9 @@ Migration 012 promoted both from `TEXT` to `jsonb`. The reads no longer have to 
 
 The migration shipped with a bug the first time around: Postgres won't auto-cast a column's existing TEXT `DEFAULT '[]'` to `jsonb`. Crash-looped prod for ~15 minutes. Hotfix `998a6ac` drops the default, changes the type, and sets the new jsonb default in one atomic `ALTER TABLE`. The lesson is in `CLAUDE.md` and `~/.claude/CLAUDE.md`.
 
-### Why migrations run on boot
+### Why migrations run in a pre-deploy phase (was: on boot)
 
-Simpler than a separate migrate step. The trade-off: a bad migration crash-loops the container and there's no manual gate. We've added a `/healthz` endpoint so the orchestrator can route around bad instances, but the real safety net is the staged-PR pattern (see below) plus the rule that destructive migrations get their own PR.
+Originally migrations ran on boot — simple, but a bad migration crash-looped the container with no gate. As of A4 they run in Railway's **pre-deploy phase** (`railway.json` → `scripts/migrate.js`): a failed migration fails the deploy and the **previous deployment keeps serving** (no crash-loop). The serving process no longer migrates in prod; `/readyz` is the readiness gate, and the `realpg` CI job runs every migration on fresh Postgres so bad ones are caught pre-merge. Locally the server still auto-migrates on boot for convenience. See `docs/operations.md`.
 
 ### Why localStorage cache for instant paint
 
