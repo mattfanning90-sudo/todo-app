@@ -4,6 +4,11 @@ const path = require('path');
 
 function buildSsl(prefix = '') {
   if (!process.env[`${prefix}DATABASE_URL`]) return false;
+  // Explicit opt-out for a Postgres that doesn't speak SSL (local dev, the
+  // real-PG test layer, CI service container). Gated to non-prod so it's an
+  // ENFORCED invariant, not just a convention — prod can never disable SSL this way.
+  if (process.env.NODE_ENV !== 'production'
+      && (process.env[`${prefix}DB_SSL`] || '').toLowerCase() === 'disable') return false;
   const ca = process.env[`${prefix}DB_CA_CERT`];
   if (ca) return { ca, rejectUnauthorized: true };
   if (process.env.NODE_ENV === 'production') {

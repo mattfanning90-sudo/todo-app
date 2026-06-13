@@ -40,3 +40,34 @@ jobs:
       - run: npm ci
       - run: npm run typecheck # tsc --noEmit
       - run: npm run test:ci   # jest --forceExit --runInBand (serial = stable in CI)
+
+  realpg:
+    name: Real-Postgres tests (vitest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: todo
+          POSTGRES_PASSWORD: todo
+          POSTGRES_DB: todo_realpg_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U todo -d todo_realpg_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://todo:todo@localhost:5432/todo_realpg_test
+      DB_SSL: disable # the service container doesn't speak SSL
+      SESSION_SECRET: test-secret-must-be-at-least-32-characters-long
+      APP_URL: http://localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:realpg # vitest against real Postgres — the FILTER/date/jsonb queries pg-mem can't model

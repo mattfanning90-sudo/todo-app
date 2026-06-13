@@ -1,0 +1,21 @@
+# Local Postgres for the real-Postgres test layer (A5). Not used in prod.
+#   docker compose up -d db
+#   DATABASE_URL=postgres://todo:todo@localhost:5433/todo_realpg_test npm run test:realpg
+# (Port 5433 avoids clashing with a local Postgres on 5432. setup.js sets
+# DB_SSL=disable automatically. Data is ephemeral — the suite truncates anyway.)
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: todo
+      POSTGRES_PASSWORD: todo
+      POSTGRES_DB: todo_realpg_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U todo -d todo_realpg_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
