@@ -135,9 +135,9 @@ async function migrationsApplied() {
 
 // Readiness (distinct from /healthz liveness) — Railway's healthcheckPath points
 // here (railway.json): a deploy is only promoted once the instance can serve.
-// In A4a this is redundant with the boot-time migration fallback (the server
-// only listens after init() succeeds, which implies migrations applied); it
-// becomes the authoritative migration gate in A4b once boot migrations are removed.
+// In prod this is the AUTHORITATIVE migration gate — the serving process no longer
+// migrates (the pre-deploy phase does), so if migrations are pending this 503s and
+// Railway keeps the previous deployment instead of routing traffic to it.
 app.get('/readyz', async (req, res) => {
   try {
     await pool.query('SELECT 1');
@@ -1499,7 +1499,12 @@ module.exports = { app, runDigests, runAutoArchive, cleanupOldNotifications, esc
 
 if (require.main === module) {
   const PORT = process.env.PORT || 3000;
-  init()
+  // Prod migrations run in the pre-deploy phase (railway.json → scripts/migrate.js),
+  // so the serving process never migrates: a bad migration fails the deploy and
+  // the previous deployment keeps serving — no crash-loop. /readyz is the
+  // authoritative gate (won't pass while migrations are pending). Locally we still
+  // auto-migrate on boot for convenience.
+  (isProd ? Promise.resolve() : init())
     .then(async () => {
       await initBackup();
       // Boot-time backup is best-effort and racey across instances; the daily

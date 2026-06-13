@@ -11,7 +11,7 @@ Config-as-code in `railway.json` (overrides the dashboard):
 - **`preDeployCommand: node scripts/migrate.js`** — migrations run in a **release phase before the new container serves**. If a migration fails, the deploy fails and the **previous deployment keeps serving** (no crash-loop, no downtime). `scripts/migrate.js` calls `database.js#init()` and exits non-zero on failure.
 - **`healthcheckPath: /readyz`** — Railway only promotes the new deployment once `/readyz` returns 200. `/readyz` (readiness, distinct from `/healthz` liveness) checks the DB is reachable **and**, in prod, that `_migrations` count ≥ the shipped migration files — so a half-migrated instance is never routed traffic.
 
-> Transitional (A4a): `server.js` boot **also** still runs migrations as an idempotent fallback. A follow-up (A4b) removes the boot path once the pre-deploy phase is confirmed in a real deploy.
+In **production the serving process does not migrate at all** — only the pre-deploy phase does, so a bad migration can never crash-loop the server; `/readyz` is the authoritative gate (503s while migrations are pending, so Railway won't promote a half-migrated instance). Locally (`NODE_ENV` ≠ `production`) the server still auto-migrates on boot for convenience.
 
 CI catches most bad migrations *before* merge: the **`realpg`** job (a required check) runs every migration against a fresh Postgres.
 
@@ -71,7 +71,7 @@ Auto-archive flips `archived = true` on any task with `stage = 'done'` whose `co
 
 ### Rules
 
-- One numbered file per change; never edit a migration after it's been recorded.
+- One numbered file per change; never edit a migration after it's been recorded. **Append-only — never delete or rename a `.sql` file:** `/readyz`'s prod gate compares `_migrations` row count against the shipped file count, so removing a file would lower the expected count and could read green against a DB that's actually missing a different migration.
 - If a migration was rolled back (so it's NOT in `_migrations`), editing the file in place is fine and intentional — the runner will retry on the next deploy. This was the recovery path for the original 012 crash.
 - Idempotent DDL (`IF NOT EXISTS`) only.
 - **Long lock waits:** if a migration legitimately needs to wait longer than 10s for its lock, raise it in the file itself (`SET LOCAL lock_timeout = '…'` after the implicit BEGIN).
