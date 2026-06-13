@@ -42,6 +42,7 @@
     "expo-updates": "~55.0.24",
     "expo-web-browser": "~55.0.16",
     "jest-expo": "~54.0.17",
+    "promise": "^8.3.0",
     "react": "19.2.0",
     "react-native": "0.83.6",
     "react-native-draggable-flatlist": "^4.0.1",
