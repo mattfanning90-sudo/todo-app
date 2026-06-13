@@ -10,6 +10,7 @@ import type {
   DigestFrequency,
   MemberBoard,
   Notification,
+  ReminderTask,
   SearchHit,
   Task,
   TodayTask,
@@ -171,6 +172,10 @@ export const api = {
       method: 'PUT',
       body: { frequency },
     }),
+  updateReminders: (body: { enabled: boolean; time: string; lead_days: number }) =>
+    request<{ ok: true }>('/api/user/reminders', { method: 'PUT', body }),
+  // NOT board-scoped — reminders span all the user's boards (owned + member).
+  reminderAgenda: () => request<ReminderTask[]>('/api/reminders/agenda'),
 
   boards: () => request<Board[]>('/api/boards'),
   memberships: () => request<MemberBoard[]>('/api/boards/memberships'),

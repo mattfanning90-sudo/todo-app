@@ -4,9 +4,23 @@ export interface User {
   name: string | null;
   username: string;
   digest_frequency: DigestFrequency;
+  // Task reminder prefs (Phase 1: on-device local notifications). The server
+  // always sends these on /api/user + auth responses (defaults: false/'09:00'/0).
+  reminders_enabled: boolean;
+  reminder_time: string;        // HH:MM, device-local
+  reminder_lead_days: number;   // 0 = on the due date, 1, or 2
 }
 
 export type DigestFrequency = 'none' | 'daily' | 'weekly' | 'fortnightly';
+
+/** Upcoming dated task returned by /api/reminders/agenda (cross-board). */
+export interface ReminderTask {
+  id: number;
+  text: string;
+  due_date: string;   // YYYY-MM-DD
+  board_id: number;
+  board_name: string;
+}
 
 export interface Board {
   id: number;

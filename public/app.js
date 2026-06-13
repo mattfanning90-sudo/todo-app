@@ -15,6 +15,8 @@
   let myId = null;
   let isDragging = false;
   let myName = '';
+  let reminderPrefs = { reminders_enabled: false, reminder_time: '09:00', reminder_lead_days: 0 };
+  let myDigest = 'none';
   let boardMembers = [];
   let memberships = [];
   let myBoards = [];
@@ -212,14 +214,53 @@
     document.getElementById('nav-today').classList.toggle('active', todayFilter);
   }
 
+  // Shared loading / error blocks so a failed fetch is never mistaken for an
+  // empty state (the old code caught errors into [] and rendered "Nothing for
+  // today 🎉" on a network failure — celebrating a fetch error).
+  function tkLoadingBlock() {
+    return `<div class="tk-state" aria-busy="true">
+      <span class="tk-spinner" aria-hidden="true"></span>
+      <p>Loading…</p></div>`;
+  }
+  function tkErrorBlock(msg, retryAction) {
+    return `<div class="tk-state tk-state-error" role="alert">
+      <p>${escapeHtml(msg)}</p>
+      <button class="tk-btn-secondary" data-action="${retryAction}">Retry</button></div>`;
+  }
+
+  // Today header (date + title) with an arbitrary block where the list goes —
+  // used for the loading and error states, which have no task data to show.
+  function paintTodayShell(innerHtml) {
+    const el = document.getElementById('screen-today');
+    if (!el) return;
+    const dateLabel = new Date().toLocaleDateString(undefined,
+      { weekday: 'long', month: 'long', day: 'numeric' });
+    el.innerHTML = `
+      <div class="tk-today-head">
+        <div>
+          <p class="tk-eyebrow">${dateLabel}</p>
+          <h1 class="tk-h1">Today</h1>
+        </div>
+      </div>
+      ${innerHtml}`;
+  }
+
   async function renderToday() {
     const el = document.getElementById('screen-today');
     if (!el) return;
+    // Loading only on first paint (no data yet) so tab switches don't flash.
+    if (!todayTasks.length) paintTodayShell(tkLoadingBlock());
     try {
       const res = await fetch('/api/tasks/today', { headers: { 'X-Requested-With': 'fetch' } });
-      todayTasks = res.ok ? await res.json() : [];
-    } catch { todayTasks = []; }
-    paintToday();
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      todayTasks = await res.json();
+      paintToday();
+    } catch {
+      // Keep last-good data on a transient failure; only show the error state
+      // when we have nothing else to show.
+      if (todayTasks.length) paintToday();
+      else paintTodayShell(tkErrorBlock('Couldn’t load today’s tasks.', 'retryToday'));
+    }
   }
 
   // Re-render from the already-loaded todayTasks without a network round-trip
@@ -424,48 +465,63 @@
   async function submitQuickAdd() {
     const text = document.getElementById('quickadd-input').value.trim();
     if (!text) return;
-    const today = new Date().toISOString().slice(0, 10);
-    await apiPost('/api/tasks', { text, stage: 'backlog', due_date: today }); // lands on default board
+    // Default to today (so it lands in the Today view) but let the server parse a
+    // natural-language date in the title ("dentist Thursday 2pm") if one is present
+    // — matching the Board quick-add, which gets NL parsing for free.
+    await apiPost('/api/tasks', { text, stage: 'backlog', default_due: 'today' });
     closeQuickAdd();
     renderToday();
   }
 
   async function renderProfile() {
-  const el = document.getElementById('screen-profile');
-  if (!el) return;
-  let d = {};
-  try {
-    const res = await fetch('/api/dashboard', { headers: { 'X-Requested-With': 'fetch' } });
-    d = res.ok ? await res.json() : {};
-  } catch { d = {}; }
-  const s = d.stats || {};
-  const counts = d.counts || {};
-  const stat = (val, label) =>
-    `<div class="tk-stat tk-card"><div class="tk-stat-val">${val ?? 0}</div>
-       <div class="tk-stat-label">${label}</div></div>`;
-  const initial = (myName || '?')[0].toUpperCase();
-  const row = (label, action, args) =>
-    `<button class="tk-set-row" data-action="${action}" ${args ? `data-args='${args}'` : ''}>
-       <span>${label}</span>
-       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-     </button>`;
+    const el = document.getElementById('screen-profile');
+    if (!el) return;
+    el.innerHTML = profileHtml('loading');
+    try {
+      const res = await fetch('/api/dashboard', { headers: { 'X-Requested-With': 'fetch' } });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      el.innerHTML = profileHtml('ok', await res.json());
+    } catch {
+      el.innerHTML = profileHtml('error');
+    }
+  }
 
-  el.innerHTML = `
+  // Profile shell (identity + settings) renders in every state so it still works
+  // offline; only the stats region shows loading / error. The old code caught
+  // a failed fetch into {} and silently rendered zeros.
+  function profileHtml(state, d = {}) {
+    const s = d.stats || {};
+    const counts = d.counts || {};
+    const stat = (val, label) =>
+      `<div class="tk-stat tk-card"><div class="tk-stat-val">${val ?? 0}</div>
+         <div class="tk-stat-label">${label}</div></div>`;
+    const initial = (myName || '?')[0].toUpperCase();
+    const row = (label, action, args) =>
+      `<button class="tk-set-row" data-action="${action}" ${args ? `data-args='${args}'` : ''}>
+         <span>${label}</span>
+         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+       </button>`;
+    const statsRegion =
+      state === 'loading' ? tkLoadingBlock() :
+      state === 'error'   ? tkErrorBlock('Couldn’t load your stats.', 'retryProfile') :
+      `<div class="tk-stat-grid">
+        ${stat(s.done_total, 'Done')}
+        ${stat(s.completed_week, 'This week')}
+        ${stat(counts.open, 'Open')}
+        ${stat(counts.overdue, 'Overdue')}
+      </div>`;
+
+    return `
     <h1 class="tk-h1" style="margin-bottom:24px">Profile</h1>
     <div class="tk-profile-card tk-card">
       <span class="user-avatar large">${initial}</span>
       <div><div class="tk-profile-name">${escapeHtml(myName || '')}</div></div>
     </div>
-    <div class="tk-stat-grid">
-      ${stat(s.done_total, 'Done')}
-      ${stat(s.completed_week, 'This week')}
-      ${stat(counts.open, 'Open')}
-      ${stat(counts.overdue, 'Overdue')}
-    </div>
+    ${statsRegion}
     <div class="tk-settings tk-card">
       <p class="tk-settings-head">Settings</p>
       ${row('Appearance', 'toggleTheme')}
-      ${row('Notifications', 'openDigestPicker')}
+      ${row('Notifications', 'gotoNotifications')}
       ${row('Boards', 'gotoTab', '["board"]')}
       ${row('Search', 'openSearch')}
       <a class="tk-set-row" href="/api/export"><span>Export data</span>
@@ -474,11 +530,13 @@
       <a class="tk-set-row danger" href="/auth/logout"><span>Sign out</span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></a>
     </div>`;
-}
+  }
   function showTab(tab) {
     currentTab = tab;
     const tt = document.getElementById('topbar-title');
     if (tt) tt.textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
+    // The notifications settings sub-screen isn't a tab; switching tabs hides it.
+    document.getElementById('screen-notifications')?.classList.remove('active');
     ['today', 'board', 'profile'].forEach(t => {
       const screen = document.getElementById('screen-' + t);
       if (screen) screen.classList.toggle('active', t === tab);
@@ -687,6 +745,21 @@
       document.getElementById('account-avatar').textContent = initial;
       document.getElementById('account-name').textContent = displayName;
       document.getElementById('account-email').textContent = user.email || '';
+
+      // Task reminders: store the synced prefs + start the local-notification loop.
+      reminderPrefs = {
+        reminders_enabled: !!user.reminders_enabled,
+        reminder_time: user.reminder_time || '09:00',
+        reminder_lead_days: user.reminder_lead_days || 0,
+      };
+      myDigest = user.digest_frequency || 'none';
+      if (window.Reminders) {
+        Reminders.start({
+          getPrefs: () => reminderPrefs,
+          fetchAgenda: () => fetch('/api/reminders/agenda', { headers: { 'X-Requested-With': 'fetch' } })
+            .then(r => (r.ok ? r.json() : [])).catch(() => []),
+        });
+      }
 
       myBoards = boards;
       memberships = memberships_;
@@ -2250,14 +2323,98 @@
 
   /* ── Email digest ── */
   async function saveDigestFrequency(value) {
+    myDigest = value;
     await apiFetch('PUT', '/api/user/digest', { frequency: value });
   }
-  function openDigestPicker() {
-    const choice = prompt('Email digest: none / daily / weekly / fortnightly');
-    if (!choice) return;
-    const v = choice.trim().toLowerCase();
-    if (!['none', 'daily', 'weekly', 'fortnightly'].includes(v)) { alert('Invalid option'); return; }
-    saveDigestFrequency(v);
+
+  /* ── Notifications settings (task reminders + email digest) ── */
+  function gotoNotifications() {
+    ['today', 'board', 'profile'].forEach(t =>
+      document.getElementById('screen-' + t)?.classList.remove('active'));
+    const el = document.getElementById('screen-notifications');
+    if (!el) return;
+    el.classList.add('active');
+    const tt = document.getElementById('topbar-title');
+    if (tt) tt.textContent = 'Notifications';
+    renderNotificationsSettings();
+  }
+  function backFromNotifications() { showTab('profile'); }
+
+  function renderNotificationsSettings() {
+    const el = document.getElementById('screen-notifications');
+    if (!el) return;
+    const p = reminderPrefs || {};
+    const time = p.reminder_time || '09:00';
+    const lead = Number(p.reminder_lead_days || 0);
+    const enabled = !!p.reminders_enabled;
+    const leadOpt = (v, label) => `<option value="${v}" ${lead === v ? 'selected' : ''}>${label}</option>`;
+    const digestOpt = (v, label) => `<option value="${v}" ${myDigest === v ? 'selected' : ''}>${label}</option>`;
+    el.innerHTML = `
+      <button class="tk-set-row" data-action="backFromNotifications" style="margin-bottom:16px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+        <span>Back</span>
+      </button>
+      <h1 class="tk-h1" style="margin-bottom:24px">Notifications</h1>
+      <div class="tk-settings tk-card">
+        <p class="tk-settings-head">Task reminders</p>
+        <label class="tk-set-row" style="cursor:pointer">
+          <span>Remind me about due tasks</span>
+          <input type="checkbox" id="reminder-enabled" data-onchange="saveReminders" ${enabled ? 'checked' : ''}>
+        </label>
+        <label class="tk-set-row">
+          <span>Time</span>
+          <input type="time" id="reminder-time" value="${time}" data-onchange="saveReminders">
+        </label>
+        <label class="tk-set-row">
+          <span>Remind me</span>
+          <select id="reminder-lead" data-onchange="saveReminders">
+            ${leadOpt(0, 'On the due date')}
+            ${leadOpt(1, '1 day before')}
+            ${leadOpt(2, '2 days before')}
+          </select>
+        </label>
+        <p id="reminder-hint" style="padding:8px 4px 0;color:var(--text-muted);font-size:13px"></p>
+      </div>
+      <div class="tk-settings tk-card">
+        <p class="tk-settings-head">Email digest</p>
+        <label class="tk-set-row">
+          <span>Frequency</span>
+          <select id="notif-digest-frequency" data-onchange="saveDigestFrequency">
+            ${digestOpt('none', 'Off')}
+            ${digestOpt('daily', 'Daily')}
+            ${digestOpt('weekly', 'Weekly')}
+            ${digestOpt('fortnightly', 'Fortnightly')}
+          </select>
+        </label>
+      </div>`;
+  }
+
+  // Read the three controls, request OS permission on enable, persist + reschedule.
+  async function saveReminders() {
+    const enabledEl = document.getElementById('reminder-enabled');
+    const timeEl = document.getElementById('reminder-time');
+    const leadEl = document.getElementById('reminder-lead');
+    const hint = document.getElementById('reminder-hint');
+    let enabled = !!(enabledEl && enabledEl.checked);
+    const time = (timeEl && timeEl.value) || '09:00';
+    const lead_days = Number((leadEl && leadEl.value) || 0);
+    if (hint) hint.textContent = '';
+    if (enabled && window.Reminders) {
+      const granted = await Reminders.enable();
+      if (!granted) {
+        enabled = false;
+        if (enabledEl) enabledEl.checked = false;
+        if (hint) hint.textContent = 'Browser notifications are blocked. Enable them in your browser settings to get reminders.';
+      }
+    }
+    reminderPrefs = { reminders_enabled: enabled, reminder_time: time, reminder_lead_days: lead_days };
+    try {
+      await apiFetch('PUT', '/api/user/reminders', { enabled, time, lead_days });
+    } catch {
+      if (hint) hint.textContent = 'Couldn’t save — please try again.';
+      return;
+    }
+    if (window.Reminders) Reminders.refresh();
   }
 
   document.getElementById('new-cat-name').addEventListener('keydown', e => { if (e.key === 'Enter') saveNewCategory(); });
@@ -2359,12 +2516,14 @@
     toggleTheme, toggleNotifications, toggleAccountMenu, closeAccountMenu,
     openSearch, openHelpModal, closeHelpModal,
     clearTodayFilter, setFilter, filterToday, viewDashboard, viewArchived,
-    toggleNewCatForm, saveNewCategory, saveDigestFrequency, openDigestPicker, addTask, openImport, closeImport,
+    toggleNewCatForm, saveNewCategory, saveDigestFrequency, addTask, openImport, closeImport,
+    gotoNotifications, backFromNotifications, saveReminders,
     importTasks, clearImport, closeSidebarMobile, closeSearch,
     openCreateBoardModal, closeCreateBoardModal, createBoard, closeMembersModal,
     inviteMember, removeMember, revokeInvite, copyInviteLink,
     deleteCategory, clearAssign, restoreTask, jumpToStage,
     setTodayFilter, toggleTaskDone, openQuickAdd, closeQuickAdd, submitQuickAdd,
+    retryToday: renderToday, retryProfile: renderProfile,
     openBoardOverflow, renameCurrentBoard, deleteCurrentBoard,
     openMembersFromBoardMenu: () => { closeBoardMenu(); openMembersModal(); },
     closeBoardMenuAndCreateBoard: () => { closeBoardMenu(); openCreateBoardModal(); },
