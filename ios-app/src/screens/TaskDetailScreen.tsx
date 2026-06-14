@@ -274,7 +274,7 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
     if (!calStart) return;
     let url = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
     url += '&text=' + encodeURIComponent(text.trim());
-    if (status) url += '&details=' + encodeURIComponent(status);
+    if (status.trim()) url += '&details=' + encodeURIComponent(status.trim());
     const allDay = !calStart.includes('T');
     let endG: string;
     if (allDay) {
@@ -296,7 +296,7 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
       const ics = buildICS({
         id: task.id,
         title: text.trim(),
-        notes: status,
+        notes: status.trim(),
         calStart,
         calEnd,
       });
