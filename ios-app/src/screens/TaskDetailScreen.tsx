@@ -96,6 +96,12 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
   const [newSubtaskText, setNewSubtaskText] = useState('');
   const subtaskInputRef = useRef<TextInput>(null);
 
+  // Share
+  const [shareQuery, setShareQuery] = useState('');
+  const [shareResults, setShareResults] = useState<UserSearchResult[]>([]);
+  const [sharing, setSharing] = useState(false);
+  const shareSearchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Category management
   const [categories, setCategories] = useState<Category[]>([]);
   const [saving, setSaving] = useState(false);
@@ -127,6 +133,26 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
       if (userSearchTimeout.current) clearTimeout(userSearchTimeout.current);
     };
   }, [userQuery]);
+
+  // Live share user search
+  useEffect(() => {
+    if (shareQuery.length < 2) {
+      setShareResults([]);
+      return;
+    }
+    if (shareSearchTimeout.current) clearTimeout(shareSearchTimeout.current);
+    shareSearchTimeout.current = setTimeout(async () => {
+      try {
+        const results = await api.searchUsers(shareQuery);
+        setShareResults(results);
+      } catch {
+        setShareResults([]);
+      }
+    }, 300);
+    return () => {
+      if (shareSearchTimeout.current) clearTimeout(shareSearchTimeout.current);
+    };
+  }, [shareQuery]);
 
   const canSave = useMemo(() => text.trim().length > 0, [text]);
 
@@ -268,6 +294,23 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
         },
       },
     ]);
+  };
+
+  const shareWithUser = async (u: UserSearchResult) => {
+    if (!task || sharing) return;
+    setSharing(true);
+    setShareQuery('');
+    setShareResults([]);
+    try {
+      await api.shareTask(task.id, u.id, board.id);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Shared', `Shared with @${u.username}`);
+    } catch (err) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      Alert.alert('Could not share task', String(err));
+    } finally {
+      setSharing(false);
+    }
   };
 
   return (
@@ -620,6 +663,48 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
               </View>
             </View>
           </SectionCard>
+
+          {/* ── Share (edit mode only) ───────────────────────────────────────── */}
+          {editing && (
+            <SectionCard eyebrow="Share" style={styles.card}>
+              <View style={styles.cardInner}>
+                <Text style={[styles.rowLabel, { color: t.textMuted }]}>
+                  Share to someone's board
+                </Text>
+                <View style={[styles.searchRow, { borderColor: sharing ? t.textMuted : t.borderInput, backgroundColor: t.surface }]}>
+                  <Icon name="search" label="" size={16} color={t.textLight} />
+                  <TextInput
+                    value={shareQuery}
+                    onChangeText={setShareQuery}
+                    placeholder={sharing ? 'Sharing…' : 'Find someone to share with…'}
+                    placeholderTextColor={t.textLight}
+                    style={[styles.searchInput, { color: t.text }]}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    editable={!sharing}
+                  />
+                  {shareQuery.length > 0 && !sharing && (
+                    <Pressable onPress={() => { setShareQuery(''); setShareResults([]); }} hitSlop={8}>
+                      <Icon name="close" label="Clear search" size={14} color={t.textLight} />
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+              {shareResults.length > 0 && (
+                <View>
+                  {shareResults.map((u, idx) => (
+                    <ListRow
+                      key={u.id}
+                      title={u.username}
+                      subtitle={u.name ?? undefined}
+                      divider={idx < shareResults.length - 1}
+                      onPress={() => shareWithUser(u)}
+                    />
+                  ))}
+                </View>
+              )}
+            </SectionCard>
+          )}
 
           {/* ── Destructive footer (edit mode only) ──────────────────────────── */}
           {editing && (

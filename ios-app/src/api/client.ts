@@ -252,6 +252,15 @@ export const api = {
     request<{ ok: true }>(`/api/categories/${categoryId}?board=${boardId}`, {
       method: 'DELETE',
     }),
+
+  // ── Task sharing ───────────────────────────────────────────────────────────
+  // Copies the task to the recipient's board. Mirrors POST /api/tasks/:id/share
+  // on the web (boardBody spreads board_id into the request body).
+  shareTask: (taskId: number, recipientUserId: number, boardId: number) =>
+    request<{ ok: true }>(`/api/tasks/${taskId}/share`, {
+      method: 'POST',
+      body: { recipient_user_id: recipientUserId, board_id: boardId },
+    }),
 };
 
 export { setCookie as setSessionCookie };
