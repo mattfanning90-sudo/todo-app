@@ -32,6 +32,7 @@ import { NotificationsScreen } from '@/screens/NotificationsScreen';
 import { ArchivedScreen } from '@/screens/ArchivedScreen';
 import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { AppearanceScreen } from '@/screens/AppearanceScreen';
 import { BoardListScreen } from '@/screens/BoardListScreen';
 
 // ── Stack / tab navigator instances ─────────────────────────────────────────
@@ -86,6 +87,7 @@ function ProfileNav() {
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="Profile" component={ProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
+      <ProfileStack.Screen name="Appearance" component={AppearanceScreen} />
       <ProfileStack.Screen name="BoardList" component={BoardListScreen} />
       <ProfileStack.Screen name="Search" component={SearchScreen} />
       <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />

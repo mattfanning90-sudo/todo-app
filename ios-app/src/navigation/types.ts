@@ -28,6 +28,7 @@ export type BoardStackParams = {
 export type ProfileStackParams = {
   Profile: undefined;
   Settings: undefined;
+  Appearance: undefined;
   BoardList: undefined;
   Search: undefined;
   Notifications: undefined;

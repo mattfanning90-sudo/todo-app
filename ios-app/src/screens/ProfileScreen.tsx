@@ -125,6 +125,7 @@ export function ProfileScreen({ navigation }: Props) {
         {/* Comprehensive settings list */}
         <View style={s.settingsCard}>
           <Text style={s.settingsHead}>Settings</Text>
+          <SettingRow label="Appearance" onPress={() => navigation.navigate('Appearance')} />
           <SettingRow label="Notifications" onPress={() => navigation.navigate('Settings')} />
           <SettingRow label="Boards" onPress={() => navigation.navigate('BoardList')} />
           <SettingRow label="Search" onPress={() => navigation.navigate('Search')} />
