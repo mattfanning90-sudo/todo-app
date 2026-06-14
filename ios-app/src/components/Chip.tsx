@@ -19,7 +19,7 @@ export function Chip({ label, active, onPress, mode = 'filter', color }: Props) 
       accessibilityState={{ selected: active }}
       style={{
         paddingHorizontal: 16, paddingVertical: 8, borderRadius: radius.pill,
-        backgroundColor: active ? activeBg : 'rgba(30,30,46,0.06)',
+        backgroundColor: active ? activeBg : t.chipMuted,
       }}
     >
       <Text style={{

@@ -16,6 +16,7 @@ export interface Theme {
   accentHover: string;
   accentText: string;
   accentMuted: string;
+  chipMuted: string;
   danger: string;
   success: string;
   warning: string;
@@ -42,6 +43,7 @@ export const lightTheme: Theme = {
   accentHover: '#E8522E',
   accentText: '#FFFFFF',
   accentMuted: 'rgba(255,107,71,0.10)',
+  chipMuted: 'rgba(30,30,46,0.06)',
   danger: '#DC2626',
   success: '#16A34A',
   warning: '#F59E0B',
@@ -65,6 +67,7 @@ export const darkTheme: Theme = {
   accentHover: '#E8522E',
   accentText: '#FFFFFF',
   accentMuted: 'rgba(255,107,71,0.15)',
+  chipMuted: 'rgba(255,255,255,0.08)',
   danger: '#F87171',
   success: '#22C55E',
   warning: '#F59E0B',
