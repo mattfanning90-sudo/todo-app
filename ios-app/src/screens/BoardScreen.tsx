@@ -307,7 +307,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
   const StageHeader = ({ stage, label }: { stage: Stage; label: string }) => {
     const stageColor = t.stage[stage];
     return (
-      <View style={[styles.stageHeader, { backgroundColor: t.tk.bg }]}>
+      <View style={[styles.stageHeader, { backgroundColor: t.bg }]}>
         <View style={[styles.stageHeaderInner, { borderLeftColor: stageColor }]}>
           <View style={styles.stageTitleRow}>
             <Text style={[styles.stageTitle, { color: stageColor }]}>{label}</Text>
@@ -332,36 +332,36 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
   return (
     <Screen padded={false}>
       {/* ── Taskly board header ──────────────────────────────────────────── */}
-      <View style={[styles.boardHead, { backgroundColor: t.tk.card, borderBottomColor: t.tk.line }]}>
+      <View style={[styles.boardHead, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
         <View>
           <Pressable style={styles.boardSwitch} onPress={openBoardSwitcher}>
-            <Text style={[styles.boardSwitchLabel, { color: t.tk.text }]}>
+            <Text style={[styles.boardSwitchLabel, { color: t.text }]}>
               {currentBoard?.name ?? 'Board'}
             </Text>
-            <Text style={{ color: t.tk.muted }}>  ▾</Text>
+            <Text style={{ color: t.textMuted }}>  ▾</Text>
           </Pressable>
-          <Text style={[styles.boardH1, { color: t.tk.muted }]}>Board</Text>
+          <Text style={[styles.boardH1, { color: t.textMuted }]}>Board</Text>
         </View>
         <View style={styles.boardHeadRight}>
-          <View style={[styles.donePill, { backgroundColor: t.tk.accent + '22' }]}>
-            <Text style={[styles.donePillLabel, { color: t.tk.accent }]}>{donePct}% done</Text>
+          <View style={[styles.donePill, { backgroundColor: t.accent + '22' }]}>
+            <Text style={[styles.donePillLabel, { color: t.accent }]}>{donePct}% done</Text>
           </View>
           <Pressable
             onPress={() => nav.navigate('Search')}
             hitSlop={10}
             testID="search-btn"
           >
-            <Text style={{ fontSize: 20, color: t.tk.muted }}>⌕</Text>
+            <Text style={{ fontSize: 20, color: t.textMuted }}>⌕</Text>
           </Pressable>
           <Pressable
             onPress={() => nav.navigate('Notifications')}
             hitSlop={10}
             testID="bell-btn"
           >
-            <Text style={{ fontSize: 20, color: t.tk.muted }}>🔔</Text>
+            <Text style={{ fontSize: 20, color: t.textMuted }}>🔔</Text>
           </Pressable>
           <Pressable onPress={openOverflow} style={styles.overflowBtn} hitSlop={10}>
-            <Text style={{ fontSize: 20, color: t.tk.muted }}>⋯</Text>
+            <Text style={{ fontSize: 20, color: t.textMuted }}>⋯</Text>
           </Pressable>
         </View>
       </View>
@@ -370,7 +370,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.filterBar, { backgroundColor: t.tk.bg }]}
+        style={[styles.filterBar, { backgroundColor: t.bg }]}
         contentContainerStyle={styles.filterScroll}
       >
         {FILTERS.map((f) => {
@@ -381,10 +381,10 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
               onPress={() => setFilter(f.key)}
               style={[
                 styles.filterPill,
-                { backgroundColor: active ? t.tk.accent : t.tk.card, borderColor: active ? t.tk.accent : t.tk.line },
+                { backgroundColor: active ? t.accent : t.surface, borderColor: active ? t.accent : t.border },
               ]}
             >
-              <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.tk.muted }}>
+              <Text style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: active ? '#fff' : t.textMuted }}>
                 {f.label}
               </Text>
             </Pressable>
@@ -393,7 +393,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
       </ScrollView>
 
       {/* ── Quick-add bar ────────────────────────────────────────────────── */}
-      <View style={[styles.quickAddOuter, { backgroundColor: t.tk.bg, borderBottomColor: t.tk.line }]}>
+      <View style={[styles.quickAddOuter, { backgroundColor: t.bg, borderBottomColor: t.border }]}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickStageRow}>
           {STAGES.map((s) => {
             const active = quickStage === s.key;
@@ -404,10 +404,10 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
                 onPress={() => setQuickStage(s.key)}
                 style={[
                   styles.quickStagePill,
-                  { backgroundColor: active ? stageColor + '22' : t.tk.card, borderColor: active ? stageColor : t.tk.line },
+                  { backgroundColor: active ? stageColor + '22' : t.surface, borderColor: active ? stageColor : t.border },
                 ]}
               >
-                <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.tk.muted }}>
+                <Text style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: active ? stageColor : t.textMuted }}>
                   {s.label}
                 </Text>
               </Pressable>
@@ -415,18 +415,18 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
           })}
         </ScrollView>
 
-        <View style={[styles.quickAddRow, { backgroundColor: t.tk.card, borderColor: t.tk.line }]}>
+        <View style={[styles.quickAddRow, { backgroundColor: t.surface, borderColor: t.border }]}>
           <TextInput
             ref={quickInputRef}
             value={quickText}
             onChangeText={setQuickText}
             onSubmitEditing={submitQuickAdd}
             placeholder={`Add to ${STAGES.find((s) => s.key === quickStage)?.label ?? ''}…`}
-            placeholderTextColor={t.tk.muted}
+            placeholderTextColor={t.textMuted}
             returnKeyType="done"
             blurOnSubmit={false}
             editable={!quickSaving}
-            style={[styles.quickInput, { color: t.tk.text }]}
+            style={[styles.quickInput, { color: t.text }]}
           />
           <Pressable
             onPress={submitQuickAdd}
@@ -434,7 +434,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
             hitSlop={10}
             style={({ pressed }) => ({ opacity: !quickText.trim() || quickSaving ? 0.35 : pressed ? 0.6 : 1 })}
           >
-            <Text style={{ color: t.tk.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
+            <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
           </Pressable>
         </View>
       </View>
@@ -449,7 +449,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
               setRefreshing(true);
               load();
             }}
-            tintColor={t.tk.muted}
+            tintColor={t.textMuted}
           />
         }
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.xxl * 2 }}
@@ -457,7 +457,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
       >
         <DropProvider>
           {!loading && tasks.length === 0 && (
-            <Text style={[styles.empty, { color: t.tk.muted }]}>No tasks yet. Tap + to add one.</Text>
+            <Text style={[styles.empty, { color: t.textMuted }]}>No tasks yet. Tap + to add one.</Text>
           )}
 
           {STAGES.map((s) => (
@@ -471,7 +471,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
               <StageHeader stage={s.key} label={s.label} />
               {stageData[s.key].length === 0 ? (
                 <View style={styles.stageEmpty}>
-                  <Text style={[styles.stageEmptyText, { color: t.tk.muted }]}>Drop a task here</Text>
+                  <Text style={[styles.stageEmptyText, { color: t.textMuted }]}>Drop a task here</Text>
                 </View>
               ) : (
                 stageData[s.key].map((task) => (

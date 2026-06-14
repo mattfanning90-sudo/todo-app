@@ -100,8 +100,8 @@ export function RootNavigator() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.tk.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={t.tk.accent} />
+      <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={t.accent} />
       </View>
     );
   }
@@ -114,11 +114,11 @@ export function RootNavigator() {
         ...navTheme,
         colors: {
           ...navTheme.colors,
-          background: t.tk.bg,
-          card: t.tk.card,
-          text: t.tk.text,
-          border: t.tk.line,
-          primary: t.tk.accent,
+          background: t.bg,
+          card: t.surface,
+          text: t.text,
+          border: t.border,
+          primary: t.accent,
         },
       }}
     >
@@ -126,9 +126,9 @@ export function RootNavigator() {
         <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: false,
-            tabBarActiveTintColor: t.tk.accent,
-            tabBarInactiveTintColor: t.tk.muted,
-            tabBarStyle: { backgroundColor: t.tk.card, borderTopColor: t.tk.line },
+            tabBarActiveTintColor: t.accent,
+            tabBarInactiveTintColor: t.textMuted,
+            tabBarStyle: { backgroundColor: t.surface, borderTopColor: t.border },
             tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) =>
               <TabIcon label={route.name} focused={focused} color={color} />,
           })}

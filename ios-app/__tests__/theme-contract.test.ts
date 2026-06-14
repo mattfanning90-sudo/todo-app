@@ -21,6 +21,6 @@ describe('Taskly theme contract', () => {
     expect(radius.pill).toBe(999);
   });
   it('no longer exposes a `tk` sub-palette', () => {
-    expect((lightTheme as Record<string, unknown>).tk).toBeUndefined();
+    expect((lightTheme as unknown as Record<string, unknown>).tk).toBeUndefined();
   });
 });
