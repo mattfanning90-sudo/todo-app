@@ -1,21 +1,36 @@
 // ios-app/src/screens/TodayScreen.tsx
 import React, { useCallback, useState } from 'react';
 import {
-  Alert, FlatList, Modal, Pressable,
-  SafeAreaView, StyleSheet, Text, TextInput, View,
+  Alert, FlatList, KeyboardAvoidingView, Modal, Platform,
+  Pressable, RefreshControl, SafeAreaView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { api } from '@/api/client';
 import type { Board, Task, TodayTask } from '@/api/types';
 import { useTheme, spacing, font, radius } from '@/theme';
 import { ProgressRing } from '@/components/ProgressRing';
 import { TagChip } from '@/components/TagChip';
+import { Icon } from '@/components/Icon';
+import { Checkbox } from '@/components/Checkbox';
+import { ScreenState } from '@/components/ScreenState';
 import type { Nav } from '@/navigation/types';
 
 type Filter = 'all' | 'active' | 'done';
 
 interface Props {
   navigation: Nav;
+}
+
+function friendlyDate(iso: string): string {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const d = new Date(iso + 'T00:00:00');
+  if (d.getTime() === today.getTime()) return 'Today';
+  if (d.getTime() === tomorrow.getTime()) return 'Tomorrow';
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export function TodayScreen({ navigation }: Props) {
@@ -25,6 +40,8 @@ export function TodayScreen({ navigation }: Props) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddText, setQuickAddText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
   const dateLabel = new Date().toLocaleDateString(undefined, {
@@ -32,11 +49,15 @@ export function TodayScreen({ navigation }: Props) {
   });
 
   const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       const data = await api.todayTasks();
       setTasks(data);
     } catch (e) {
-      // silently empty on 401 (AuthContext handles redirect)
+      setError('Could not load tasks.');
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -61,6 +82,7 @@ export function TodayScreen({ navigation }: Props) {
     const newStage = task.stage === 'done' ? 'backlog' : 'done';
     // Optimistic update
     setTasks(prev => prev.map(tk => tk.id === task.id ? { ...tk, stage: newStage } : tk));
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await api.updateTask(task.id, { board_id: task.board_id, stage: newStage });
     } catch {
@@ -106,7 +128,6 @@ export function TodayScreen({ navigation }: Props) {
     row: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16,
       backgroundColor: t.surface, borderRadius: radius.lg, marginBottom: 10,
       shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-    check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2 },
     taskTitle: { fontSize: 15, fontWeight: font.weight.medium, color: t.text },
     taskTitleDone: { textDecorationLine: 'line-through', opacity: 0.55 },
     taskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
@@ -125,6 +146,7 @@ export function TodayScreen({ navigation }: Props) {
       padding: 14, fontSize: 15, color: t.text, marginBottom: spacing.lg },
     submitBtn: { backgroundColor: t.accent, borderRadius: radius.md, padding: 14, alignItems: 'center' },
     submitLabel: { color: '#fff', fontWeight: font.weight.bold, fontSize: 15 },
+    listContent: { flexGrow: 1 },
   });
 
   const renderItem = ({ item }: { item: TodayTask }) => {
@@ -156,12 +178,10 @@ export function TodayScreen({ navigation }: Props) {
 
     return (
       <View style={s.row}>
-        <Pressable
-          style={[s.check, {
-            borderColor: done ? t.accent : prioColor(item.priority),
-            backgroundColor: done ? t.accent : 'transparent',
-          }]}
-          onPress={() => toggleDone(item)}
+        <Checkbox
+          checked={done}
+          onToggle={() => toggleDone(item)}
+          color={prioColor(item.priority)}
           testID={`check-${item.id}`}
         />
         <Pressable
@@ -174,7 +194,7 @@ export function TodayScreen({ navigation }: Props) {
             {overdue ? (
               <Text style={s.overdueBadge} testID={`overdue-badge-${item.id}`}>Overdue</Text>
             ) : item.due_date ? (
-              <Text style={s.dueBadge}>{item.due_date}</Text>
+              <Text style={s.dueBadge}>{friendlyDate(item.due_date)}</Text>
             ) : null}
             {item.cat_name && <TagChip name={item.cat_name} color={item.cat_color ?? '#9CA3AF'} />}
             <Text style={s.boardName}>{item.board_name}</Text>
@@ -191,62 +211,90 @@ export function TodayScreen({ navigation }: Props) {
     </Pressable>
   );
 
+  const listHeader = (
+    <>
+      <View style={s.head}>
+        <View>
+          <Text style={s.eyebrow}>{dateLabel}</Text>
+          <Text style={s.h1}>Today</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Icon
+            name="search"
+            label="Search"
+            onPress={() => navigation.navigate('Search')}
+          />
+          <Icon
+            name="bell"
+            label="Notifications"
+            onPress={() => navigation.navigate('Notifications')}
+          />
+          <ProgressRing pct={pct} size={80} stroke={6} color={t.accent} />
+        </View>
+      </View>
+      <View style={s.chipRow}>
+        <FilterChip mode="all" label="All" />
+        <FilterChip mode="active" label="Active" />
+        <FilterChip mode="done" label="Done" />
+      </View>
+    </>
+  );
+
+  const listFooter = (
+    <Pressable style={s.addBtn} onPress={() => setQuickAddOpen(true)}>
+      <Text style={s.addLabel}>+ Add task…</Text>
+    </Pressable>
+  );
+
   return (
     <SafeAreaView style={s.safe}>
-      <FlatList
-        style={s.scroll}
-        data={visible}
-        keyExtractor={i => String(i.id)}
-        renderItem={renderItem}
-        ListHeaderComponent={
-          <>
-            <View style={s.head}>
-              <View>
-                <Text style={s.eyebrow}>{dateLabel}</Text>
-                <Text style={s.h1}>Today</Text>
-              </View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Pressable onPress={() => navigation.navigate('Search')} testID="search-btn" hitSlop={8}>
-                  <Text style={{ fontSize: 20, color: t.textMuted }}>⌕</Text>
-                </Pressable>
-                <Pressable onPress={() => navigation.navigate('Notifications')} testID="bell-btn" hitSlop={8}>
-                  <Text style={{ fontSize: 20, color: t.textMuted }}>🔔</Text>
-                </Pressable>
-                <ProgressRing pct={pct} size={80} stroke={6} color={t.accent} />
-              </View>
-            </View>
-            <View style={s.chipRow}>
-              <FilterChip mode="all" label="All" />
-              <FilterChip mode="active" label="Active" />
-              <FilterChip mode="done" label="Done" />
-            </View>
-          </>
-        }
-        ListFooterComponent={
-          <Pressable style={s.addBtn} onPress={() => setQuickAddOpen(true)}>
-            <Text style={s.addLabel}>+ Add task…</Text>
-          </Pressable>
-        }
-      />
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={load}
+        empty={!loading && !error && visible.length === 0}
+        emptyTitle="Nothing for today 🎉"
+      >
+        <FlatList
+          style={s.scroll}
+          contentContainerStyle={s.listContent}
+          data={visible}
+          keyExtractor={i => String(i.id)}
+          renderItem={renderItem}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={listFooter}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={load}
+              tintColor={t.accent}
+            />
+          }
+        />
+      </ScreenState>
       <Modal visible={quickAddOpen} transparent animationType="slide"
         onRequestClose={() => setQuickAddOpen(false)}>
         <Pressable style={s.modalOverlay} onPress={() => setQuickAddOpen(false)}>
-          <Pressable style={s.sheet} onPress={() => {}}>
-            <Text style={s.sheetTitle}>New Task</Text>
-            <TextInput
-              style={s.input}
-              placeholder="Task title…"
-              placeholderTextColor={t.textMuted}
-              value={quickAddText}
-              onChangeText={setQuickAddText}
-              onSubmitEditing={submitQuickAdd}
-              returnKeyType="done"
-              autoFocus
-            />
-            <Pressable style={s.submitBtn} onPress={submitQuickAdd} disabled={submitting}>
-              <Text style={s.submitLabel}>{submitting ? 'Adding…' : 'Add Task'}</Text>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          >
+            <Pressable style={s.sheet} onPress={() => {}}>
+              <Text style={s.sheetTitle}>New Task</Text>
+              <TextInput
+                style={s.input}
+                placeholder="Task title…"
+                placeholderTextColor={t.textMuted}
+                value={quickAddText}
+                onChangeText={setQuickAddText}
+                onSubmitEditing={submitQuickAdd}
+                returnKeyType="done"
+                autoFocus
+              />
+              <Pressable style={s.submitBtn} onPress={submitQuickAdd} disabled={submitting}>
+                <Text style={s.submitLabel}>{submitting ? 'Adding…' : 'Add Task'}</Text>
+              </Pressable>
             </Pressable>
-          </Pressable>
+          </KeyboardAvoidingView>
         </Pressable>
       </Modal>
     </SafeAreaView>
