@@ -32,6 +32,7 @@ export type ProfileStackParams = {
   BoardList: undefined;
   Search: undefined;
   Notifications: undefined;
+  Import: undefined;
 };
 
 // ── Unified nav type ─────────────────────────────────────────────────────────

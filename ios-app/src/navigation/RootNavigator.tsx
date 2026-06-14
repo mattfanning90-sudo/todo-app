@@ -35,6 +35,7 @@ import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
 import { AppearanceScreen } from '@/screens/AppearanceScreen';
 import { BoardListScreen } from '@/screens/BoardListScreen';
+import { ImportScreen } from '@/screens/ImportScreen';
 
 // ── Stack / tab navigator instances ─────────────────────────────────────────
 const TodayStack = createNativeStackNavigator<TodayStackParams>();
@@ -92,6 +93,7 @@ function ProfileNav() {
       <ProfileStack.Screen name="BoardList" component={BoardListScreen} />
       <ProfileStack.Screen name="Search" component={SearchScreen} />
       <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
+      <ProfileStack.Screen name="Import" component={ImportScreen} />
     </ProfileStack.Navigator>
   );
 }

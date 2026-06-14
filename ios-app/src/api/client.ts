@@ -261,6 +261,15 @@ export const api = {
       method: 'POST',
       body: { recipient_user_id: recipientUserId, board_id: boardId },
     }),
+
+  // ── Bulk import ────────────────────────────────────────────────────────────
+  // Server always imports to the user's default board (ensureDefaultBoard).
+  // Body mirrors the /api/import contract: { tasks, categories }.
+  importTasks: (tasks: Record<string, unknown>[], categories?: Record<string, unknown>[]) =>
+    request<{ ok: true }>('/api/import', {
+      method: 'POST',
+      body: { tasks, categories: categories ?? [] },
+    }),
 };
 
 export { setCookie as setSessionCookie };

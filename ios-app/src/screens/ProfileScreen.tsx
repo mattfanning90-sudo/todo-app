@@ -129,6 +129,10 @@ export function ProfileScreen({ navigation }: Props) {
             onPress={() => Linking.openURL(`${api.baseUrl}/api/export`)}
           />
           <SettingRow
+            label="Import tasks"
+            onPress={() => navigation.navigate('Import')}
+          />
+          <SettingRow
             label="About"
             onPress={() => Alert.alert('Taskly', 'Cross-platform task manager.')}
           />
