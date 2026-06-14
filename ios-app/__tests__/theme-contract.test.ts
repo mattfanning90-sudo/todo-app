@@ -14,7 +14,7 @@ describe('Taskly theme contract', () => {
   it('has no blue leak in priority/stage', () => {
     expect(lightTheme.priority.high).toBe('#FF6B47');
     expect(lightTheme.priority.low).toBe('#9CA3AF');
-    expect(lightTheme.stage.in_progress).toBe('#64748B');
+    expect(lightTheme.stage.in_progress).toBe('#FF6B47');
   });
   it('exposes the new card radius and a pill radius', () => {
     expect(radius.card).toBe(16);

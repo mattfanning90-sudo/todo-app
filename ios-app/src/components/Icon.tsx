@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, View, ViewStyle } from 'react-native';
 import {
   Search, Bell, Settings, MoreHorizontal, ChevronRight, ChevronLeft,
-  Check, Mail, Repeat, Plus, X, Trash2,
+  Check, Mail, Repeat, Plus, X, Trash2, Calendar, LayoutGrid, CircleUser,
 } from 'lucide-react-native';
 import { useTheme } from '@/theme';
 
@@ -10,6 +10,7 @@ const MAP = {
   search: Search, bell: Bell, settings: Settings, more: MoreHorizontal,
   chevron: ChevronRight, back: ChevronLeft, check: Check, mail: Mail,
   repeat: Repeat, plus: Plus, close: X, trash: Trash2,
+  calendar: Calendar, board: LayoutGrid, profile: CircleUser,
 } as const;
 
 export type IconName = keyof typeof MAP;

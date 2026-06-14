@@ -51,7 +51,7 @@ export const lightTheme: Theme = {
   warning: '#F59E0B',
   overlay: 'rgba(30,30,46,0.40)',
   shadowStyle: { shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
-  stage: { backlog: '#94A3B8', in_progress: '#64748B', done: '#16A34A' },
+  stage: { backlog: '#94A3B8', in_progress: '#FF6B47', done: '#16A34A' },
   priority: { high: '#FF6B47', medium: '#F59E0B', low: '#9CA3AF', none: '#9CA3AF' },
 };
 
@@ -75,7 +75,7 @@ export const darkTheme: Theme = {
   warning: '#F59E0B',
   overlay: 'rgba(0,0,0,0.50)',
   shadowStyle: { shadowColor: '#000', shadowOpacity: 0.30, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  stage: { backlog: '#94A3B8', in_progress: '#64748B', done: '#22C55E' },
+  stage: { backlog: '#94A3B8', in_progress: '#FF6B47', done: '#22C55E' },
   priority: { high: '#FF6B47', medium: '#F59E0B', low: '#9CA3AF', none: '#9CA3AF' },
 };
 

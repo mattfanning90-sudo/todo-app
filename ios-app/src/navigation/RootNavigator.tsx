@@ -1,5 +1,6 @@
 import React from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
+import { Icon } from '@/components/Icon';
 import {
   NavigationContainer, DarkTheme, DefaultTheme,
 } from '@react-navigation/native';
@@ -42,10 +43,10 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParams>();
 const Tab = createBottomTabNavigator();
 const AuthStack = createNativeStackNavigator<{ Login: undefined }>();
 
-// ── Tab icon helper (plain text glyphs — no native icon dep needed) ──────────
-function TabIcon({ label, focused, color }: { label: string; focused: boolean; color: string }) {
-  const icons: Record<string, string> = { Today: '◷', Board: '⊞', Profile: '◉' };
-  return <Text style={{ fontSize: focused ? 20 : 18, color }}>{icons[label] ?? '•'}</Text>;
+// ── Tab icon helper ──────────────────────────────────────────────────────────
+function TabIcon({ label, color }: { label: string; focused: boolean; color: string }) {
+  const iconName = label === 'Today' ? 'calendar' : label === 'Board' ? 'board' : 'profile';
+  return <Icon name={iconName as 'calendar' | 'board' | 'profile'} label="" color={color} size={22} />;
 }
 
 // ── Per-tab stack navigators ─────────────────────────────────────────────────
