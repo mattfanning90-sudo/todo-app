@@ -137,9 +137,9 @@ LoginScreen
 
 ## 4 — Design Comparison
 
-### Tokens: identical ✓
+### Tokens
 
-All design tokens remain aligned (see original report for the full table).
+**Tokens:** Web and iOS now share the Taskly palette (coral `#FF6B47`, warm surfaces, soft shadows). iOS additionally exposes a System / Light / Dark appearance preference (persisted); web currently offers Light / Dark.
 
 ### Layout patterns: intentionally different, functionally equivalent
 
