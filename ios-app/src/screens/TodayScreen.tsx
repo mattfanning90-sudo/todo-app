@@ -40,7 +40,8 @@ export function TodayScreen({ navigation }: Props) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddText, setQuickAddText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -49,7 +50,6 @@ export function TodayScreen({ navigation }: Props) {
   });
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
     try {
       const data = await api.todayTasks();
@@ -58,6 +58,7 @@ export function TodayScreen({ navigation }: Props) {
       setError('Could not load tasks.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
@@ -252,8 +253,6 @@ export function TodayScreen({ navigation }: Props) {
         loading={loading}
         error={error}
         onRetry={load}
-        empty={!loading && !error && visible.length === 0}
-        emptyTitle="Nothing for today 🎉"
       >
         <FlatList
           style={s.scroll}
@@ -263,10 +262,15 @@ export function TodayScreen({ navigation }: Props) {
           renderItem={renderItem}
           ListHeaderComponent={listHeader}
           ListFooterComponent={listFooter}
+          ListEmptyComponent={
+            <Text style={{ textAlign: 'center', color: t.textMuted, marginTop: spacing.xl }}>
+              Nothing for today 🎉
+            </Text>
+          }
           refreshControl={
             <RefreshControl
-              refreshing={loading}
-              onRefresh={load}
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); load(); }}
               tintColor={t.accent}
             />
           }
