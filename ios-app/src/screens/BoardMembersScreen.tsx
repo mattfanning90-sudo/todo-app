@@ -141,8 +141,6 @@ export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
     return name.slice(0, 2).toUpperCase();
   };
 
-  const isEmpty = !loading && members.length === 0;
-
   return (
     <Screen padded={false}>
       <ScreenHeader variant="detail" title="Members" onBack={goBack} />
@@ -161,92 +159,93 @@ export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
           />
         }
       >
-        <ScreenState
-          loading={loading}
-          empty={isEmpty}
-          emptyIcon="profile"
-          emptyTitle="Just you so far"
-          emptyBody="Just you so far. Invite someone to share this board."
-        >
+        {/* Loading / error states only — do NOT pass empty, as that would hide the invite form */}
+        <ScreenState loading={loading}>
           {/* Members section */}
           <SectionCard eyebrow={`Members (${members.length})`}>
-            {members.map((m, index) => (
+            {members.length === 0 ? (
+              <Text style={{ color: t.textMuted, fontSize: font.size.sm, padding: spacing.sm }}>
+                Just you so far — invite someone below.
+              </Text>
+            ) : (
+              members.map((m, index) => (
+                <ListRow
+                  key={m.id}
+                  title={displayName(m)}
+                  subtitle={m.name ? m.email : undefined}
+                  divider={index < members.length - 1}
+                  leading={
+                    <AvatarInitials
+                      initials={initials(m)}
+                      bg={t.accent + '22'}
+                      color={t.accent}
+                    />
+                  }
+                  trailing={
+                    isOwner ? (
+                      <Text
+                        onPress={() => removeMember(m)}
+                        style={{ color: t.danger, fontSize: font.size.sm, fontWeight: font.weight.medium }}
+                      >
+                        Remove
+                      </Text>
+                    ) : undefined
+                  }
+                />
+              ))
+            )}
+          </SectionCard>
+        </ScreenState>
+
+        {/* Pending invites (owner only) — outside ScreenState so always rendered */}
+        {isOwner && invites.length > 0 && (
+          <SectionCard eyebrow={`Pending invites (${invites.length})`}>
+            {invites.map((inv, index) => (
               <ListRow
-                key={m.id}
-                title={displayName(m)}
-                subtitle={m.name ? m.email : undefined}
-                divider={index < members.length - 1}
-                leading={
-                  <AvatarInitials
-                    initials={initials(m)}
-                    bg={t.accent + '22'}
-                    color={t.accent}
-                  />
-                }
+                key={inv.id}
+                title={inv.invitee_email}
+                subtitle="Invite pending"
+                divider={index < invites.length - 1}
+                leading={<Icon name="mail" label="" size={20} color={t.textMuted} />}
                 trailing={
-                  isOwner ? (
-                    <Text
-                      onPress={() => removeMember(m)}
-                      style={{ color: t.danger, fontSize: font.size.sm, fontWeight: font.weight.medium }}
-                    >
-                      Remove
-                    </Text>
-                  ) : undefined
+                  <Text
+                    onPress={() => revokeInvite(inv)}
+                    style={{ color: t.textMuted, fontSize: font.size.sm, fontWeight: font.weight.medium }}
+                  >
+                    Revoke
+                  </Text>
                 }
               />
             ))}
           </SectionCard>
+        )}
 
-          {/* Pending invites (owner only) */}
-          {isOwner && invites.length > 0 && (
-            <SectionCard eyebrow={`Pending invites (${invites.length})`}>
-              {invites.map((inv, index) => (
-                <ListRow
-                  key={inv.id}
-                  title={inv.invitee_email}
-                  subtitle="Invite pending"
-                  divider={index < invites.length - 1}
-                  leading={<Icon name="mail" label="" size={20} color={t.textMuted} />}
-                  trailing={
-                    <Text
-                      onPress={() => revokeInvite(inv)}
-                      style={{ color: t.textMuted, fontSize: font.size.sm, fontWeight: font.weight.medium }}
-                    >
-                      Revoke
-                    </Text>
-                  }
-                />
-              ))}
-            </SectionCard>
-          )}
-
-          {/* Invite form (owner only) */}
-          {isOwner && (
-            <Card padded>
-              <TextField
-                label="Email address"
-                value={inviteEmail}
-                onChangeText={setInviteEmail}
-                onSubmitEditing={invite}
-                placeholder="name@example.com"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                returnKeyType="send"
-              />
-              <Button
-                label={inviting ? 'Sending…' : 'Send invite'}
-                onPress={invite}
-                disabled={!inviteEmail.trim() || inviting}
-                loading={inviting}
-              />
-              <Text style={{ color: t.textMuted, fontSize: font.size.sm, lineHeight: 18, marginTop: spacing.sm }}>
-                If they already have an account they'll be added immediately. Otherwise they'll
-                receive an email invite.
-              </Text>
-            </Card>
-          )}
-        </ScreenState>
+        {/* Invite form (owner only) — outside ScreenState so always rendered for owners */}
+        {isOwner && (
+          <Card padded>
+            <TextField
+              label="Email address"
+              value={inviteEmail}
+              onChangeText={setInviteEmail}
+              onSubmitEditing={invite}
+              placeholder="name@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="send"
+            />
+            <Button
+              label={inviting ? 'Sending…' : 'Send invite'}
+              onPress={invite}
+              disabled={!inviteEmail.trim() || inviting}
+              loading={inviting}
+            />
+            <Text style={{ color: t.textMuted, fontSize: font.size.sm, lineHeight: 18, marginTop: spacing.sm }}>
+              If they already have an account they'll be added immediately. Otherwise they'll
+              receive an email invite.
+            </Text>
+          </Card>
+        )}
       </ScrollView>
     </Screen>
   );
