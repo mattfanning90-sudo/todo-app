@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,8 +13,10 @@ interface Props extends TextInputProps {
   error?: string;
 }
 
-export function TextField({ label, error, style, ...rest }: Props) {
+export function TextField({ label, error, style, onFocus, onBlur, ...rest }: Props) {
   const t = useTheme();
+  const [focused, setFocused] = useState(false);
+  const borderColor = error ? t.danger : focused ? t.accent : t.borderInput;
   return (
     <View style={styles.wrap}>
       {label ? (
@@ -23,13 +25,11 @@ export function TextField({ label, error, style, ...rest }: Props) {
       <TextInput
         placeholderTextColor={t.textLight}
         {...rest}
+        onFocus={(e) => { setFocused(true); onFocus?.(e); }}
+        onBlur={(e) => { setFocused(false); onBlur?.(e); }}
         style={[
           styles.input,
-          {
-            backgroundColor: t.surfaceElevated,
-            borderColor: error ? t.danger : t.borderInput,
-            color: t.text,
-          },
+          { backgroundColor: t.surface, borderColor, borderWidth: 1.5, color: t.text },
           style,
         ]}
       />

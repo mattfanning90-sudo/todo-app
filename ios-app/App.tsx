@@ -8,6 +8,7 @@ import Constants from 'expo-constants';
 import * as Sentry from '@sentry/react-native';
 import * as Notifications from 'expo-notifications';
 import { AuthProvider, useAuth } from '@/auth/AuthContext';
+import { ThemeProvider } from '@/theme/ThemeProvider';
 import { api } from '@/api/client';
 import { reconcileReminders } from '@/notifications/reminders';
 import { RootNavigator } from '@/navigation/RootNavigator';
@@ -82,11 +83,13 @@ function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <AuthProvider>
-          <StatusBar style="auto" />
-          <ReminderSync />
-          <RootNavigator />
-        </AuthProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            <StatusBar style="auto" />
+            <ReminderSync />
+            <RootNavigator />
+          </AuthProvider>
+        </ThemeProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

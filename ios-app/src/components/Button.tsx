@@ -6,7 +6,7 @@ import { useTheme, radius, spacing, font } from '@/theme';
 interface Props {
   label: string;
   onPress?: () => void;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -24,22 +24,20 @@ export function Button({
   const isDisabled = disabled || loading;
 
   const bg =
-    variant === 'primary'
-      ? t.accent
-      : variant === 'secondary'
-      ? t.surfaceElevated
-      : 'transparent';
+    variant === 'primary' ? t.accent
+    : variant === 'secondary' ? t.surface
+    : 'transparent';
   const fg =
-    variant === 'primary'
-      ? t.accentText
-      : variant === 'ghost'
-      ? t.accent
-      : t.text;
+    variant === 'primary' ? t.accentText
+    : variant === 'destructive' ? t.danger
+    : variant === 'ghost' ? t.accent
+    : t.text;
 
   return (
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
       style={({ pressed }) => [
         styles.base,
         {

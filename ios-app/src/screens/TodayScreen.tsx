@@ -53,9 +53,9 @@ export function TodayScreen({ navigation }: Props) {
   );
 
   const prioColor = (p: string) =>
-    p === 'high' ? t.tk.prioHigh :
-    p === 'medium' ? t.tk.prioMed :
-    t.tk.prioLow;
+    p === 'high' ? t.priority.high :
+    p === 'medium' ? t.priority.medium :
+    t.priority.low;
 
   async function toggleDone(task: TodayTask) {
     const newStage = task.stage === 'done' ? 'backlog' : 'done';
@@ -91,39 +91,39 @@ export function TodayScreen({ navigation }: Props) {
   }
 
   const s = StyleSheet.create({
-    safe: { flex: 1, backgroundColor: t.tk.bg },
+    safe: { flex: 1, backgroundColor: t.bg },
     scroll: { flex: 1, padding: spacing.xl },
     head: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.xl },
     eyebrow: { fontSize: font.size.xs, fontWeight: font.weight.bold, letterSpacing: 0.8,
-      textTransform: 'uppercase', color: t.tk.muted, marginBottom: 4 },
-    h1: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: t.tk.text },
+      textTransform: 'uppercase', color: t.textMuted, marginBottom: 4 },
+    h1: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: t.text },
     chipRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg },
     chip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 99,
       backgroundColor: 'rgba(30,30,46,0.06)' },
-    chipActive: { backgroundColor: t.tk.accent },
-    chipLabel: { fontSize: 13, fontWeight: font.weight.semibold, color: t.tk.muted },
+    chipActive: { backgroundColor: t.accent },
+    chipLabel: { fontSize: 13, fontWeight: font.weight.semibold, color: t.textMuted },
     chipLabelActive: { color: '#fff' },
     row: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16,
-      backgroundColor: t.tk.card, borderRadius: radius.lg, marginBottom: 10,
+      backgroundColor: t.surface, borderRadius: radius.lg, marginBottom: 10,
       shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
     check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2 },
-    taskTitle: { fontSize: 15, fontWeight: font.weight.medium, color: t.tk.text },
+    taskTitle: { fontSize: 15, fontWeight: font.weight.medium, color: t.text },
     taskTitleDone: { textDecorationLine: 'line-through', opacity: 0.55 },
     taskMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-    dueBadge: { fontSize: 12, color: t.tk.muted },
+    dueBadge: { fontSize: 12, color: t.textMuted },
     overdueBadge: { fontSize: 12, color: '#DC2626', fontWeight: font.weight.semibold },
-    boardName: { fontSize: 11, color: t.tk.muted },
+    boardName: { fontSize: 11, color: t.textMuted },
     prioDot: { width: 7, height: 7, borderRadius: 4 },
     addBtn: { marginTop: spacing.md, padding: 16, borderRadius: radius.lg,
-      borderWidth: 2, borderColor: t.tk.line, borderStyle: 'dashed', alignItems: 'center' },
-    addLabel: { color: t.tk.muted, fontSize: 14 },
+      borderWidth: 2, borderColor: t.border, borderStyle: 'dashed', alignItems: 'center' },
+    addLabel: { color: t.textMuted, fontSize: 14 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: t.tk.card, borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    sheet: { backgroundColor: t.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20,
       padding: spacing.xl, paddingBottom: spacing.xxl },
-    sheetTitle: { fontSize: 18, fontWeight: font.weight.bold, color: t.tk.text, marginBottom: spacing.lg },
-    input: { borderWidth: 1, borderColor: t.tk.line, borderRadius: radius.md,
-      padding: 14, fontSize: 15, color: t.tk.text, marginBottom: spacing.lg },
-    submitBtn: { backgroundColor: t.tk.accent, borderRadius: radius.md, padding: 14, alignItems: 'center' },
+    sheetTitle: { fontSize: 18, fontWeight: font.weight.bold, color: t.text, marginBottom: spacing.lg },
+    input: { borderWidth: 1, borderColor: t.border, borderRadius: radius.md,
+      padding: 14, fontSize: 15, color: t.text, marginBottom: spacing.lg },
+    submitBtn: { backgroundColor: t.accent, borderRadius: radius.md, padding: 14, alignItems: 'center' },
     submitLabel: { color: '#fff', fontWeight: font.weight.bold, fontSize: 15 },
   });
 
@@ -158,8 +158,8 @@ export function TodayScreen({ navigation }: Props) {
       <View style={s.row}>
         <Pressable
           style={[s.check, {
-            borderColor: done ? t.tk.accent : prioColor(item.priority),
-            backgroundColor: done ? t.tk.accent : 'transparent',
+            borderColor: done ? t.accent : prioColor(item.priority),
+            backgroundColor: done ? t.accent : 'transparent',
           }]}
           onPress={() => toggleDone(item)}
           testID={`check-${item.id}`}
@@ -207,12 +207,12 @@ export function TodayScreen({ navigation }: Props) {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <Pressable onPress={() => navigation.navigate('Search')} testID="search-btn" hitSlop={8}>
-                  <Text style={{ fontSize: 20, color: t.tk.muted }}>⌕</Text>
+                  <Text style={{ fontSize: 20, color: t.textMuted }}>⌕</Text>
                 </Pressable>
                 <Pressable onPress={() => navigation.navigate('Notifications')} testID="bell-btn" hitSlop={8}>
-                  <Text style={{ fontSize: 20, color: t.tk.muted }}>🔔</Text>
+                  <Text style={{ fontSize: 20, color: t.textMuted }}>🔔</Text>
                 </Pressable>
-                <ProgressRing pct={pct} size={80} stroke={6} color={t.tk.accent} />
+                <ProgressRing pct={pct} size={80} stroke={6} color={t.accent} />
               </View>
             </View>
             <View style={s.chipRow}>
@@ -236,7 +236,7 @@ export function TodayScreen({ navigation }: Props) {
             <TextInput
               style={s.input}
               placeholder="Task title…"
-              placeholderTextColor={t.tk.muted}
+              placeholderTextColor={t.textMuted}
               value={quickAddText}
               onChangeText={setQuickAddText}
               onSubmitEditing={submitQuickAdd}

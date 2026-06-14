@@ -110,6 +110,8 @@ The design system is the same across both clients. Web uses CSS variables; iOS u
 
 Stage colors (`backlog`, `in_progress`, `done`) and priority colors (`high`, `medium`, `low`, `none`) are defined identically in both.
 
+Both clients share the Taskly palette: coral accent `#FF6B47`, warm background surfaces, and soft shadows. iOS theme lives in `ios-app/src/theme/index.ts` as one flat palette. The former `tk` Taskly sub-namespace was collapsed into the base tokens (2026-06); there is no separate Taskly namespace anymore.
+
 When updating colors, update **both** `public/app.js` CSS variables and `ios-app/src/theme/index.ts`.
 
 ---

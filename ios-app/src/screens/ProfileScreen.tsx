@@ -31,41 +31,41 @@ export function ProfileScreen({ navigation }: Props) {
   const counts = dash?.counts;
 
   const s = StyleSheet.create({
-    safe: { flex: 1, backgroundColor: t.tk.bg },
+    safe: { flex: 1, backgroundColor: t.bg },
     scroll: { padding: spacing.xl },
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       marginBottom: spacing.xl },
-    h1: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: t.tk.text },
+    h1: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: t.text },
     headerIcons: { flexDirection: 'row', gap: spacing.lg },
-    headerIcon: { fontSize: 22, color: t.tk.muted },
+    headerIcon: { fontSize: 22, color: t.textMuted },
     profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
-      backgroundColor: t.tk.card, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.xl,
+      backgroundColor: t.surface, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.xl,
       shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-    avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: t.tk.accent,
+    avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: t.accent,
       alignItems: 'center', justifyContent: 'center' },
     avatarText: { color: '#fff', fontSize: 22, fontWeight: font.weight.bold },
-    profileName: { fontSize: 20, fontWeight: font.weight.bold, color: t.tk.text },
-    profileEmail: { fontSize: 13, color: t.tk.muted, marginTop: 2 },
+    profileName: { fontSize: 20, fontWeight: font.weight.bold, color: t.text },
+    profileEmail: { fontSize: 13, color: t.textMuted, marginTop: 2 },
     statGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md, marginBottom: spacing.xl },
     statBox: { flex: 1, minWidth: '45%', borderRadius: radius.lg, padding: spacing.xl, alignItems: 'center',
       shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 3, shadowOffset: { width: 0, height: 1 } },
     statVal: { fontSize: 28, fontWeight: font.weight.bold },
     statLabel: { fontSize: 12, marginTop: 4 },
-    settingsCard: { backgroundColor: t.tk.card, borderRadius: radius.lg, overflow: 'hidden',
+    settingsCard: { backgroundColor: t.surface, borderRadius: radius.lg, overflow: 'hidden',
       shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
     settingsHead: { fontSize: 11, fontWeight: font.weight.bold, letterSpacing: 0.7,
-      textTransform: 'uppercase', color: t.tk.muted, padding: spacing.lg, paddingBottom: spacing.sm },
+      textTransform: 'uppercase', color: t.textMuted, padding: spacing.lg, paddingBottom: spacing.sm },
     setRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: spacing.lg, borderTopWidth: 1, borderTopColor: t.tk.line },
-    setLabel: { fontSize: 15, color: t.tk.text },
+      padding: spacing.lg, borderTopWidth: 1, borderTopColor: t.border },
+    setLabel: { fontSize: 15, color: t.text },
     chevron: { fontSize: 20 },
   });
 
   function StatBox({ value, label }: { value: number | undefined; label: string }) {
     return (
-      <View style={[s.statBox, { backgroundColor: t.tk.card }]}>
-        <Text style={[s.statVal, { color: t.tk.accent }]}>{value ?? 0}</Text>
-        <Text style={[s.statLabel, { color: t.tk.muted }]}>{label}</Text>
+      <View style={[s.statBox, { backgroundColor: t.surface }]}>
+        <Text style={[s.statVal, { color: t.accent }]}>{value ?? 0}</Text>
+        <Text style={[s.statLabel, { color: t.textMuted }]}>{label}</Text>
       </View>
     );
   }
@@ -74,7 +74,7 @@ export function ProfileScreen({ navigation }: Props) {
     return (
       <Pressable style={s.setRow} onPress={onPress}>
         <Text style={[s.setLabel, danger && { color: '#DC2626' }]}>{label}</Text>
-        <Text style={[s.chevron, { color: t.tk.muted }]}>›</Text>
+        <Text style={[s.chevron, { color: t.textMuted }]}>›</Text>
       </Pressable>
     );
   }
@@ -125,6 +125,7 @@ export function ProfileScreen({ navigation }: Props) {
         {/* Comprehensive settings list */}
         <View style={s.settingsCard}>
           <Text style={s.settingsHead}>Settings</Text>
+          <SettingRow label="Appearance" onPress={() => navigation.navigate('Appearance')} />
           <SettingRow label="Notifications" onPress={() => navigation.navigate('Settings')} />
           <SettingRow label="Boards" onPress={() => navigation.navigate('BoardList')} />
           <SettingRow label="Search" onPress={() => navigation.navigate('Search')} />

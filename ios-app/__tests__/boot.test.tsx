@@ -8,6 +8,11 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => {}),
+}));
+
 jest.mock('../src/auth/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 1, email: 'test@test.com', name: 'Test', username: 'test', digest_frequency: 'none' },
@@ -35,11 +40,12 @@ jest.mock('../src/api/client', () => ({
 }));
 
 import { RootNavigator } from '../src/navigation/RootNavigator';
+import { ThemeProvider } from '../src/theme/ThemeProvider';
 
 test('app boots: RootNavigator mounts the tab navigator without throwing', async () => {
   // If react-navigation majors were mismatched (or any screen threw on first
   // render), this render() call throws before the assertion is reached.
-  const tree = render(<RootNavigator />);
+  const tree = render(<ThemeProvider><RootNavigator /></ThemeProvider>);
   await waitFor(() => {
     expect(tree.toJSON()).toBeTruthy();
   });

@@ -7,7 +7,6 @@ import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useColorScheme } from 'react-native';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/theme';
 
@@ -33,6 +32,7 @@ import { NotificationsScreen } from '@/screens/NotificationsScreen';
 import { ArchivedScreen } from '@/screens/ArchivedScreen';
 import { BoardMembersScreen } from '@/screens/BoardMembersScreen';
 import { SettingsScreen } from '@/screens/SettingsScreen';
+import { AppearanceScreen } from '@/screens/AppearanceScreen';
 import { BoardListScreen } from '@/screens/BoardListScreen';
 
 // ── Stack / tab navigator instances ─────────────────────────────────────────
@@ -87,6 +87,7 @@ function ProfileNav() {
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="Profile" component={ProfileScreen} />
       <ProfileStack.Screen name="Settings" component={SettingsScreen} />
+      <ProfileStack.Screen name="Appearance" component={AppearanceScreen} />
       <ProfileStack.Screen name="BoardList" component={BoardListScreen} />
       <ProfileStack.Screen name="Search" component={SearchScreen} />
       <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
@@ -97,18 +98,17 @@ function ProfileNav() {
 // ── Root navigator ───────────────────────────────────────────────────────────
 export function RootNavigator() {
   const { user, loading } = useAuth();
-  const scheme = useColorScheme();
   const t = useTheme();
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: t.tk.bg, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator color={t.tk.accent} />
+      <View style={{ flex: 1, backgroundColor: t.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator color={t.accent} />
       </View>
     );
   }
 
-  const navTheme = scheme === 'light' ? DefaultTheme : DarkTheme;
+  const navTheme = t.name === 'light' ? DefaultTheme : DarkTheme;
 
   return (
     <NavigationContainer
@@ -116,11 +116,11 @@ export function RootNavigator() {
         ...navTheme,
         colors: {
           ...navTheme.colors,
-          background: t.tk.bg,
-          card: t.tk.card,
-          text: t.tk.text,
-          border: t.tk.line,
-          primary: t.tk.accent,
+          background: t.bg,
+          card: t.surface,
+          text: t.text,
+          border: t.border,
+          primary: t.accent,
         },
       }}
     >
@@ -128,9 +128,9 @@ export function RootNavigator() {
         <Tab.Navigator
           screenOptions={({ route }) => ({
             headerShown: false,
-            tabBarActiveTintColor: t.tk.accent,
-            tabBarInactiveTintColor: t.tk.muted,
-            tabBarStyle: { backgroundColor: t.tk.card, borderTopColor: t.tk.line },
+            tabBarActiveTintColor: t.accent,
+            tabBarInactiveTintColor: t.textMuted,
+            tabBarStyle: { backgroundColor: t.surface, borderTopColor: t.border },
             tabBarIcon: ({ focused, color }: { focused: boolean; color: string }) =>
               <TabIcon label={route.name} focused={focused} color={color} />,
           })}
