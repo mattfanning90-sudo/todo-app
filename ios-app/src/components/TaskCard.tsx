@@ -9,6 +9,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 // (using iOS's native responder system) works correctly inside RNGH.
 import { useTheme, radius, spacing, font } from '@/theme';
 import type { Category, Stage, Task } from '@/api/types';
+import { Checkbox } from '@/components/Checkbox';
 
 const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 const STAGE_LABELS: Record<Stage, string> = {
@@ -114,20 +115,12 @@ export function TaskCard({ task, category, onPress, onToggleDone, dragHandle, on
         {dragHandle}
         <View style={styles.inner}>
           <View style={styles.topRow}>
-            {/* Checkbox — inner Pressable wins the responder automatically */}
-            <Pressable
-              onPress={() => onToggleDone?.()}
-              hitSlop={8}
-              style={[
-                styles.checkbox,
-                {
-                  borderColor: isDone ? t.success : t.borderInput,
-                  backgroundColor: isDone ? t.success : 'transparent',
-                },
-              ]}
-            >
-              {isDone && <Text style={styles.checkmark}>✓</Text>}
-            </Pressable>
+            {/* Checkbox — 44pt accessible control (role="checkbox", state={checked}) */}
+            <Checkbox
+              checked={isDone}
+              onToggle={() => onToggleDone?.()}
+              color={t.priority[task.priority]}
+            />
 
             {/* Task text */}
             <View style={{ flex: 1 }}>
@@ -234,17 +227,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-    flexShrink: 0,
-  },
-  checkmark: { color: '#fff', fontSize: 10, fontWeight: '700' },
   text: {
     flex: 1,
     fontSize: font.size.md,
@@ -256,7 +238,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 5,
     marginTop: 5,
-    marginLeft: 26,
+    marginLeft: 44,
     alignItems: 'center',
   },
   catPill: {
@@ -299,7 +281,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.sm,
     marginTop: 8,
-    marginLeft: 26,
+    marginLeft: 44,
   },
   moveBtn: {
     paddingHorizontal: 10,
