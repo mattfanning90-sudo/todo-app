@@ -112,7 +112,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    const apiErr = new ApiError(text || res.statusText, res.status);
+    let message = text || res.statusText;
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.error === 'string') message = parsed.error;
+      else if (typeof parsed?.message === 'string') message = parsed.message;
+    } catch {
+      // not JSON — keep raw text
+    }
+    const apiErr = new ApiError(message, res.status);
     // Capture only real failures (5xx). 4xx (validation, not-found, conflict)
     // are expected outcomes — breadcrumb them to keep off the error quota.
     if (res.status >= 500) {
@@ -261,7 +269,7 @@ export const api = {
   shareTask: (taskId: number, recipientUserId: number, boardId: number) =>
     request<{ ok: true }>(`/api/tasks/${taskId}/share`, {
       method: 'POST',
-      body: { recipient_user_id: recipientUserId, board_id: boardId },
+      body: { recipient_user_id: recipientUserId, boardId },
     }),
 
   // ── Bulk import ────────────────────────────────────────────────────────────
