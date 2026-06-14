@@ -29,7 +29,18 @@ import type { RouteProp } from '@react-navigation/native';
 
 const STAGES: Stage[] = ['backlog', 'in_progress', 'done'];
 const PRIORITIES: Priority[] = ['none', 'low', 'medium', 'high'];
-const RECURRENCES: string[] = ['none', 'daily', 'weekly', 'monthly', 'weekdays', 'biweekly', 'quarterly', 'yearly'];
+// Web vocabulary — must match public/app.js recurrence <select> options exactly.
+const RECURRENCES: string[] = ['none', 'daily', 'weekly', 'monthly', 'after:3', 'after:7', 'after:14', 'after:30'];
+const RECURRENCE_LABELS: Record<string, string> = {
+  none: 'No repeat',
+  daily: 'Daily',
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  'after:3': 'Every 3 days',
+  'after:7': 'Every 7 days',
+  'after:14': 'Every 14 days',
+  'after:30': 'Every 30 days',
+};
 const CATEGORY_COLORS = [
   '#4285F4', '#34A853', '#EA4335', '#FBBC05',
   '#8B5CF6', '#F59E0B', '#10B981', '#EC4899',
@@ -438,13 +449,24 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
                 {RECURRENCES.map((r) => (
                   <Chip
                     key={r}
-                    label={r}
+                    label={RECURRENCE_LABELS[r] ?? r}
                     active={recurrence === r}
                     color={t.accent}
                     mode="choice"
                     onPress={() => setRecurrence(r)}
                   />
                 ))}
+                {/* Render a read-only chip for any legacy value not in the web set */}
+                {recurrence !== 'none' && !RECURRENCES.includes(recurrence) && (
+                  <Chip
+                    key={`legacy-${recurrence}`}
+                    label={recurrence}
+                    active
+                    color={t.textMuted}
+                    mode="choice"
+                    onPress={() => {}}
+                  />
+                )}
               </View>
             </View>
           </SectionCard>
