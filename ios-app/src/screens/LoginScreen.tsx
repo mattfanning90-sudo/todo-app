@@ -112,6 +112,7 @@ export function LoginScreen() {
   const [username, setUsername] = useState('');
   const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestUsernameRef = useRef<string>('');
   const [loading, setLoading] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -140,6 +141,7 @@ export function LoginScreen() {
 
   const handleUsernameChange = (val: string) => {
     setUsername(val);
+    latestUsernameRef.current = val;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (!val.trim()) {
       setUsernameStatus('idle');
@@ -151,10 +153,13 @@ export function LoginScreen() {
     }
     setUsernameStatus('checking');
     debounceRef.current = setTimeout(async () => {
+      const checked = val.trim();
       try {
-        const { available } = await api.checkUsername(val.trim());
+        const { available } = await api.checkUsername(checked);
+        if (latestUsernameRef.current.trim() !== checked) return;
         setUsernameStatus(available ? 'available' : 'taken');
       } catch {
+        if (latestUsernameRef.current.trim() !== checked) return;
         setUsernameStatus('idle');
       }
     }, DEBOUNCE_MS);
