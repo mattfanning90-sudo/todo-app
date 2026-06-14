@@ -1,13 +1,9 @@
 import React, { useCallback, useState } from 'react';
 import {
   Alert,
-  FlatList,
-  Pressable,
   RefreshControl,
-  StyleSheet,
+  ScrollView,
   Text,
-  TextInput,
-  View,
 } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -15,7 +11,14 @@ import type { Nav, BoardStackParams } from '@/navigation/types';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
-import { useTheme, radius, spacing, font } from '@/theme';
+import { Card } from '@/components/Card';
+import { Icon } from '@/components/Icon';
+import { ListRow } from '@/components/ListRow';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { SectionCard } from '@/components/SectionCard';
+import { TextField } from '@/components/TextField';
+import { useTheme, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import type { Board, BoardInvite, BoardMember } from '@/api/types';
@@ -112,16 +115,16 @@ export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
     );
   };
 
-  const revokeInvite = (invite: BoardInvite) => {
-    Alert.alert('Revoke invite?', `Cancel the pending invite for ${invite.invitee_email}?`, [
+  const revokeInvite = (inv: BoardInvite) => {
+    Alert.alert('Revoke invite?', `Cancel the pending invite for ${inv.invitee_email}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Revoke',
         style: 'destructive',
         onPress: async () => {
           try {
-            await api.revokeInvite(board.id, invite.id);
-            setInvites((prev) => prev.filter((i) => i.id !== invite.id));
+            await api.revokeInvite(board.id, inv.id);
+            setInvites((prev) => prev.filter((i) => i.id !== inv.id));
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
           } catch (err) {
             Alert.alert('Could not revoke invite', String(err));
@@ -131,28 +134,22 @@ export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
     ]);
   };
 
-  const displayName = (m: BoardMember) =>
-    m.name || m.username || m.email;
+  const displayName = (m: BoardMember) => m.name || m.username || m.email;
 
   const initials = (m: BoardMember) => {
     const name = m.name || m.username || m.email;
     return name.slice(0, 2).toUpperCase();
   };
 
+  const isEmpty = !loading && members.length === 0;
+
   return (
     <Screen padded={false}>
-      {/* Header */}
-      <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={goBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: t.text }]}>Members</Text>
-        <View style={{ width: 50 }} />
-      </View>
+      <ScreenHeader variant="detail" title="Members" onBack={goBack} />
 
-      <FlatList
-        data={[]}
-        keyExtractor={() => '__placeholder__'}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl * 2, gap: spacing.lg }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -163,188 +160,123 @@ export function BoardMembersScreen({ board: boardProp, onBack }: Props) {
             tintColor={t.textMuted}
           />
         }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingBottom: spacing.xxl * 2,
-        }}
-        ListHeaderComponent={
-          <>
-            {/* Board name context */}
-            <View style={[styles.boardInfo, { borderBottomColor: t.border }]}>
-              <Text style={[styles.boardName, { color: t.text }]}>{board.name}</Text>
-              {!isOwner && (
-                <Text style={[styles.viewerNote, { color: t.textMuted }]}>
-                  You're a member of this board.
-                </Text>
-              )}
-            </View>
-
-            {/* Members section */}
-            <Text style={[styles.sectionLabel, { color: t.textMuted }]}>
-              Members ({members.length})
-            </Text>
-
-            {members.length === 0 && !loading && (
-              <Text style={[styles.emptyNote, { color: t.textMuted }]}>
-                No other members yet. Invite someone below.
-              </Text>
-            )}
-
-            {members.map((m) => (
-              <View
+      >
+        <ScreenState
+          loading={loading}
+          empty={isEmpty}
+          emptyIcon="profile"
+          emptyTitle="Just you so far"
+          emptyBody="Just you so far. Invite someone to share this board."
+        >
+          {/* Members section */}
+          <SectionCard eyebrow={`Members (${members.length})`}>
+            {members.map((m, index) => (
+              <ListRow
                 key={m.id}
-                style={[styles.memberRow, { backgroundColor: t.surface, borderColor: t.border }]}
-              >
-                <View style={[styles.avatar, { backgroundColor: t.accent + '22' }]}>
-                  <Text style={[styles.avatarText, { color: t.accent }]}>{initials(m)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.memberName, { color: t.text }]}>{displayName(m)}</Text>
-                  {m.name && (
-                    <Text style={[styles.memberEmail, { color: t.textMuted }]}>{m.email}</Text>
-                  )}
-                </View>
-                {isOwner && (
-                  <Pressable
-                    onPress={() => removeMember(m)}
-                    hitSlop={10}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                  >
-                    <Text style={[styles.removeText, { color: t.danger }]}>Remove</Text>
-                  </Pressable>
-                )}
-              </View>
-            ))}
-
-            {/* Pending invites (owner only) */}
-            {isOwner && invites.length > 0 && (
-              <>
-                <Text style={[styles.sectionLabel, { color: t.textMuted, marginTop: spacing.lg }]}>
-                  Pending invites ({invites.length})
-                </Text>
-                {invites.map((inv) => (
-                  <View
-                    key={inv.id}
-                    style={[styles.memberRow, { backgroundColor: t.surface, borderColor: t.border }]}
-                  >
-                    <View style={[styles.avatar, { backgroundColor: t.surfaceElevated }]}>
-                      <Text style={[styles.avatarText, { color: t.textMuted }]}>✉</Text>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.memberName, { color: t.text }]}>{inv.invitee_email}</Text>
-                      <Text style={[styles.memberEmail, { color: t.textMuted }]}>Invite pending</Text>
-                    </View>
-                    <Pressable
-                      onPress={() => revokeInvite(inv)}
-                      hitSlop={10}
-                      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                    >
-                      <Text style={[styles.removeText, { color: t.textMuted }]}>Revoke</Text>
-                    </Pressable>
-                  </View>
-                ))}
-              </>
-            )}
-
-            {/* Invite form (owner only) */}
-            {isOwner && (
-              <>
-                <Text style={[styles.sectionLabel, { color: t.textMuted, marginTop: spacing.lg }]}>
-                  Invite someone
-                </Text>
-                <View
-                  style={[styles.inviteRow, { backgroundColor: t.surface, borderColor: t.border }]}
-                >
-                  <TextInput
-                    value={inviteEmail}
-                    onChangeText={setInviteEmail}
-                    onSubmitEditing={invite}
-                    placeholder="Email address"
-                    placeholderTextColor={t.textLight}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    returnKeyType="send"
-                    style={[styles.inviteInput, { color: t.text }]}
+                title={displayName(m)}
+                subtitle={m.name ? m.email : undefined}
+                divider={index < members.length - 1}
+                leading={
+                  <AvatarInitials
+                    initials={initials(m)}
+                    bg={t.accent + '22'}
+                    color={t.accent}
                   />
-                </View>
-                <Button
-                  label={inviting ? 'Sending…' : 'Send invite'}
-                  onPress={invite}
-                  disabled={!inviteEmail.trim() || inviting}
-                  style={{ marginTop: spacing.sm }}
+                }
+                trailing={
+                  isOwner ? (
+                    <Text
+                      onPress={() => removeMember(m)}
+                      style={{ color: t.danger, fontSize: font.size.sm, fontWeight: font.weight.medium }}
+                    >
+                      Remove
+                    </Text>
+                  ) : undefined
+                }
+              />
+            ))}
+          </SectionCard>
+
+          {/* Pending invites (owner only) */}
+          {isOwner && invites.length > 0 && (
+            <SectionCard eyebrow={`Pending invites (${invites.length})`}>
+              {invites.map((inv, index) => (
+                <ListRow
+                  key={inv.id}
+                  title={inv.invitee_email}
+                  subtitle="Invite pending"
+                  divider={index < invites.length - 1}
+                  leading={<Icon name="mail" label="" size={20} color={t.textMuted} />}
+                  trailing={
+                    <Text
+                      onPress={() => revokeInvite(inv)}
+                      style={{ color: t.textMuted, fontSize: font.size.sm, fontWeight: font.weight.medium }}
+                    >
+                      Revoke
+                    </Text>
+                  }
                 />
-                <Text style={[styles.inviteHint, { color: t.textMuted }]}>
-                  If they already have an account they'll be added immediately. Otherwise they'll
-                  receive an email invite.
-                </Text>
-              </>
-            )}
-          </>
-        }
-        renderItem={() => null}
-      />
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Invite form (owner only) */}
+          {isOwner && (
+            <Card padded>
+              <TextField
+                label="Email address"
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                onSubmitEditing={invite}
+                placeholder="name@example.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="send"
+              />
+              <Button
+                label={inviting ? 'Sending…' : 'Send invite'}
+                onPress={invite}
+                disabled={!inviteEmail.trim() || inviting}
+                loading={inviting}
+              />
+              <Text style={{ color: t.textMuted, fontSize: font.size.sm, lineHeight: 18, marginTop: spacing.sm }}>
+                If they already have an account they'll be added immediately. Otherwise they'll
+                receive an email invite.
+              </Text>
+            </Card>
+          )}
+        </ScreenState>
+      </ScrollView>
     </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  topBar: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-  },
-  headerTitle: { fontSize: font.size.md, fontWeight: font.weight.bold },
-  boardInfo: {
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
-    marginBottom: spacing.lg,
-    gap: spacing.xs,
-  },
-  boardName: { fontSize: font.size.lg, fontWeight: font.weight.bold },
-  viewerNote: { fontSize: font.size.sm },
-  sectionLabel: {
-    fontSize: font.size.xs,
-    fontWeight: font.weight.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
-  },
-  emptyNote: { fontSize: font.size.sm, marginBottom: spacing.md },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    marginBottom: spacing.sm,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: { fontSize: font.size.sm, fontWeight: font.weight.bold },
-  memberName: { fontSize: font.size.md, fontWeight: font.weight.semibold },
-  memberEmail: { fontSize: font.size.sm, marginTop: 1 },
-  removeText: { fontSize: font.size.sm, fontWeight: font.weight.medium },
-  inviteRow: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-  },
-  inviteInput: { height: 44, fontSize: font.size.md },
-  inviteHint: {
-    fontSize: font.size.sm,
-    lineHeight: 18,
-    marginTop: spacing.sm,
-  },
-});
+function AvatarInitials({
+  initials,
+  bg,
+  color,
+}: {
+  initials: string;
+  bg: string;
+  color: string;
+}) {
+  return (
+    <Text
+      style={{
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: bg,
+        color,
+        fontSize: font.size.sm,
+        fontWeight: font.weight.bold,
+        textAlign: 'center',
+        lineHeight: 36,
+        overflow: 'hidden',
+      }}
+    >
+      {initials}
+    </Text>
+  );
+}
