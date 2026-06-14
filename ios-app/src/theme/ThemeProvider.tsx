@@ -13,6 +13,7 @@ interface ThemeState {
 }
 
 const Ctx = createContext<ThemeState | null>(null);
+export const ThemeContext = Ctx;
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const os = useColorScheme();

@@ -1,4 +1,6 @@
-import { useThemeContext } from '@/theme/ThemeProvider';
+import { useContext } from 'react';
+import { useColorScheme } from 'react-native';
+import { ThemeContext } from '@/theme/ThemeProvider';
 
 export type ThemeName = 'light' | 'dark';
 
@@ -78,7 +80,10 @@ export const darkTheme: Theme = {
 };
 
 export function useTheme(): Theme {
-  return useThemeContext().theme;
+  const ctx = useContext(ThemeContext);
+  const os = useColorScheme();
+  if (ctx) return ctx.theme;
+  return os === 'dark' ? darkTheme : lightTheme;
 }
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
