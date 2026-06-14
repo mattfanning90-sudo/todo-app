@@ -64,5 +64,6 @@ test('pressing Mark all read calls api.markNotificationsRead', async () => {
 test('shows empty state when there are no notifications', async () => {
   fetchMock.mockResponseOnce(JSON.stringify([]));
   render(<NotificationsScreen onBack={jest.fn()} />);
-  expect(await screen.findByText(/no notifications/i)).toBeTruthy();
+  // Empty-state copy changed to "You're all caught up" in the Taskly restyle.
+  expect(await screen.findByText(/caught up/i)).toBeTruthy();
 });

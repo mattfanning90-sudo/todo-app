@@ -150,33 +150,38 @@ describe('assigned-to picker', () => {
 });
 
 // ── Calendar date fields ──────────────────────────────────────────────────────
+// The restyle replaced free-text TextInputs with <DateField> (pressable + native
+// date picker). Tests now assert labels/formatted values instead of placeholder
+// text or editable input display values.
 
 describe('calendar date fields', () => {
   test('renders cal_start and cal_end inputs', () => {
-    const { getByPlaceholderText } = renderDetail();
-    expect(getByPlaceholderText(/start date/i)).toBeTruthy();
-    expect(getByPlaceholderText(/end date/i)).toBeTruthy();
+    // DateField renders a label Text node above the pressable field.
+    const { getByText } = renderDetail();
+    expect(getByText('Calendar start')).toBeTruthy();
+    expect(getByText('Calendar end')).toBeTruthy();
   });
 
   test('pre-fills cal_start and cal_end from task', () => {
-    const { getByDisplayValue } = renderDetail();
-    expect(getByDisplayValue('2026-06-01')).toBeTruthy();
-    expect(getByDisplayValue('2026-06-02')).toBeTruthy();
+    // DateField formats the ISO value via toLocaleDateString for display.
+    // task has cal_start='2026-06-01' → "Jun 1, 2026"
+    //           cal_end  ='2026-06-02' → "Jun 2, 2026"
+    const { getByText } = renderDetail();
+    expect(getByText('Jun 1, 2026')).toBeTruthy();
+    expect(getByText('Jun 2, 2026')).toBeTruthy();
   });
 
   test('includes cal_start and cal_end in save payload', async () => {
+    // DateField has no typeable input; values round-trip from state initialised
+    // by the task prop. Render with existing cal dates and confirm Save sends them.
     fetchMock.mockResponseOnce(JSON.stringify(task));
-    const { getByPlaceholderText, getByText } = renderDetail(
-      { ...task, cal_start: null, cal_end: null }
-    );
-    fireEvent.changeText(getByPlaceholderText(/start date/i), '2026-07-01');
-    fireEvent.changeText(getByPlaceholderText(/end date/i), '2026-07-05');
+    const { getByText } = renderDetail(task);
     fireEvent.press(getByText('Save'));
 
     await waitFor(() => {
       const body = JSON.parse(fetchMock.mock.calls[1][1]?.body as string);
-      expect(body.cal_start).toBe('2026-07-01');
-      expect(body.cal_end).toBe('2026-07-05');
+      expect(body.cal_start).toBe('2026-06-01');
+      expect(body.cal_end).toBe('2026-06-02');
     });
   });
 });
