@@ -143,14 +143,16 @@ export const api = {
     if (mobileSession) await setCookie(mobileSession);
     return user as User;
   },
-  async signup(email: string, password: string, name?: string): Promise<User> {
+  async signup(email: string, password: string, name?: string, username?: string): Promise<User> {
     const { mobileSession, ...user } = await request<User & { mobileSession?: string }>(
       '/auth/signup',
-      { method: 'POST', body: { email, password, name } }
+      { method: 'POST', body: { email, password, name, username } }
     );
     if (mobileSession) await setCookie(mobileSession);
     return user as User;
   },
+  checkUsername: (username: string) =>
+    request<{ available: boolean }>(`/api/check-username?username=${encodeURIComponent(username)}`),
   async googleLogin(idToken: string): Promise<User> {
     const { mobileSession, ...user } = await request<User & { mobileSession?: string }>(
       '/auth/google/mobile',

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -16,7 +16,7 @@ import { Card } from '@/components/Card';
 import { BrandMark } from '@/components/BrandMark';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme, font, spacing } from '@/theme';
-import { ApiError } from '@/api/client';
+import { api, ApiError } from '@/api/client';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -97,6 +97,11 @@ function GoogleLoginButton({
   );
 }
 
+type UsernameStatus = 'idle' | 'checking' | 'available' | 'taken' | 'invalid';
+
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,30}$/;
+const DEBOUNCE_MS = 450;
+
 export function LoginScreen() {
   const t = useTheme();
   const { login, signup } = useAuth();
@@ -104,6 +109,9 @@ export function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<UsernameStatus>('idle');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [loading, setLoading] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [bannerError, setBannerError] = useState<string | null>(null);
@@ -130,17 +138,66 @@ export function LoginScreen() {
     setBannerError(null);
   };
 
+  const handleUsernameChange = (val: string) => {
+    setUsername(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!val.trim()) {
+      setUsernameStatus('idle');
+      return;
+    }
+    if (!USERNAME_REGEX.test(val.trim())) {
+      setUsernameStatus('invalid');
+      return;
+    }
+    setUsernameStatus('checking');
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { available } = await api.checkUsername(val.trim());
+        setUsernameStatus(available ? 'available' : 'taken');
+      } catch {
+        setUsernameStatus('idle');
+      }
+    }, DEBOUNCE_MS);
+  };
+
+  // When switching to login mode, reset username state
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    setUsername('');
+    setUsernameStatus('idle');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    clearErrors();
+  };
+
   const submit = async () => {
     clearErrors();
     setLoading(true);
     try {
-      if (mode === 'login') await login(email.trim(), password);
-      else await signup(email.trim(), password, name.trim() || undefined);
+      if (mode === 'login') {
+        await login(email.trim(), password);
+      } else {
+        const chosenUsername = username.trim() || undefined;
+        await signup(email.trim(), password, name.trim() || undefined, chosenUsername);
+      }
     } catch (err) {
       handleAuthError(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const usernameHint = (): string | undefined => {
+    if (usernameStatus === 'checking') return 'Checking…';
+    if (usernameStatus === 'available') return '✓ Available';
+    if (usernameStatus === 'taken') return '✗ Already taken';
+    if (usernameStatus === 'invalid') return '✗ 3–30 chars, letters/numbers/underscores only';
+    return undefined;
+  };
+
+  const usernameHintColor = (): string => {
+    if (usernameStatus === 'available') return t.success;
+    if (usernameStatus === 'taken' || usernameStatus === 'invalid') return t.danger;
+    return t.textMuted;
   };
 
   return (
@@ -181,6 +238,23 @@ export function LoginScreen() {
                 placeholder="Optional"
               />
             )}
+            {mode === 'signup' && (
+              <View>
+                <TextField
+                  label="Username"
+                  value={username}
+                  onChangeText={handleUsernameChange}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  placeholder="Optional — auto-generated if blank"
+                />
+                {usernameHint() ? (
+                  <Text style={[styles.usernameHint, { color: usernameHintColor() }]}>
+                    {usernameHint()}
+                  </Text>
+                ) : null}
+              </View>
+            )}
             <TextField
               label="Email"
               value={email}
@@ -205,7 +279,7 @@ export function LoginScreen() {
               label={mode === 'login' ? 'Sign in' : 'Create account'}
               onPress={submit}
               loading={loading}
-              disabled={!email || !password}
+              disabled={!email || !password || usernameStatus === 'taken' || usernameStatus === 'invalid'}
             />
 
             {googleConfigured && (
@@ -228,10 +302,7 @@ export function LoginScreen() {
                 : 'Already have an account? Sign in'
             }
             variant="ghost"
-            onPress={() => {
-              setMode(mode === 'login' ? 'signup' : 'login');
-              clearErrors();
-            }}
+            onPress={switchMode}
             style={styles.toggle}
           />
         </ScrollView>
@@ -281,4 +352,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   toggle: { marginTop: spacing.md },
+  usernameHint: {
+    fontSize: font.size.sm,
+    marginTop: -spacing.sm,
+    marginBottom: spacing.md,
+  },
 });

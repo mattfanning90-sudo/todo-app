@@ -13,7 +13,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name?: string) => Promise<void>;
+  signup: (email: string, password: string, name?: string, username?: string) => Promise<void>;
   googleLogin: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
   patchUser: (patch: Partial<User>) => void;
@@ -51,8 +51,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const u = await api.login(email, password);
         setUser(u);
       },
-      signup: async (email, password, name) => {
-        const u = await api.signup(email, password, name);
+      signup: async (email, password, name, username) => {
+        const u = await api.signup(email, password, name, username);
         setUser(u);
       },
       googleLogin: async (idToken) => {
