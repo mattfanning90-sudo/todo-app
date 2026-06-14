@@ -13,6 +13,7 @@ import {
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { DropProvider, Draggable, Droppable } from 'react-native-reanimated-dnd';
+import { Icon } from '@/components/Icon';
 import { Screen } from '@/components/Screen';
 import { TaskCard } from '@/components/TaskCard';
 import { useTheme, radius, spacing, font } from '@/theme';
@@ -338,7 +339,7 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
             <Text style={[styles.boardSwitchLabel, { color: t.text }]}>
               {currentBoard?.name ?? 'Board'}
             </Text>
-            <Text style={{ color: t.textMuted }}>  ▾</Text>
+            <Icon name="chevron" label="Switch board" size={16} />
           </Pressable>
           <Text style={[styles.boardH1, { color: t.textMuted }]}>Board</Text>
         </View>
@@ -346,23 +347,21 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
           <View style={[styles.donePill, { backgroundColor: t.accent + '22' }]}>
             <Text style={[styles.donePillLabel, { color: t.accent }]}>{donePct}% done</Text>
           </View>
-          <Pressable
+          <Icon
+            name="search"
+            label="Search"
             onPress={() => nav.navigate('Search')}
-            hitSlop={10}
-            testID="search-btn"
-          >
-            <Text style={{ fontSize: 20, color: t.textMuted }}>⌕</Text>
-          </Pressable>
-          <Pressable
+          />
+          <Icon
+            name="bell"
+            label="Notifications"
             onPress={() => nav.navigate('Notifications')}
-            hitSlop={10}
-            testID="bell-btn"
-          >
-            <Text style={{ fontSize: 20, color: t.textMuted }}>🔔</Text>
-          </Pressable>
-          <Pressable onPress={openOverflow} style={styles.overflowBtn} hitSlop={10}>
-            <Text style={{ fontSize: 20, color: t.textMuted }}>⋯</Text>
-          </Pressable>
+          />
+          <Icon
+            name="more"
+            label="More options"
+            onPress={openOverflow}
+          />
         </View>
       </View>
 
@@ -540,9 +539,6 @@ const styles = StyleSheet.create({
   donePillLabel: {
     fontSize: font.size.xs,
     fontWeight: font.weight.semibold,
-  },
-  overflowBtn: {
-    // no extra padding needed; hitSlop handles it
   },
   // ── Filter pills ─────────────────────────────────────────────────────────────
   filterBar: { flexGrow: 0, paddingVertical: spacing.sm },
