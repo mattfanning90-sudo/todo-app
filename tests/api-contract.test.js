@@ -35,6 +35,15 @@ const TODAY_TASK_KEYS = [
   'board_id', 'board_name', 'cat_name', 'cat_color', 'completed_at',
 ];
 
+// ios-app/src/api/types.ts → interface User (required keys) + reminder prefs.
+const USER_KEYS = [
+  'id', 'email', 'name', 'username', 'digest_frequency',
+  'reminders_enabled', 'reminder_time', 'reminder_lead_days',
+];
+
+// ios-app/src/api/types.ts → interface ReminderTask (all keys required).
+const REMINDER_TASK_KEYS = ['id', 'text', 'due_date', 'board_id', 'board_name'];
+
 let agent;
 let boardId;
 
@@ -77,6 +86,33 @@ describe('API contract: GET /api/tasks/today → iOS TodayTask', () => {
     expect(task, 'expected the task due today to appear in /api/tasks/today').toBeTruthy();
     for (const key of TODAY_TASK_KEYS) {
       expect(task, `GET /api/tasks/today response is missing iOS TodayTask key "${key}"`).toHaveProperty(key);
+    }
+  });
+});
+
+describe('API contract: GET /api/user → iOS User', () => {
+  it('carries every key the iOS User type requires, incl. reminder prefs', async () => {
+    const res = await agent.get('/api/user').set('X-Requested-With', 'fetch');
+    expect(res.status).toBe(200);
+    for (const key of USER_KEYS) {
+      expect(res.body, `GET /api/user response is missing iOS User key "${key}"`).toHaveProperty(key);
+    }
+  });
+});
+
+describe('API contract: GET /api/reminders/agenda → iOS ReminderTask', () => {
+  it('every agenda task carries every key the iOS ReminderTask type requires', async () => {
+    const soon = new Date(Date.now() + 2 * 864e5).toISOString().slice(0, 10);
+    await agent.post(`/api/tasks?board=${boardId}`).set('X-Requested-With', 'fetch').send({
+      text: 'agenda task', board_id: boardId, priority: 'low', due_date: soon,
+    });
+    const res = await agent.get('/api/reminders/agenda').set('X-Requested-With', 'fetch');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    const task = res.body.find(t => t.text === 'agenda task');
+    expect(task, 'expected the upcoming dated task to appear in /api/reminders/agenda').toBeTruthy();
+    for (const key of REMINDER_TASK_KEYS) {
+      expect(task, `GET /api/reminders/agenda response is missing iOS ReminderTask key "${key}"`).toHaveProperty(key);
     }
   });
 });

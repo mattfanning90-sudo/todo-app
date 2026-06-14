@@ -355,6 +355,15 @@ async function seedCategories(userId, boardId) {
 
 const wrap = fn => (req, res, next) => fn(req, res, next).catch(next);
 
+// Reminder preferences, shaped for the user-facing JSON payloads (snake_case to
+// match ios-app/src/api/types.ts + the A3 contract test). Defaults guard rows
+// loaded before migration 014 applied.
+const reminderPrefs = u => ({
+  reminders_enabled: u.reminders_enabled ?? false,
+  reminder_time: u.reminder_time ?? '09:00',
+  reminder_lead_days: u.reminder_lead_days ?? 0,
+});
+
 /* ── Auth strategies ── */
 if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
   passport.use(new GoogleStrategy({
@@ -409,7 +418,7 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, async (email, passwor
 passport.serializeUser((user, done) => done(null, user.id));
 passport.deserializeUser(async (id, done) => {
   try {
-    const { rows } = await pool.query('SELECT id, name, email, username, digest_frequency FROM users WHERE id = $1', [id]);
+    const { rows } = await pool.query('SELECT id, name, email, username, digest_frequency, reminders_enabled, reminder_time, reminder_lead_days FROM users WHERE id = $1', [id]);
     const user = rows[0];
     if (user && !user.username) {
       const username = await generateUsername();
@@ -584,6 +593,7 @@ app.post('/auth/google/mobile', authLimiter, wrap(async (req, res) => {
       res.json({
         id: user.id, email: user.email, name: user.name,
         username: user.username, digest_frequency: user.digest_frequency,
+        ...reminderPrefs(user),
         mobileSession,
       });
     });
@@ -661,6 +671,7 @@ app.post('/auth/signup', authLimiter, wrap(async (req, res) => {
         return res.json({
           id: newUser.id, email: newUser.email, name: newUser.name,
           username: newUser.username, digest_frequency: newUser.digest_frequency,
+          ...reminderPrefs(newUser),
           mobileSession,
         });
       }
@@ -689,6 +700,7 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
           return res.json({
             id: user.id, email: user.email, name: user.name,
             username: user.username, digest_frequency: user.digest_frequency,
+            ...reminderPrefs(user),
             mobileSession,
           });
         }
@@ -701,13 +713,29 @@ app.post('/auth/login', authLimiter, (req, res, next) => {
 /* ── User ── */
 app.get('/api/user', (req, res) => {
   if (!req.isAuthenticated()) return res.json(null);
-  res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username, digest_frequency: req.user.digest_frequency || 'none' });
+  res.json({ id: req.user.id, name: req.user.name, email: req.user.email, username: req.user.username, digest_frequency: req.user.digest_frequency || 'none', ...reminderPrefs(req.user) });
 });
 
 app.put('/api/user/digest', requireAuth, wrap(async (req, res) => {
   const { frequency } = req.body;
   if (!['none', 'daily', 'weekly', 'fortnightly'].includes(frequency)) return res.status(400).json({ error: 'Invalid frequency' });
   await pool.query('UPDATE users SET digest_frequency = $1 WHERE id = $2', [frequency, req.user.id]);
+  res.json({ ok: true });
+}));
+
+// Task reminder preferences (Phase 1: on-device local notifications). The clients
+// schedule/fire locally; the server just stores the synced intent + serves the agenda.
+app.put('/api/user/reminders', requireAuth, wrap(async (req, res) => {
+  const { enabled, time, lead_days } = req.body;
+  const okTime = typeof time === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(time);
+  const okLead = [0, 1, 2].includes(lead_days);
+  if (typeof enabled !== 'boolean' || !okTime || !okLead) {
+    return res.status(400).json({ error: 'invalid_reminders' });
+  }
+  await pool.query(
+    'UPDATE users SET reminders_enabled = $1, reminder_time = $2, reminder_lead_days = $3 WHERE id = $4',
+    [enabled, time, lead_days, req.user.id]
+  );
   res.json({ ok: true });
 }));
 
@@ -991,6 +1019,30 @@ app.get('/api/tasks/today', requireAuth, wrap(async (req, res) => {
   res.json(rows);
 }));
 
+// Reminder agenda: the user's upcoming dated, actionable tasks across ALL their
+// boards (owned + member), for local-notification scheduling. Deliberately NOT
+// ?board= scoped — reminders are user-global (documented exception in
+// docs/cross-platform.md). Modeled on /api/tasks/today with a date range; the
+// `due_date <> ''` guard is load-bearing (TEXT '' sorts before every YYYY-MM-DD).
+app.get('/api/reminders/agenda', requireAuth, wrap(async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const max = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
+  const { rows } = await pool.query(
+    `SELECT DISTINCT t.id, t.text, t.due_date, t.board_id, b.name AS board_name
+       FROM tasks t
+       JOIN boards b ON b.id = t.board_id
+       LEFT JOIN board_members bm ON bm.board_id = t.board_id AND bm.member_user_id = $1
+      WHERE (b.owner_user_id = $1 OR bm.member_user_id IS NOT NULL)
+        AND (t.archived IS NULL OR t.archived = false)
+        AND t.stage <> 'done'
+        AND t.due_date <> '' AND t.due_date >= $2 AND t.due_date <= $3
+      ORDER BY t.due_date ASC
+      LIMIT 100`,
+    [req.user.id, today, max]
+  );
+  res.json(rows);
+}));
+
 app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
   const { boardId, ownerId } = await getBoardContext(req);
   const { text: rawText, status = '', owners = [], cal_start = '', cal_end = '',
@@ -1003,6 +1055,7 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
 
   let due_date = explicitDue, text = rawText;
   if (!explicitDue) {
+    let matched = false;
     const parsed = chrono.parse(rawText);
     if (parsed.length > 0) {
       const parsedDate = parsed[0].date();
@@ -1012,7 +1065,13 @@ app.post('/api/tasks', requireAuth, wrap(async (req, res) => {
         due_date = parsedDate.toISOString().split('T')[0];
         const stripped = rawText.replace(parsed[0].text, '').trim().replace(/\s+/g, ' ');
         if (stripped.length > 0) text = stripped;
+        matched = true;
       }
+    }
+    // Today quick-add: with no explicit date and no NL date in the title, default
+    // the task to today so it lands in the Today view. A parsed NL date wins.
+    if (!matched && req.body.default_due === 'today') {
+      due_date = new Date().toISOString().split('T')[0];
     }
   }
 

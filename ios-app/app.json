@@ -39,6 +39,7 @@
     "plugins": [
       "expo-secure-store",
       "expo-web-browser",
+      "expo-notifications",
       "@sentry/react-native/expo"
     ],
     "extra": {

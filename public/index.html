@@ -307,6 +307,7 @@
     </div>
     </section>
     <section class="screen" id="screen-profile"></section>
+    <section class="screen" id="screen-notifications"></section>
   </main>
 </div>
 
@@ -447,7 +448,8 @@
   <div class="modal tk-card" data-action="stop" style="max-width:440px;padding:24px;">
     <div class="modal-header"><h2>New Task</h2>
       <button class="modal-close" data-action="closeQuickAdd">×</button></div>
-    <input id="quickadd-input" type="text" placeholder="Task title…" autocomplete="off"
+    <input id="quickadd-input" type="text" aria-label="New task"
+      placeholder="Task title… (try 'dentist Thursday 2pm')" autocomplete="off"
       style="width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--tk-line);
       background:var(--tk-card);color:var(--tk-text);font:inherit;font-size:15px;outline:none;" />
     <button class="tk-btn-primary" data-action="submitQuickAdd"
@@ -475,6 +477,7 @@
 <script src="/vendor/sentry.min.js" defer></script>
 <script src="/sentry-boot.js" defer></script>
 <script src="/vendor/Sortable.min.js" defer></script>
-<script src="/app.js?v=20260520d" defer></script>
+<script src="/reminders.js?v=20260613" defer></script>
+<script src="/app.js?v=20260613a" defer></script>
 </body>
 </html>
