@@ -1,6 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +9,10 @@ import {
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { Nav } from '@/navigation/types';
 import { Screen } from '@/components/Screen';
-import { useTheme, radius, spacing, font } from '@/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { SectionCard } from '@/components/SectionCard';
+import { useTheme, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { Notification } from '@/api/types';
 
@@ -64,94 +66,85 @@ export function NotificationsScreen({ onBack }: Props) {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  return (
-    <Screen>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: t.border }]}>
-        <Pressable onPress={goBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: t.text }]}>Notifications</Text>
-        {unreadCount > 0 ? (
-          <Pressable onPress={markAllRead} disabled={markingRead} hitSlop={8}>
-            <Text style={{ color: t.accent, fontSize: font.size.sm }}>
-              {markingRead ? '…' : 'Mark all read'}
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={{ width: 80 }} />
-        )}
-      </View>
+  const markAllAction = unreadCount > 0 ? (
+    <Pressable onPress={markAllRead} disabled={markingRead} hitSlop={8}>
+      <Text style={[styles.actionLabel, { color: t.accent }]}>
+        {markingRead ? '…' : 'Mark all read'}
+      </Text>
+    </Pressable>
+  ) : undefined;
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={t.accent} />
-        </View>
-      ) : notifications.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={{ color: t.textMuted, fontSize: font.size.md }}>No notifications</Text>
-        </View>
-      ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-          {notifications.map((n) => (
-            <View
-              key={n.id}
-              testID={n.read ? `notif-read-${n.id}` : `notif-unread-${n.id}`}
-              style={[
-                styles.row,
-                {
-                  backgroundColor: n.read ? t.surface : t.accentMuted,
-                  borderBottomColor: t.border,
-                },
-              ]}
-            >
-              <View style={{ flex: 1 }}>
-                <Text
-                  style={[
-                    styles.message,
-                    {
-                      color: t.text,
-                      fontWeight: n.read ? font.weight.regular : font.weight.semibold,
-                    },
-                  ]}
-                >
-                  {n.message}
-                </Text>
-                <Text style={[styles.meta, { color: t.textMuted }]}>
-                  {n.from_username ? `@${n.from_username} · ` : ''}{formatDate(n.created_at)}
-                </Text>
+  return (
+    <Screen padded={false}>
+      <ScreenHeader variant="detail" title="Notifications" onBack={goBack} actions={markAllAction} />
+
+      <ScreenState
+        loading={loading}
+        empty={!loading && notifications.length === 0}
+        emptyIcon="bell"
+        emptyTitle="You're all caught up"
+        emptyBody="Mentions, invites, and assignments show up here."
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+        >
+          <SectionCard style={styles.card}>
+            {notifications.map((n, i) => (
+              <View
+                key={n.id}
+                testID={n.read ? `notif-read-${n.id}` : `notif-unread-${n.id}`}
+                style={[
+                  styles.row,
+                  i < notifications.length - 1 && {
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: t.border,
+                  },
+                ]}
+              >
+                {/* leading: coral dot for unread, placeholder for read */}
+                <View style={styles.dotWrap}>
+                  {!n.read && <View style={[styles.dot, { backgroundColor: t.accent }]} />}
+                </View>
+
+                <View style={{ flex: 1 }}>
+                  <Text
+                    style={[
+                      styles.message,
+                      { color: t.text },
+                      !n.read && styles.unread,
+                    ]}
+                  >
+                    {n.message}
+                  </Text>
+                  <Text style={[styles.meta, { color: t.textMuted }]}>
+                    {n.from_username ? `@${n.from_username} · ` : ''}{formatDate(n.created_at)}
+                  </Text>
+                </View>
               </View>
-              {!n.read && (
-                <View style={[styles.dot, { backgroundColor: t.accent }]} />
-              )}
-            </View>
-          ))}
+            ))}
+          </SectionCard>
         </ScrollView>
-      )}
+      </ScreenState>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    marginBottom: spacing.sm,
-  },
-  title: { fontSize: font.size.lg, fontWeight: font.weight.bold },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll: { padding: spacing.lg, paddingBottom: spacing.xxl * 2 },
+  card: { marginBottom: spacing.lg },
+  actionLabel: { fontSize: font.size.sm, fontWeight: font.weight.medium },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 56,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.md,
   },
-  message: { fontSize: font.size.md, lineHeight: 20 },
-  meta: { fontSize: font.size.xs, marginTop: 4 },
-  dot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
+  dotWrap: { width: 8, alignItems: 'center' },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  message: { fontSize: font.size.md, fontWeight: font.weight.medium, lineHeight: 20 },
+  unread: { fontWeight: font.weight.semibold },
+  meta: { fontSize: font.size.sm, marginTop: 2 },
 });
