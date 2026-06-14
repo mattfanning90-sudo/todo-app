@@ -180,13 +180,9 @@ export function BoardListScreen({
       </View>
 
       <ScreenState
-        loading={loading}
+        loading={loading && boards.length === 0 && !hasShared}
         error={error}
         onRetry={() => { setLoading(true); load(); }}
-        empty={isEmpty}
-        emptyIcon="board"
-        emptyTitle="No boards yet"
-        emptyBody="Create your first board below."
       >
         <ScrollView
           showsVerticalScrollIndicator={false}
