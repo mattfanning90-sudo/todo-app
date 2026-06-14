@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -10,7 +11,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { File, Paths } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
@@ -45,6 +48,82 @@ const CATEGORY_COLORS = [
   '#4285F4', '#34A853', '#EA4335', '#FBBC05',
   '#8B5CF6', '#F59E0B', '#10B981', '#EC4899',
 ];
+
+// ── Calendar export helpers (mirrors web's buildICS / toGCalDate) ────────────
+
+function addDaysYmd(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + n);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+}
+
+function icsEscape(s: string): string {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+function icsStamp(v: string): string {
+  return v.includes('T') ? v.replace(/[-:]/g, '') + '00' : v.replace(/-/g, '');
+}
+
+function buildICS(opts: {
+  id: number;
+  title: string;
+  notes: string;
+  calStart: string;
+  calEnd: string;
+}): string {
+  const { id, title, notes, calStart, calEnd } = opts;
+  const allDay = !calStart.includes('T');
+  const startTime = allDay ? '' : calStart.split('T')[1];
+  const dtStart = allDay
+    ? `DTSTART;VALUE=DATE:${icsStamp(calStart)}`
+    : `DTSTART:${icsStamp(calStart)}`;
+  let dtEnd: string;
+  if (allDay) {
+    const endDate = addDaysYmd(calEnd ? calEnd.split('T')[0] : calStart, 1);
+    dtEnd = `DTEND;VALUE=DATE:${endDate.replace(/-/g, '')}`;
+  } else {
+    let endVal: string;
+    if (calEnd) {
+      const [ed, et] = calEnd.split('T');
+      endVal = `${ed}T${et || startTime}`;
+    } else {
+      const d = new Date(calStart);
+      d.setMinutes(d.getMinutes() + 60);
+      endVal = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+    dtEnd = `DTEND:${icsStamp(endVal)}`;
+  }
+  const now = new Date();
+  const dtstamp = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}T${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}${String(now.getUTCSeconds()).padStart(2, '0')}Z`;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Taskly//EN',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:taskly-${id}-${now.getTime()}@taskly`,
+    `DTSTAMP:${dtstamp}`,
+    dtStart,
+    dtEnd,
+    `SUMMARY:${icsEscape(title)}`,
+  ];
+  if (notes) lines.push(`DESCRIPTION:${icsEscape(notes)}`);
+  lines.push('END:VEVENT', 'END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}
+
+function toGCalDate(calVal: string, addMinutes = 0): string {
+  if (!calVal) return '';
+  if (!calVal.includes('T')) return calVal.replace(/-/g, ''); // all-day -> YYYYMMDD
+  const d = new Date(calVal);
+  d.setMinutes(d.getMinutes() + addMinutes);
+  return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'; // timed -> UTC basic
+}
 
 interface Props {
   board?: Board;
@@ -186,6 +265,51 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
       Alert.alert('Could not save task', String(err));
     } finally {
       setSaving(false);
+    }
+  };
+
+  // ── Calendar export ──────────────────────────────────────────────────────────
+
+  const openGoogleCalendar = () => {
+    if (!calStart) return;
+    let url = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+    url += '&text=' + encodeURIComponent(text.trim());
+    if (status) url += '&details=' + encodeURIComponent(status);
+    const allDay = !calStart.includes('T');
+    let endG: string;
+    if (allDay) {
+      const endDate = addDaysYmd(calEnd ? calEnd.split('T')[0] : calStart, 1);
+      endG = endDate.replace(/-/g, '');
+    } else if (calEnd) {
+      const [ed, et] = calEnd.split('T');
+      endG = toGCalDate(`${ed}T${et || calStart.split('T')[1]}`);
+    } else {
+      endG = toGCalDate(calStart, 60);
+    }
+    url += '&dates=' + toGCalDate(calStart) + '/' + endG;
+    Linking.openURL(url).catch(() => Alert.alert('Could not open Google Calendar'));
+  };
+
+  const exportICS = async () => {
+    if (!calStart || !task) return;
+    try {
+      const ics = buildICS({
+        id: task.id,
+        title: text.trim(),
+        notes: status,
+        calStart,
+        calEnd,
+      });
+      const slug = (text.trim() || 'event')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .slice(0, 40);
+      const file = new File(Paths.cache, `${slug}-${task.id}.ics`);
+      file.create({ overwrite: true });
+      file.write(ics);
+      await Sharing.shareAsync(file.uri, { mimeType: 'text/calendar', UTI: 'public.calendar' });
+    } catch (err) {
+      Alert.alert('Could not export .ics', String(err));
     }
   };
 
@@ -535,6 +659,24 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
                 onChange={setCalEnd}
                 placeholder="No end date"
               />
+              {calStart ? (
+                <View style={styles.calExportRow}>
+                  <Pressable
+                    onPress={openGoogleCalendar}
+                    style={[styles.calExportBtn, { backgroundColor: t.accentMuted, borderColor: t.accent }]}
+                  >
+                    <Text style={[styles.calExportBtnText, { color: t.accent }]}>Add to Google Calendar</Text>
+                  </Pressable>
+                  {editing && task && (
+                    <Pressable
+                      onPress={exportICS}
+                      style={[styles.calExportBtn, { backgroundColor: t.chipMuted, borderColor: t.border }]}
+                    >
+                      <Text style={[styles.calExportBtnText, { color: t.text }]}>Export .ics</Text>
+                    </Pressable>
+                  )}
+                </View>
+              ) : null}
             </View>
           </SectionCard>
 
@@ -863,5 +1005,21 @@ const styles = StyleSheet.create({
   destructiveFooter: {
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  calExportRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  calExportBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  calExportBtnText: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
   },
 });
