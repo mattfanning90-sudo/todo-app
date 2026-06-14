@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
-  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -9,6 +7,9 @@ import {
   View,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { Card } from '@/components/Card';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { DashboardData, Priority } from '@/api/types';
@@ -22,15 +23,19 @@ const PRIORITY_ORDER: Priority[] = ['high', 'medium', 'low', 'none'];
 export function DashboardScreen({ onBack }: Props) {
   const t = useTheme();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const d = await api.dashboard();
       setData(d);
     } catch (err) {
-      Alert.alert('Could not load dashboard', String(err));
+      setError(String(err));
     } finally {
+      setLoading(false);
       setRefreshing(false);
     }
   }, []);
@@ -41,95 +46,155 @@ export function DashboardScreen({ onBack }: Props) {
 
   const maxTrend = Math.max(1, ...(data?.trend.map((d) => d.completed) ?? [0]));
 
+  // Compute max values for progress bar charts
+  const maxPriority = Math.max(
+    1,
+    ...PRIORITY_ORDER.map((p) => data?.byPriority[p] ?? 0),
+  );
+  const maxCategory = Math.max(
+    1,
+    ...(data?.byCategory ?? []).map((c) => c.count),
+  );
+
+  const totalTasks =
+    (data?.counts.open ?? 0) +
+    (data?.counts.inProgress ?? 0) +
+    (data?.counts.overdue ?? 0);
+  const isEmpty = !loading && !error && data != null && totalTasks === 0 &&
+    (data.trend ?? []).every((d) => d.completed === 0);
+
   return (
     <Screen padded={false}>
-      <View style={[styles.topBar, { paddingHorizontal: spacing.lg }]}>
-        <Pressable onPress={onBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontWeight: font.weight.semibold }}>
-            ‹ Boards
-          </Text>
-        </Pressable>
-        <Text style={[styles.title, { color: t.text }]}>Dashboard</Text>
-        <View style={{ width: 60 }} />
-      </View>
+      <ScreenHeader variant="detail" title="Dashboard" onBack={onBack} />
 
-      <ScrollView
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingBottom: spacing.xxl,
-        }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={t.textMuted}
-          />
-        }
+      <ScreenState
+        loading={loading && !refreshing}
+        error={error ?? undefined}
+        onRetry={() => { setLoading(true); load(); }}
+        empty={isEmpty}
+        emptyIcon="board"
+        emptyTitle="No activity yet."
+        emptyBody="Complete a few tasks and your trends will show up here."
       >
-        <View style={styles.statsRow}>
-          <Stat label="Open" value={data?.counts.open ?? 0} color={t.stage.backlog} />
-          <Stat
-            label="In progress"
-            value={data?.counts.inProgress ?? 0}
-            color={t.stage.in_progress}
-          />
-          <Stat
-            label="Overdue"
-            value={data?.counts.overdue ?? 0}
-            color={t.danger}
-          />
-        </View>
-
-        <Card title="Last 7 days">
-          <View style={styles.trendRow}>
-            {(data?.trend ?? []).map((d) => (
-              <View key={d.date} style={styles.trendCol}>
-                <View
-                  style={[
-                    styles.trendBar,
-                    {
-                      height: Math.max(4, (d.completed / maxTrend) * 80),
-                      backgroundColor: t.accent,
-                    },
-                  ]}
-                />
-                <Text style={[styles.trendLabel, { color: t.textMuted }]}>
-                  {d.date.slice(5)}
-                </Text>
-              </View>
-            ))}
-          </View>
-        </Card>
-
-        <Card title="By priority">
-          {PRIORITY_ORDER.map((p) => (
-            <Row
-              key={p}
-              label={p}
-              value={data?.byPriority[p] ?? 0}
-              color={t.priority[p]}
+        <ScrollView
+          contentContainerStyle={[
+            styles.scroll,
+            { backgroundColor: t.bg },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+              tintColor={t.textMuted}
             />
-          ))}
-        </Card>
+          }
+        >
+          {/* Stat cards row */}
+          <View style={styles.statsRow}>
+            <StatCard
+              label="Open"
+              value={data?.counts.open ?? 0}
+              color={t.stage.backlog}
+            />
+            <StatCard
+              label="In Progress"
+              value={data?.counts.inProgress ?? 0}
+              color={t.accent}
+            />
+            <StatCard
+              label="Overdue"
+              value={data?.counts.overdue ?? 0}
+              color={t.danger}
+            />
+          </View>
 
-        <Card title="By category">
-          {(data?.byCategory ?? []).length === 0 ? (
-            <Text style={{ color: t.textMuted }}>No categorised tasks yet.</Text>
-          ) : (
-            data!.byCategory.map((c) => (
-              <Row key={c.name} label={c.name} value={c.count} color={c.color} />
-            ))
-          )}
-        </Card>
-      </ScrollView>
+          {/* 7-day trend bars */}
+          <Card padded style={styles.section}>
+            <Text style={[styles.sectionEyebrow, { color: t.textMuted }]}>
+              Last 7 days
+            </Text>
+            <View style={styles.trendRow}>
+              {(data?.trend ?? []).map((d) => {
+                const barH = Math.max(4, (d.completed / maxTrend) * 72);
+                return (
+                  <View key={d.date} style={styles.trendCol}>
+                    {/* count label above bar */}
+                    <Text style={[styles.trendCount, { color: d.completed > 0 ? t.text : t.textLight }]}>
+                      {d.completed > 0 ? d.completed : ''}
+                    </Text>
+                    <View style={[styles.trendTrack, { backgroundColor: t.accentMuted }]}>
+                      <View
+                        style={[
+                          styles.trendFill,
+                          {
+                            height: barH,
+                            backgroundColor: t.accent,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text style={[styles.trendLabel, { color: t.textMuted }]}>
+                      {d.date.slice(5)}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </Card>
+
+          {/* By priority — horizontal bar chart */}
+          <Card padded style={styles.section}>
+            <Text style={[styles.sectionEyebrow, { color: t.textMuted }]}>
+              By priority
+            </Text>
+            {PRIORITY_ORDER.map((p) => {
+              const count = data?.byPriority[p] ?? 0;
+              const pct = count / maxPriority;
+              return (
+                <BarRow
+                  key={p}
+                  label={p}
+                  value={count}
+                  pct={pct}
+                  dotColor={t.priority[p]}
+                />
+              );
+            })}
+          </Card>
+
+          {/* By category — horizontal bar chart */}
+          <Card padded style={styles.section}>
+            <Text style={[styles.sectionEyebrow, { color: t.textMuted }]}>
+              By category
+            </Text>
+            {(data?.byCategory ?? []).length === 0 ? (
+              <Text style={[styles.emptyHint, { color: t.textMuted }]}>
+                No categorised tasks yet.
+              </Text>
+            ) : (
+              data!.byCategory.map((c) => (
+                <BarRow
+                  key={c.name}
+                  label={c.name}
+                  value={c.count}
+                  pct={c.count / maxCategory}
+                  dotColor={c.color}
+                />
+              ))
+            )}
+          </Card>
+        </ScrollView>
+      </ScreenState>
     </Screen>
   );
 }
 
-function Stat({
+// ─── Stat card ───────────────────────────────────────────────────────────────
+
+function StatCard({
   label,
   value,
   color,
@@ -140,102 +205,163 @@ function Stat({
 }) {
   const t = useTheme();
   return (
-    <View
-      style={[
-        styles.stat,
-        { backgroundColor: t.surface, borderColor: t.border },
-      ]}
-    >
+    <Card padded style={styles.statCard}>
       <Text style={[styles.statValue, { color }]}>{value}</Text>
       <Text style={[styles.statLabel, { color: t.textMuted }]}>{label}</Text>
-    </View>
+    </Card>
   );
 }
 
-function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  const t = useTheme();
-  return (
-    <View
-      style={[
-        styles.card,
-        { backgroundColor: t.surface, borderColor: t.border },
-      ]}
-    >
-      <Text style={[styles.cardTitle, { color: t.textMuted }]}>{title}</Text>
-      {children}
-    </View>
-  );
-}
+// ─── Horizontal progress bar row ─────────────────────────────────────────────
 
-function Row({
+function BarRow({
   label,
   value,
-  color,
+  pct,
+  dotColor,
 }: {
   label: string;
   value: number;
-  color: string;
+  pct: number;
+  dotColor: string;
 }) {
   const t = useTheme();
   return (
-    <View style={styles.row}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text style={[styles.rowLabel, { color: t.text }]}>{label}</Text>
-      <Text style={[styles.rowValue, { color: t.textMuted }]}>{value}</Text>
+    <View style={styles.barRow}>
+      <View style={styles.barMeta}>
+        <View style={[styles.dot, { backgroundColor: dotColor }]} />
+        <Text
+          style={[styles.barLabel, { color: t.text }]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <Text style={[styles.barValue, { color: t.textMuted }]}>{value}</Text>
+      </View>
+      {/* track + fill */}
+      <View style={[styles.track, { backgroundColor: t.accentMuted }]}>
+        <View
+          style={[
+            styles.fill,
+            {
+              width: `${Math.round(pct * 100)}%`,
+              backgroundColor: t.accent,
+            },
+          ]}
+        />
+      </View>
     </View>
   );
 }
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  topBar: {
+  scroll: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.md,
+  },
+  statsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  title: { fontSize: font.size.lg, fontWeight: font.weight.bold },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md },
-  stat: {
+  statCard: {
     flex: 1,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
   },
-  statValue: { fontSize: font.size.xxl, fontWeight: font.weight.bold },
-  statLabel: { fontSize: font.size.xs, marginTop: spacing.xs },
-  card: {
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    marginBottom: spacing.md,
+  statValue: {
+    fontSize: font.size.xxl,
+    fontWeight: font.weight.bold,
+    marginBottom: spacing.xs,
   },
-  cardTitle: {
+  statLabel: {
     fontSize: font.size.xs,
+    fontWeight: font.weight.medium,
+  },
+  section: {
+    marginBottom: spacing.xs,
+  },
+  sectionEyebrow: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
     marginBottom: spacing.md,
   },
+
+  // Trend (vertical bars)
   trendRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
-    height: 100,
+    gap: 4,
   },
-  trendCol: { alignItems: 'center', flex: 1 },
-  trendBar: { width: 18, borderRadius: 4 },
-  trendLabel: { fontSize: font.size.xs, marginTop: spacing.xs },
-  row: {
+  trendCol: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+  },
+  trendCount: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+    minHeight: 14,
+  },
+  trendTrack: {
+    width: '80%',
+    height: 80,
+    borderRadius: radius.sm,
+    justifyContent: 'flex-end',
+    overflow: 'hidden',
+  },
+  trendFill: {
+    borderRadius: radius.sm,
+    minHeight: 4,
+  },
+  trendLabel: {
+    fontSize: font.size.xs,
+    marginTop: 2,
+  },
+
+  // Horizontal bar rows
+  barRow: {
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  barMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.xs,
+    gap: spacing.sm,
   },
-  dot: { width: 10, height: 10, borderRadius: 5, marginRight: spacing.sm },
-  rowLabel: { flex: 1, fontSize: font.size.md, textTransform: 'capitalize' },
-  rowValue: { fontSize: font.size.md, fontWeight: font.weight.semibold },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  barLabel: {
+    flex: 1,
+    fontSize: font.size.sm,
+    fontWeight: font.weight.medium,
+    textTransform: 'capitalize',
+  },
+  barValue: {
+    fontSize: font.size.sm,
+    fontWeight: font.weight.semibold,
+  },
+  track: {
+    height: 6,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
+  },
+  fill: {
+    height: 6,
+    borderRadius: radius.pill,
+    minWidth: 4,
+  },
+
+  emptyHint: {
+    fontSize: font.size.md,
+    fontStyle: 'italic',
+  },
 });
