@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Switch, View } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useNavigation } from '@react-navigation/native';
 import * as Notifications from 'expo-notifications';
@@ -165,15 +165,17 @@ export function SettingsScreen({ onBack }: Props) {
         <SectionCard eyebrow="Email digest" style={{ marginBottom: spacing.lg }}>
           {OPTIONS.map((opt, idx) => {
             const active = current === opt.value;
+            const isSaving = saving === opt.value;
             return (
               <ListRow
                 key={opt.value}
                 title={opt.label}
                 subtitle={opt.sub}
-                accessory="check"
+                accessory={isSaving ? 'none' : 'check'}
                 selected={active}
+                trailing={isSaving ? <ActivityIndicator size="small" /> : undefined}
                 divider={idx < OPTIONS.length - 1}
-                onPress={() => select(opt.value)}
+                onPress={saving ? undefined : () => select(opt.value)}
               />
             );
           })}
