@@ -1,10 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
+import { Card } from '@/components/Card';
+import { BrandMark } from '@/components/BrandMark';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme, font, spacing } from '@/theme';
 import { ApiError } from '@/api/client';
@@ -96,22 +105,39 @@ export function LoginScreen() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+
+  // Classify errors: field-level for credential failures, banner for network/Google
+  const handleAuthError = (err: unknown) => {
+    if (err instanceof ApiError) {
+      if (err.status === 401) {
+        setFieldError('Wrong email or password');
+      } else {
+        setBannerError(err.message || 'Something went wrong');
+      }
+    } else {
+      setBannerError('Network error');
+    }
+  };
+
+  const handleGoogleError = (msg: string) => {
+    setBannerError(msg);
+  };
+
+  const clearErrors = () => {
+    setFieldError(null);
+    setBannerError(null);
+  };
 
   const submit = async () => {
-    setError(null);
+    clearErrors();
     setLoading(true);
     try {
       if (mode === 'login') await login(email.trim(), password);
       else await signup(email.trim(), password, name.trim() || undefined);
     } catch (err) {
-      const msg =
-        err instanceof ApiError
-          ? err.status === 401
-            ? 'Wrong email or password'
-            : err.message || 'Something went wrong'
-          : 'Network error';
-      setError(msg);
+      handleAuthError(err);
     } finally {
       setLoading(false);
     }
@@ -123,15 +149,28 @@ export function LoginScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.flex}
       >
-        <View style={styles.flex}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Brand header */}
           <View style={styles.header}>
-            <Text style={[styles.title, { color: t.text }]}>Todo</Text>
+            <BrandMark size={56} />
             <Text style={[styles.subtitle, { color: t.textMuted }]}>
               {mode === 'login' ? 'Welcome back' : 'Create your account'}
             </Text>
           </View>
 
-          <View style={styles.form}>
+          {/* Network / Google error banner */}
+          {bannerError ? (
+            <View style={[styles.banner, { backgroundColor: t.danger + '18', borderColor: t.danger + '40' }]}>
+              <Text style={[styles.bannerText, { color: t.danger }]}>{bannerError}</Text>
+            </View>
+          ) : null}
+
+          {/* Form card */}
+          <Card padded>
             {mode === 'signup' && (
               <TextField
                 label="Name"
@@ -159,7 +198,7 @@ export function LoginScreen() {
               secureTextEntry
               textContentType={mode === 'login' ? 'password' : 'newPassword'}
               placeholder="••••••••"
-              error={error ?? undefined}
+              error={fieldError ?? undefined}
             />
 
             <Button
@@ -176,25 +215,26 @@ export function LoginScreen() {
                   <Text style={[styles.dividerText, { color: t.textMuted }]}>or</Text>
                   <View style={[styles.dividerLine, { backgroundColor: t.border }]} />
                 </View>
-                <GoogleLoginButton onError={(msg) => setError(msg)} />
+                <GoogleLoginButton onError={handleGoogleError} />
               </>
             )}
+          </Card>
 
-            <Button
-              label={
-                mode === 'login'
-                  ? "Don't have an account? Sign up"
-                  : 'Already have an account? Sign in'
-              }
-              variant="ghost"
-              onPress={() => {
-                setMode(mode === 'login' ? 'signup' : 'login');
-                setError(null);
-              }}
-              style={styles.toggle}
-            />
-          </View>
-        </View>
+          {/* Mode toggle */}
+          <Button
+            label={
+              mode === 'login'
+                ? "Don't have an account? Sign up"
+                : 'Already have an account? Sign in'
+            }
+            variant="ghost"
+            onPress={() => {
+              setMode(mode === 'login' ? 'signup' : 'login');
+              clearErrors();
+            }}
+            style={styles.toggle}
+          />
+        </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
   );
@@ -202,15 +242,32 @@ export function LoginScreen() {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
   header: {
     marginTop: spacing.xxl * 2,
-    marginBottom: spacing.xxl,
-    alignItems: 'flex-start',
+    marginBottom: spacing.xl,
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  title: { fontSize: font.size.xxl, fontWeight: font.weight.bold },
-  subtitle: { fontSize: font.size.md, marginTop: spacing.xs },
-  form: { flex: 1 },
-  toggle: { marginTop: spacing.md },
+  subtitle: {
+    fontSize: font.size.md,
+    marginTop: spacing.xs,
+  },
+  banner: {
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  bannerText: {
+    fontSize: font.size.sm,
+    fontWeight: '500',
+  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -223,4 +280,5 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
+  toggle: { marginTop: spacing.md },
 });
