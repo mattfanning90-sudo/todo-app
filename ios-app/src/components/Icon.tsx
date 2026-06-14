@@ -28,7 +28,15 @@ export function Icon({ name, label, size = 22, color, onPress, style }: Props) {
   const Glyph = MAP[name];
   const glyph = <Glyph size={size} color={color ?? t.textMuted} strokeWidth={2} />;
   if (!onPress) {
-    return <View accessibilityLabel={label} accessibilityElementsHidden style={style}>{glyph}</View>;
+    return (
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={style}
+      >
+        {glyph}
+      </View>
+    );
   }
   return (
     <Pressable
