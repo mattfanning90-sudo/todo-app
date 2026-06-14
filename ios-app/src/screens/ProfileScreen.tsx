@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme, spacing, font, radius } from '@/theme';
+import { Icon } from '@/components/Icon';
 import type { DashboardData, User } from '@/api/types';
 import type { Nav } from '@/navigation/types';
 
@@ -36,8 +37,7 @@ export function ProfileScreen({ navigation }: Props) {
     headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       marginBottom: spacing.xl },
     h1: { fontSize: font.size.xxl, fontWeight: font.weight.bold, color: t.text },
-    headerIcons: { flexDirection: 'row', gap: spacing.lg },
-    headerIcon: { fontSize: 22, color: t.textMuted },
+    headerIcons: { flexDirection: 'row', alignItems: 'center' },
     profileCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg,
       backgroundColor: t.surface, borderRadius: radius.lg, padding: spacing.xl, marginBottom: spacing.xl,
       shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
@@ -58,7 +58,6 @@ export function ProfileScreen({ navigation }: Props) {
     setRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       padding: spacing.lg, borderTopWidth: 1, borderTopColor: t.border },
     setLabel: { fontSize: 15, color: t.text },
-    chevron: { fontSize: 20 },
   });
 
   function StatBox({ value, label }: { value: number | undefined; label: string }) {
@@ -74,7 +73,7 @@ export function ProfileScreen({ navigation }: Props) {
     return (
       <Pressable style={s.setRow} onPress={onPress}>
         <Text style={[s.setLabel, danger && { color: '#DC2626' }]}>{label}</Text>
-        <Text style={[s.chevron, { color: t.textMuted }]}>›</Text>
+        <Icon name="chevron" label="" size={18} />
       </Pressable>
     );
   }
@@ -94,12 +93,8 @@ export function ProfileScreen({ navigation }: Props) {
         <View style={s.headerRow}>
           <Text style={s.h1}>Profile</Text>
           <View style={s.headerIcons}>
-            <Pressable onPress={() => navigation.navigate('Search')} hitSlop={10}>
-              <Text style={s.headerIcon}>⌕</Text>
-            </Pressable>
-            <Pressable onPress={() => navigation.navigate('Notifications')} hitSlop={10}>
-              <Text style={s.headerIcon}>🔔</Text>
-            </Pressable>
+            <Icon name="search" label="Search" onPress={() => navigation.navigate('Search')} />
+            <Icon name="bell" label="Notifications" onPress={() => navigation.navigate('Notifications')} />
           </View>
         </View>
 
