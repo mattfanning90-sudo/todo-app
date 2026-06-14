@@ -120,7 +120,7 @@ export function TodayScreen({ navigation }: Props) {
       const boards = await api.boards();
       const boardId = boards[0]?.id;
       if (!boardId) { Alert.alert('No board found'); return; }
-      await api.createTask({ text, board_id: boardId, stage: 'backlog', due_date: todayStr });
+      await api.createTask({ text, board_id: boardId, stage: 'backlog', default_due: 'today' });
       setQuickAddOpen(false);
       setQuickAddText('');
       load();

@@ -218,7 +218,7 @@ export const api = {
     request<Task[]>(`/api/tasks?board=${boardId}`),
   archivedTasks: (boardId: number) =>
     request<Task[]>(`/api/tasks?board=${boardId}&archived=true`),
-  createTask: (body: Partial<Task> & { board_id: number; text: string }) =>
+  createTask: (body: Partial<Task> & { board_id: number; text: string; default_due?: string }) =>
     request<Task>(`/api/tasks?board=${body.board_id}`, { method: 'POST', body }),
   updateTask: (id: number, body: Partial<Task> & { board_id: number }) =>
     request<Task>(`/api/tasks/${id}?board=${body.board_id}`, {
