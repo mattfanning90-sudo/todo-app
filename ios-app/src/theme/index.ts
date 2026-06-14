@@ -1,4 +1,4 @@
-import { useColorScheme } from 'react-native';
+import { useThemeContext } from '@/theme/ThemeProvider';
 
 export type ThemeName = 'light' | 'dark';
 
@@ -74,10 +74,8 @@ export const darkTheme: Theme = {
   priority: { high: '#FF6B47', medium: '#F59E0B', low: '#9CA3AF', none: '#9CA3AF' },
 };
 
-// NOTE: useTheme is re-pointed at the ThemeProvider context in Task 2.
-// Temporary OS-only resolution so this task compiles in isolation:
 export function useTheme(): Theme {
-  return useColorScheme() === 'dark' ? darkTheme : lightTheme;
+  return useThemeContext().theme;
 }
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };

@@ -7,7 +7,6 @@ import {
   createNativeStackNavigator,
 } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useColorScheme } from 'react-native';
 import { useAuth } from '@/auth/AuthContext';
 import { useTheme } from '@/theme';
 
@@ -97,7 +96,6 @@ function ProfileNav() {
 // ── Root navigator ───────────────────────────────────────────────────────────
 export function RootNavigator() {
   const { user, loading } = useAuth();
-  const scheme = useColorScheme();
   const t = useTheme();
 
   if (loading) {
@@ -108,7 +106,7 @@ export function RootNavigator() {
     );
   }
 
-  const navTheme = scheme === 'light' ? DefaultTheme : DarkTheme;
+  const navTheme = t.name === 'light' ? DefaultTheme : DarkTheme;
 
   return (
     <NavigationContainer
