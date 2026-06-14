@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import {
   Alert,
   FlatList,
-  Pressable,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,7 +12,11 @@ import type { RouteProp } from '@react-navigation/native';
 import type { Nav, BoardStackParams } from '@/navigation/types';
 import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
-import { useTheme, radius, spacing, font } from '@/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { Card } from '@/components/Card';
+import { Button } from '@/components/Button';
+import { useTheme, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import type { Board, Task } from '@/api/types';
 
@@ -29,6 +32,10 @@ function formatDate(dateStr: string | null): string {
     day: 'numeric',
     year: 'numeric',
   });
+}
+
+function stageLabel(stage: string): string {
+  return stage === 'in_progress' ? 'In Progress' : stage.charAt(0).toUpperCase() + stage.slice(1);
 }
 
 export function ArchivedScreen({ board: boardProp, onBack }: Props) {
@@ -96,145 +103,113 @@ export function ArchivedScreen({ board: boardProp, onBack }: Props) {
     ]);
   };
 
-  const stageLabel = (stage: string) =>
-    stage === 'in_progress' ? 'In Progress' : stage.charAt(0).toUpperCase() + stage.slice(1);
+  const stageColor = (stage: string): string => {
+    if (stage === 'in_progress') return t.stage.in_progress;
+    if (stage === 'done') return t.stage.done;
+    return t.stage.backlog;
+  };
 
   return (
     <Screen padded={false}>
-      {/* Header */}
-      <View style={[styles.topBar, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <Pressable onPress={goBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: t.text }]}>Archived</Text>
-        <View style={{ width: 50 }} />
-      </View>
+      <ScreenHeader variant="detail" title="Archived" onBack={goBack} />
 
-      <FlatList
-        data={tasks}
-        keyExtractor={(item) => String(item.id)}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={t.textMuted}
-          />
-        }
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xxl * 2,
-        }}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-        ListEmptyComponent={
-          !loading ? (
-            <View style={styles.emptyWrap}>
-              <Text style={[styles.emptyTitle, { color: t.text }]}>Nothing archived</Text>
-              <Text style={[styles.emptyBody, { color: t.textMuted }]}>
-                Tasks archived from the board or auto-archived after completion will appear here.
-              </Text>
-            </View>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <View style={[styles.card, { backgroundColor: t.surface, borderColor: t.border }]}>
-            <View style={styles.cardMain}>
-              <Text style={[styles.cardText, { color: t.textMuted }]} numberOfLines={2}>
-                {item.text}
-              </Text>
-              <View style={styles.cardMeta}>
-                <View style={[styles.stageBadge, { backgroundColor: t.surfaceElevated }]}>
-                  <Text style={[styles.stageBadgeText, { color: t.textMuted }]}>
-                    {stageLabel(item.stage)}
-                  </Text>
+      <ScreenState loading={loading} empty={!loading && tasks.length === 0} emptyTitle="Nothing archived">
+        <FlatList
+          data={tasks}
+          keyExtractor={(item) => String(item.id)}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+              tintColor={t.textMuted}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+          renderItem={({ item }) => {
+            const color = stageColor(item.stage);
+            const badgeBg = color + '20';
+            return (
+              <Card padded>
+                {/* Title with strikethrough */}
+                <Text style={[styles.taskTitle, { color: t.textMuted }]} numberOfLines={2}>
+                  {item.text}
+                </Text>
+
+                {/* Meta row: stage badge + archived date */}
+                <View style={styles.metaRow}>
+                  <View style={[styles.stageBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.stageBadgeText, { color }]}>
+                      {stageLabel(item.stage)}
+                    </Text>
+                  </View>
+                  {item.archived_at ? (
+                    <Text style={[styles.archivedDate, { color: t.textLight }]}>
+                      Archived {formatDate(item.archived_at)}
+                    </Text>
+                  ) : null}
                 </View>
-                {item.archived_at && (
-                  <Text style={[styles.archivedDate, { color: t.textLight }]}>
-                    Archived {formatDate(item.archived_at)}
-                  </Text>
-                )}
-              </View>
-            </View>
-            <View style={styles.cardActions}>
-              <Pressable
-                onPress={() => restore(item)}
-                style={[styles.actionBtn, { backgroundColor: t.accentMuted, borderColor: t.accent + '44' }]}
-              >
-                <Text style={{ color: t.accent, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>
-                  Restore
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => remove(item)}
-                style={[styles.actionBtn, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}
-              >
-                <Text style={{ color: t.danger, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>
-                  Delete
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
-      />
+
+                {/* Actions */}
+                <View style={styles.actions}>
+                  <Button
+                    label="Restore"
+                    variant="secondary"
+                    onPress={() => restore(item)}
+                    style={{ flex: 1, height: 44, backgroundColor: t.accentMuted, borderColor: t.accent + '44', borderWidth: 1 }}
+                  />
+                  <Button
+                    label="Delete"
+                    variant="destructive"
+                    onPress={() => remove(item)}
+                    style={{ flex: 1, height: 44 }}
+                  />
+                </View>
+              </Card>
+            );
+          }}
+        />
+      </ScreenState>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  topBar: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  listContent: {
     paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xxl * 2,
   },
-  headerTitle: {
-    fontSize: font.size.md,
-    fontWeight: font.weight.bold,
-  },
-  card: {
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  cardMain: { gap: spacing.xs },
-  cardText: {
+  taskTitle: {
     fontSize: font.size.md,
     lineHeight: 20,
     textDecorationLine: 'line-through',
+    marginBottom: spacing.sm,
   },
-  cardMeta: {
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     flexWrap: 'wrap',
+    marginBottom: spacing.md,
   },
   stageBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
-  stageBadgeText: { fontSize: font.size.xs, fontWeight: font.weight.medium },
-  archivedDate: { fontSize: font.size.xs },
-  cardActions: { flexDirection: 'row', gap: spacing.sm },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    alignItems: 'center',
+  stageBadgeText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
   },
-  emptyWrap: {
-    paddingTop: spacing.xxl * 2,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
+  archivedDate: {
+    fontSize: font.size.xs,
+  },
+  actions: {
+    flexDirection: 'row',
     gap: spacing.sm,
   },
-  emptyTitle: { fontSize: font.size.lg, fontWeight: font.weight.semibold },
-  emptyBody: { fontSize: font.size.md, textAlign: 'center', lineHeight: 22 },
 });
