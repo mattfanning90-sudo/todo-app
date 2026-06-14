@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -10,6 +8,11 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { ListRow } from '@/components/ListRow';
+import { TagChip } from '@/components/TagChip';
+import { Icon } from '@/components/Icon';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { api, ApiError } from '@/api/client';
 import type { Board, SearchHit } from '@/api/types';
@@ -22,15 +25,30 @@ interface Props {
 
 const DEBOUNCE_MS = 280;
 
+// Tinted stage badge: low-opacity background + saturated text.
+// NOT white-on-solid-colour — fixes contrast bug in the old implementation.
+const STAGE_TINT: Record<SearchHit['stage'], { bg: string; fg: string }> = {
+  backlog:     { bg: '#94A3B81A', fg: '#64748B' },
+  in_progress: { bg: '#FF6B471A', fg: '#FF6B47' },
+  done:        { bg: '#16A34A1A', fg: '#16A34A' },
+};
+
+function stageLabel(s: SearchHit['stage']): string {
+  return s === 'in_progress' ? 'In progress' : s === 'done' ? 'Done' : 'Backlog';
+}
+
 export function SearchScreen({ onBack, onOpenBoard }: Props) {
   const nav = useNavigation<Nav>();
   const goBack = onBack ?? (() => nav.goBack());
   const openBoard = onOpenBoard ?? ((board: Board) => nav.navigate('Board', { board }));
   const t = useTheme();
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchHit[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const abortRef = useRef<AbortController | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -47,11 +65,13 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
       setResults([]);
       setSearched(false);
       setLoading(false);
+      setError(null);
       return;
     }
     const controller = new AbortController();
     abortRef.current = controller;
     setLoading(true);
+    setError(null);
     try {
       const hits = await api.search(q, controller.signal);
       setResults(hits);
@@ -60,6 +80,7 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
       if (err instanceof ApiError) {
         setResults([]);
         setSearched(true);
+        setError('Search failed. Try again.');
       }
       // AbortError on supersession — ignore silently.
     } finally {
@@ -73,9 +94,12 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
     timerRef.current = setTimeout(() => runSearch(text.trim()), DEBOUNCE_MS);
   };
 
+  const retry = () => {
+    const q = query.trim();
+    if (q.length >= 2) runSearch(q);
+  };
+
   const openHit = (hit: SearchHit) => {
-    // Reconstruct enough of a Board for BoardScreen to fetch its data.
-    // We don't have slug on the search hit; BoardScreen never reads it.
     const board: Board = {
       id: hit.board_id,
       owner_user_id: hit.board_owner_id,
@@ -85,17 +109,16 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
     openBoard(board);
   };
 
+  const isIdle = query.trim().length < 2;
+  const isEmpty = searched && !loading && !error && results.length === 0;
+
   return (
     <Screen>
-      <View style={styles.topBar}>
-        <Pressable onPress={goBack} hitSlop={10}>
-          <Text style={{ color: t.accent, fontSize: font.size.md }}>‹ Back</Text>
-        </Pressable>
-        <Text style={[styles.title, { color: t.text }]}>Search</Text>
-        <View style={{ width: 48 }} />
-      </View>
+      <ScreenHeader variant="detail" title="Search" onBack={goBack} />
 
-      <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: t.border }]}>
+      {/* Prominent search field with leading search icon */}
+      <View style={[styles.inputWrap, { backgroundColor: t.surface, borderColor: t.borderInput }]}>
+        <Icon name="search" label="" size={18} color={t.textMuted} />
         <TextInput
           autoFocus
           value={query}
@@ -107,101 +130,93 @@ export function SearchScreen({ onBack, onOpenBoard }: Props) {
           returnKeyType="search"
           style={[styles.input, { color: t.text }]}
         />
-        {loading ? <ActivityIndicator color={t.textMuted} /> : null}
       </View>
 
-      <FlatList
-        data={results}
-        keyExtractor={(hit) => String(hit.id)}
-        contentContainerStyle={{ paddingBottom: spacing.xxl }}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          <Text style={[styles.empty, { color: t.textMuted }]}>
-            {query.trim().length < 2
-              ? 'Type at least 2 characters to search.'
-              : searched && !loading
-              ? 'No tasks match that.'
-              : ' '}
-          </Text>
-        }
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => openHit(item)}
-            style={({ pressed }) => [
-              styles.row,
-              {
-                backgroundColor: t.surface,
-                borderColor: t.border,
-                opacity: pressed ? 0.7 : 1,
-              },
-            ]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.rowText, { color: t.text }]} numberOfLines={2}>
-                {item.text}
-              </Text>
-              <Text style={[styles.rowMeta, { color: t.textMuted }]} numberOfLines={1}>
-                {item.board_name}
-                {item.cat_name ? ` · ${item.cat_name}` : ''}
-                {item.due_date ? ` · ${item.due_date}` : ''}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.stageBadge,
-                { backgroundColor: t.stage[item.stage] },
-              ]}
-            >
-              <Text style={styles.stageBadgeText}>{stageLabel(item.stage)}</Text>
-            </View>
-          </Pressable>
-        )}
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
-      />
+      {/* Idle hint — before 2 chars typed */}
+      {isIdle ? (
+        <ScreenState
+          empty
+          emptyIcon="search"
+          emptyBody="Type at least 2 characters to search."
+        />
+      ) : (
+        /* Loading / error / empty / results */
+        <ScreenState
+          loading={loading}
+          error={error}
+          onRetry={retry}
+          empty={isEmpty}
+          emptyIcon="search"
+          emptyBody={`No tasks match "${query.trim()}".`}
+        >
+          <FlatList
+            data={results}
+            keyExtractor={(hit) => String(hit.id)}
+            contentContainerStyle={{ paddingBottom: spacing.xxl }}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const { bg, fg } = STAGE_TINT[item.stage];
+              const subtitleParts = [item.board_name];
+              if (item.due_date) subtitleParts.push(item.due_date);
+
+              const trailing = (
+                <View style={styles.trailingWrap}>
+                  {item.cat_name && item.cat_color ? (
+                    <TagChip name={item.cat_name} color={item.cat_color} />
+                  ) : null}
+                  <View style={[styles.stageBadge, { backgroundColor: bg }]}>
+                    <Text style={[styles.stageBadgeText, { color: fg }]}>
+                      {stageLabel(item.stage)}
+                    </Text>
+                  </View>
+                </View>
+              );
+
+              return (
+                <ListRow
+                  title={item.text}
+                  subtitle={subtitleParts.join(' · ')}
+                  trailing={trailing}
+                  divider
+                  onPress={() => openHit(item)}
+                />
+              );
+            }}
+          />
+        </ScreenState>
+      )}
     </Screen>
   );
 }
 
-function stageLabel(s: SearchHit['stage']): string {
-  return s === 'in_progress' ? 'In progress' : s === 'done' ? 'Done' : 'Backlog';
-}
-
 const styles = StyleSheet.create({
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-  },
-  title: { fontSize: font.size.lg, fontWeight: font.weight.bold },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     marginBottom: spacing.md,
+    height: 44,
   },
   input: {
     flex: 1,
-    height: 44,
     fontSize: font.size.md,
   },
-  row: {
+  trailingWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
+    gap: spacing.xs,
+    flexShrink: 1,
   },
-  rowText: { fontSize: font.size.md, fontWeight: font.weight.medium },
-  rowMeta: { fontSize: font.size.sm, marginTop: 2 },
   stageBadge: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
-    borderRadius: radius.sm,
+    borderRadius: radius.pill,
   },
-  stageBadgeText: { color: '#fff', fontSize: font.size.xs, fontWeight: font.weight.semibold },
-  empty: { textAlign: 'center', paddingTop: spacing.xxl, fontSize: font.size.md },
+  stageBadgeText: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.semibold,
+  },
 });
