@@ -8,6 +8,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { api } from '@/api/client';
 import type { Board, Task, TodayTask } from '@/api/types';
+import { getNextDueDate } from '@/utils/recurrence';
 import { useTheme, spacing, font, radius } from '@/theme';
 import { ProgressRing } from '@/components/ProgressRing';
 import { TagChip } from '@/components/TagChip';
@@ -81,11 +82,28 @@ export function TodayScreen({ navigation }: Props) {
 
   async function toggleDone(task: TodayTask) {
     const newStage = task.stage === 'done' ? 'backlog' : 'done';
+    const transitioningToDone = newStage === 'done';
     // Optimistic update
     setTasks(prev => prev.map(tk => tk.id === task.id ? { ...tk, stage: newStage } : tk));
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
       await api.updateTask(task.id, { board_id: task.board_id, stage: newStage });
+      if (transitioningToDone && task.recurrence && task.recurrence !== 'none') {
+        const nextDue = getNextDueDate(task.due_date, task.recurrence);
+        if (nextDue) {
+          await api.createTask({
+            board_id: task.board_id,
+            text: task.text,
+            stage: 'backlog',
+            due_date: nextDue,
+            priority: task.priority,
+            recurrence: task.recurrence,
+            category_id: task.category_id,
+          });
+          // Reload to pull the new task into the list if its due date is today.
+          load();
+        }
+      }
     } catch {
       // Revert
       setTasks(prev => prev.map(tk => tk.id === task.id ? { ...tk, stage: task.stage } : tk));

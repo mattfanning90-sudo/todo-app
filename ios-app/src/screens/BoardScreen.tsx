@@ -20,6 +20,7 @@ import { useTheme, radius, spacing, font } from '@/theme';
 import { useAuth } from '@/auth/AuthContext';
 import { api } from '@/api/client';
 import type { Board, Category, Stage, Task } from '@/api/types';
+import { getNextDueDate } from '@/utils/recurrence';
 import type { Nav, BoardStackParams } from '@/navigation/types';
 import type { RouteProp } from '@react-navigation/native';
 
@@ -276,10 +277,26 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
     async (task: Task) => {
       if (!currentBoard) return;
       const newStage: Stage = task.stage === 'done' ? 'backlog' : 'done';
+      const transitioningToDone = newStage === 'done';
       setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
       try {
         await api.updateTask(task.id, { board_id: currentBoard.id, stage: newStage });
+        if (transitioningToDone && task.recurrence && task.recurrence !== 'none') {
+          const nextDue = getNextDueDate(task.due_date, task.recurrence);
+          if (nextDue) {
+            const spawned = await api.createTask({
+              board_id: currentBoard.id,
+              text: task.text,
+              stage: 'backlog',
+              due_date: nextDue,
+              priority: task.priority,
+              recurrence: task.recurrence,
+              category_id: task.category_id,
+            });
+            setTasks((prev) => [...prev, spawned]);
+          }
+        }
       } catch (err) {
         Alert.alert('Could not update task', String(err));
         load();
@@ -291,10 +308,26 @@ export function BoardScreen({ board: boardProp, onBack, onOpenTask, onOpenArchiv
   const moveToStage = useCallback(
     async (task: Task, newStage: Stage) => {
       if (task.stage === newStage || !currentBoard) return;
+      const transitioningToDone = newStage === 'done';
       setTasks((prev) => prev.map((u) => (u.id === task.id ? { ...u, stage: newStage } : u)));
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       try {
         await api.updateTask(task.id, { board_id: currentBoard.id, stage: newStage });
+        if (transitioningToDone && task.recurrence && task.recurrence !== 'none') {
+          const nextDue = getNextDueDate(task.due_date, task.recurrence);
+          if (nextDue) {
+            const spawned = await api.createTask({
+              board_id: currentBoard.id,
+              text: task.text,
+              stage: 'backlog',
+              due_date: nextDue,
+              priority: task.priority,
+              recurrence: task.recurrence,
+              category_id: task.category_id,
+            });
+            setTasks((prev) => [...prev, spawned]);
+          }
+        }
       } catch (err) {
         Alert.alert('Could not move task', String(err));
         load();
