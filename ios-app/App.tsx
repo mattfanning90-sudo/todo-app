@@ -93,8 +93,8 @@ function NotificationDeepLink() {
         const taskId = response.notification.request.content.data?.taskId;
         if (!taskId) return; // not a reminder notification
         if (!navigationRef.isReady()) return;
-        // Navigate to the Today tab. The navigator nests Today inside a tab so
-        // we reset the Today stack to its root first, then switch to it.
+        // Switch to the Today tab. (The stack inside Today is not reset —
+        // the user lands wherever they left it within that tab.)
         navigationRef.navigate('Today' as never);
       } catch {
         // Guard: never let a navigation failure break the app startup.
