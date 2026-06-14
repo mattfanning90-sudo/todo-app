@@ -14,6 +14,12 @@ import * as Haptics from 'expo-haptics';
 import { Screen } from '@/components/Screen';
 import { TextField } from '@/components/TextField';
 import { Button } from '@/components/Button';
+import { SectionCard } from '@/components/SectionCard';
+import { Chip } from '@/components/Chip';
+import { Checkbox } from '@/components/Checkbox';
+import { DateField } from '@/components/DateField';
+import { ListRow } from '@/components/ListRow';
+import { Icon } from '@/components/Icon';
 import { useTheme, radius, spacing, font } from '@/theme';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { api } from '@/api/client';
@@ -259,19 +265,26 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={{ flex: 1 }}
       >
-        <View style={styles.topBar}>
-          <Pressable onPress={() => close(false)} hitSlop={10}>
+        {/* ── Top bar ────────────────────────────────────────────────────────── */}
+        <View style={[styles.topBar, { borderBottomColor: t.border }]}>
+          <Pressable onPress={() => close(false)} hitSlop={10} style={styles.topBarSide}>
             <Text style={{ color: t.accent, fontSize: font.size.md }}>Cancel</Text>
           </Pressable>
-          <Text style={[styles.title, { color: t.text }]}>
+          <Text style={[styles.topBarTitle, { color: t.text }]} numberOfLines={1}>
             {editing ? 'Edit task' : 'New task'}
           </Text>
-          <Pressable onPress={save} disabled={!canSave || saving} hitSlop={10}>
+          <Pressable
+            onPress={save}
+            disabled={!canSave || saving}
+            hitSlop={10}
+            style={styles.topBarSide}
+          >
             <Text
               style={{
                 color: canSave && !saving ? t.accent : t.textMuted,
                 fontSize: font.size.md,
                 fontWeight: font.weight.semibold,
+                textAlign: 'right',
               }}
             >
               {saving ? 'Saving…' : 'Save'}
@@ -279,255 +292,326 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={{ paddingBottom: spacing.xxl }}>
-          {/* Task text */}
-          <TextField
-            label="What needs doing?"
-            value={text}
-            onChangeText={setText}
-            placeholder="e.g. Pay rent tomorrow"
-            multiline
-          />
-
-          {/* Notes / status */}
-          <TextField
-            label="Notes"
-            value={status}
-            onChangeText={setStatus}
-            placeholder="Notes or status details…"
-            multiline
-          />
-
-          <Section label="Stage">
-            <View style={styles.row}>
-              {STAGES.map((s) => (
-                <Chip key={s} label={s} active={stage === s} color={t.stage[s]} onPress={() => setStage(s)} />
-              ))}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── Content ──────────────────────────────────────────────────────── */}
+          <SectionCard eyebrow="Content" style={styles.card}>
+            <View style={styles.cardInner}>
+              <TextField
+                label="What needs doing?"
+                value={text}
+                onChangeText={setText}
+                placeholder="e.g. Pay rent tomorrow"
+                multiline
+              />
+              <TextField
+                label="Notes"
+                value={status}
+                onChangeText={setStatus}
+                placeholder="Notes or status details…"
+                multiline
+              />
             </View>
-          </Section>
+          </SectionCard>
 
-          <Section label="Priority">
-            <View style={styles.row}>
-              {PRIORITIES.map((p) => (
-                <Chip key={p} label={p} active={priority === p} color={t.priority[p]} onPress={() => setPriority(p)} />
-              ))}
-            </View>
-          </Section>
-
-          {/* Recurrence */}
-          <Section label="Recurrence">
-            <View style={styles.row}>
-              {RECURRENCES.map((r) => (
-                <Chip
-                  key={r}
-                  label={r}
-                  active={recurrence === r}
-                  color={t.accent}
-                  onPress={() => setRecurrence(r)}
-                />
-              ))}
-            </View>
-          </Section>
-
-          <Section label="Category">
-            <View style={styles.row}>
-              <Chip label="None" active={categoryId === null} color={t.textMuted} onPress={() => setCategoryId(null)} />
-              {categories.map((c) => (
-                <View key={c.id} style={styles.catChipWrap}>
-                  <Chip label={c.name} active={categoryId === c.id} color={c.color} onPress={() => setCategoryId(c.id)} />
-                  <Pressable
-                    onPress={() => deleteCategory(c)}
-                    hitSlop={6}
-                    testID={`delete-category-${c.id}`}
-                    style={styles.catDeleteBtn}
-                  >
-                    <Text style={{ color: t.danger, fontSize: 11, fontWeight: '700' }}>×</Text>
-                  </Pressable>
-                </View>
-              ))}
-              <Pressable
-                onPress={() => setCreatingCategory((v) => !v)}
-                style={[styles.chip, { backgroundColor: t.surface, borderColor: t.border, borderStyle: 'dashed' }]}
-              >
-                <Text style={{ color: t.accent, fontWeight: font.weight.medium }}>
-                  {creatingCategory ? '× Cancel' : '+ New'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {creatingCategory && (
-              <View style={[styles.newCatForm, { backgroundColor: t.surface, borderColor: t.border }]}>
-                <TextField
-                  label="Name"
-                  value={newCatName}
-                  onChangeText={setNewCatName}
-                  placeholder="e.g. Home"
-                  maxLength={30}
-                  autoCapitalize="words"
-                />
-                <Text style={[styles.sectionLabel, { color: t.textMuted }]}>Color</Text>
-                <View style={styles.palette}>
-                  {CATEGORY_COLORS.map((color) => (
-                    <Pressable
-                      key={color}
-                      onPress={() => setNewCatColor(color)}
-                      style={[styles.swatch, { backgroundColor: color, borderColor: color === newCatColor ? t.text : 'transparent' }]}
-                    />
-                  ))}
-                </View>
-                <Button
-                  label={savingCategory ? 'Adding…' : 'Add category'}
-                  onPress={submitNewCategory}
-                  disabled={!newCatName.trim() || savingCategory}
-                  style={{ marginTop: spacing.md }}
-                />
+          {/* ── Organize ─────────────────────────────────────────────────────── */}
+          <SectionCard eyebrow="Organize" style={styles.card}>
+            <View style={styles.cardInner}>
+              {/* Stage */}
+              <Text style={[styles.rowLabel, { color: t.textMuted }]}>Stage</Text>
+              <View style={styles.chipRow}>
+                {STAGES.map((s) => (
+                  <Chip
+                    key={s}
+                    label={s}
+                    active={stage === s}
+                    color={t.stage[s]}
+                    mode="choice"
+                    onPress={() => setStage(s)}
+                  />
+                ))}
               </View>
-            )}
-          </Section>
 
-          <TextField
-            label="Due date (YYYY-MM-DD)"
-            value={dueDate ? dueDate.slice(0, 10) : ''}
-            onChangeText={setDueDate}
-            placeholder="Optional"
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
+              {/* Priority */}
+              <Text style={[styles.rowLabel, { color: t.textMuted }]}>Priority</Text>
+              <View style={styles.chipRow}>
+                {PRIORITIES.map((p) => (
+                  <Chip
+                    key={p}
+                    label={p}
+                    active={priority === p}
+                    color={t.priority[p]}
+                    mode="choice"
+                    onPress={() => setPriority(p)}
+                  />
+                ))}
+              </View>
 
-          {/* Assigned-to user */}
-          <Section label="Assign to">
+              {/* Category */}
+              <Text style={[styles.rowLabel, { color: t.textMuted }]}>Category</Text>
+              <View style={styles.chipRow}>
+                <Chip
+                  label="None"
+                  active={categoryId === null}
+                  color={t.textMuted}
+                  mode="choice"
+                  onPress={() => setCategoryId(null)}
+                />
+                {categories.map((c) => (
+                  <View key={c.id} style={styles.catChipWrap}>
+                    <Chip
+                      label={c.name}
+                      active={categoryId === c.id}
+                      color={c.color}
+                      mode="choice"
+                      onPress={() => setCategoryId(c.id)}
+                    />
+                    <Pressable
+                      onPress={() => deleteCategory(c)}
+                      hitSlop={6}
+                      testID={`delete-category-${c.id}`}
+                      style={styles.catDeleteBtn}
+                    >
+                      <Icon name="close" label={`Delete ${c.name}`} size={10} color={t.danger} />
+                    </Pressable>
+                  </View>
+                ))}
+                <Pressable
+                  onPress={() => setCreatingCategory((v) => !v)}
+                  style={[
+                    styles.newCatChip,
+                    { backgroundColor: t.chipMuted, borderColor: t.border },
+                  ]}
+                >
+                  <Icon
+                    name={creatingCategory ? 'close' : 'plus'}
+                    label={creatingCategory ? 'Cancel' : 'New category'}
+                    size={13}
+                    color={t.accent}
+                  />
+                  <Text style={{ color: t.accent, fontWeight: font.weight.semibold, fontSize: 13, marginLeft: 4 }}>
+                    {creatingCategory ? 'Cancel' : 'New'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {creatingCategory && (
+                <View style={[styles.newCatForm, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
+                  <TextField
+                    label="Name"
+                    value={newCatName}
+                    onChangeText={setNewCatName}
+                    placeholder="e.g. Home"
+                    maxLength={30}
+                    autoCapitalize="words"
+                  />
+                  <Text style={[styles.rowLabel, { color: t.textMuted }]}>Color</Text>
+                  <View style={styles.palette}>
+                    {CATEGORY_COLORS.map((color) => (
+                      <Pressable
+                        key={color}
+                        onPress={() => setNewCatColor(color)}
+                        style={[
+                          styles.swatch,
+                          {
+                            backgroundColor: color,
+                            borderColor: color === newCatColor ? t.text : 'transparent',
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  <Button
+                    label={savingCategory ? 'Adding…' : 'Add category'}
+                    onPress={submitNewCategory}
+                    disabled={!newCatName.trim() || savingCategory}
+                    style={{ marginTop: spacing.md }}
+                  />
+                </View>
+              )}
+
+              {/* Recurrence */}
+              <Text style={[styles.rowLabel, { color: t.textMuted }]}>Recurrence</Text>
+              <View style={styles.chipRow}>
+                {RECURRENCES.map((r) => (
+                  <Chip
+                    key={r}
+                    label={r}
+                    active={recurrence === r}
+                    color={t.accent}
+                    mode="choice"
+                    onPress={() => setRecurrence(r)}
+                  />
+                ))}
+              </View>
+            </View>
+          </SectionCard>
+
+          {/* ── Schedule ─────────────────────────────────────────────────────── */}
+          <SectionCard eyebrow="Schedule" style={styles.card}>
+            <View style={styles.cardInner}>
+              <DateField
+                label="Due date"
+                value={dueDate ? dueDate.slice(0, 10) : ''}
+                onChange={setDueDate}
+                placeholder="No due date"
+              />
+              <DateField
+                label="Calendar start"
+                value={calStart ? calStart.slice(0, 10) : ''}
+                onChange={setCalStart}
+                placeholder="No start date"
+              />
+              <DateField
+                label="Calendar end"
+                value={calEnd ? calEnd.slice(0, 10) : ''}
+                onChange={setCalEnd}
+                placeholder="No end date"
+              />
+            </View>
+          </SectionCard>
+
+          {/* ── Assign ───────────────────────────────────────────────────────── */}
+          <SectionCard eyebrow="Assign" style={styles.card}>
             {assignedToUserId ? (
-              <View style={styles.row}>
-                <View style={[styles.assignedPill, { backgroundColor: t.surfaceElevated, borderColor: t.border }]}>
-                  <Text style={{ color: t.text, fontSize: font.size.sm }}>{assignedUserLabel}</Text>
+              <View style={styles.assignedWrap}>
+                <View style={[styles.assignedPill, { backgroundColor: t.accentMuted, borderColor: t.accent }]}>
+                  <Text style={{ color: t.accent, fontSize: font.size.sm, fontWeight: font.weight.semibold }}>
+                    {assignedUserLabel}
+                  </Text>
                 </View>
                 <Pressable
                   onPress={() => { setAssignedToUserId(null); setAssignedUserLabel(''); setUserQuery(''); }}
-                  style={{ padding: spacing.sm }}
+                  hitSlop={8}
                 >
-                  <Text style={{ color: t.danger, fontSize: font.size.sm }}>Remove</Text>
+                  <Icon name="close" label="Remove assignee" size={18} color={t.danger} />
                 </Pressable>
               </View>
             ) : (
-              <>
-                <TextInput
-                  value={userQuery}
-                  onChangeText={setUserQuery}
-                  placeholder="Search user by name or email…"
-                  placeholderTextColor={t.textLight}
-                  style={[styles.searchInput, { borderColor: t.border, color: t.text, backgroundColor: t.surface }]}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                {userResults.length > 0 && (
-                  <View style={[styles.userResultsList, { borderColor: t.border, backgroundColor: t.surface }]}>
-                    {userResults.map((u) => (
-                      <Pressable
-                        key={u.id}
-                        onPress={() => {
-                          setAssignedToUserId(u.id);
-                          setAssignedUserLabel(u.username);
-                          setUserQuery('');
-                          setUserResults([]);
-                        }}
-                        style={[styles.userResultRow, { borderBottomColor: t.border }]}
-                      >
-                        <Text style={{ color: t.text, fontWeight: font.weight.medium }}>{u.username}</Text>
-                        {u.name && <Text style={{ color: t.textMuted, fontSize: font.size.sm }}>{u.name}</Text>}
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-              </>
+              <View style={styles.cardInner}>
+                <View style={[styles.searchRow, { borderColor: t.borderInput, backgroundColor: t.surface }]}>
+                  <Icon name="search" label="" size={16} color={t.textLight} />
+                  <TextInput
+                    value={userQuery}
+                    onChangeText={setUserQuery}
+                    placeholder="Search user by name or email…"
+                    placeholderTextColor={t.textLight}
+                    style={[styles.searchInput, { color: t.text }]}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {userQuery.length > 0 && (
+                    <Pressable onPress={() => { setUserQuery(''); setUserResults([]); }} hitSlop={8}>
+                      <Icon name="close" label="Clear search" size={14} color={t.textLight} />
+                    </Pressable>
+                  )}
+                </View>
+              </View>
             )}
-          </Section>
+            {!assignedToUserId && userResults.length > 0 && (
+              <View>
+                {userResults.map((u, idx) => (
+                  <ListRow
+                    key={u.id}
+                    title={u.username}
+                    subtitle={u.name ?? undefined}
+                    divider={idx < userResults.length - 1}
+                    onPress={() => {
+                      setAssignedToUserId(u.id);
+                      setAssignedUserLabel(u.username);
+                      setUserQuery('');
+                      setUserResults([]);
+                    }}
+                  />
+                ))}
+              </View>
+            )}
+          </SectionCard>
 
-          {/* Calendar fields */}
-          <Section label="Calendar">
-            <TextField
-              label="Start date (YYYY-MM-DD)"
-              value={calStart ? calStart.slice(0, 10) : ''}
-              onChangeText={setCalStart}
-              placeholder="Start date (YYYY-MM-DD)"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TextField
-              label="End date (YYYY-MM-DD)"
-              value={calEnd ? calEnd.slice(0, 10) : ''}
-              onChangeText={setCalEnd}
-              placeholder="End date (YYYY-MM-DD)"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </Section>
+          {/* ── Subtasks ─────────────────────────────────────────────────────── */}
+          <SectionCard
+            eyebrow={`Subtasks${subtasks.length > 0 ? ` (${subtasks.filter((s) => s.done).length}/${subtasks.length})` : ''}`}
+            style={styles.card}
+          >
+            <View>
+              {subtasks.map((st, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.subtaskRow,
+                    idx < subtasks.length - 1 && {
+                      borderBottomWidth: StyleSheet.hairlineWidth,
+                      borderBottomColor: t.border,
+                    },
+                  ]}
+                >
+                  <Checkbox
+                    checked={st.done}
+                    onToggle={() => toggleSubtask(idx)}
+                    color={t.success}
+                  />
+                  <Text
+                    style={[
+                      styles.subtaskText,
+                      {
+                        color: st.done ? t.textMuted : t.text,
+                        textDecorationLine: st.done ? 'line-through' : 'none',
+                      },
+                    ]}
+                  >
+                    {st.text}
+                  </Text>
+                  <Pressable onPress={() => removeSubtask(idx)} hitSlop={10}>
+                    <Icon name="close" label={`Remove subtask`} size={16} color={t.textLight} />
+                  </Pressable>
+                </View>
+              ))}
 
-          {/* ── Subtasks ─────────────────────────────────────────────────── */}
-          <Section label={`Subtasks${subtasks.length > 0 ? ` (${subtasks.filter((s) => s.done).length}/${subtasks.length})` : ''}`}>
-            {subtasks.map((st, idx) => (
-              <View
-                key={idx}
-                style={[styles.subtaskRow, { borderBottomColor: t.border }]}
-              >
+              {/* Add subtask row */}
+              <View style={[styles.subtaskAddRow, { borderTopColor: t.border }]}>
+                <Icon name="plus" label="" size={16} color={t.textLight} />
+                <TextInput
+                  ref={subtaskInputRef}
+                  value={newSubtaskText}
+                  onChangeText={setNewSubtaskText}
+                  onSubmitEditing={addSubtask}
+                  placeholder="Add subtask…"
+                  placeholderTextColor={t.textLight}
+                  returnKeyType="done"
+                  blurOnSubmit={false}
+                  style={[styles.subtaskInput, { color: t.text }]}
+                />
                 <Pressable
-                  onPress={() => toggleSubtask(idx)}
-                  style={[
-                    styles.subtaskCheck,
-                    {
-                      borderColor: st.done ? t.success : t.borderInput,
-                      backgroundColor: st.done ? t.success : 'transparent',
-                    },
-                  ]}
+                  onPress={addSubtask}
+                  disabled={!newSubtaskText.trim()}
+                  hitSlop={8}
+                  style={({ pressed }) => ({
+                    opacity: !newSubtaskText.trim() ? 0.3 : pressed ? 0.6 : 1,
+                  })}
                 >
-                  {st.done && <Text style={styles.subtaskCheckmark}>✓</Text>}
-                </Pressable>
-                <Text
-                  style={[
-                    styles.subtaskText,
-                    {
-                      color: st.done ? t.textMuted : t.text,
-                      textDecorationLine: st.done ? 'line-through' : 'none',
-                    },
-                  ]}
-                >
-                  {st.text}
-                </Text>
-                <Pressable onPress={() => removeSubtask(idx)} hitSlop={10}>
-                  <Text style={[styles.subtaskRemove, { color: t.textLight }]}>×</Text>
+                  <Text style={{ color: t.accent, fontSize: font.size.md, fontWeight: font.weight.bold }}>
+                    Add
+                  </Text>
                 </Pressable>
               </View>
-            ))}
-
-            <View style={[styles.subtaskAddRow, { borderColor: t.border }]}>
-              <TextInput
-                ref={subtaskInputRef}
-                value={newSubtaskText}
-                onChangeText={setNewSubtaskText}
-                onSubmitEditing={addSubtask}
-                placeholder="Add subtask…"
-                placeholderTextColor={t.textLight}
-                returnKeyType="done"
-                blurOnSubmit={false}
-                style={[styles.subtaskInput, { color: t.text }]}
-              />
-              <Pressable
-                onPress={addSubtask}
-                disabled={!newSubtaskText.trim()}
-                hitSlop={8}
-                style={({ pressed }) => ({
-                  opacity: !newSubtaskText.trim() ? 0.3 : pressed ? 0.6 : 1,
-                })}
-              >
-                <Text style={{ color: t.accent, fontSize: font.size.lg, fontWeight: '700' }}>+</Text>
-              </Pressable>
             </View>
-          </Section>
+          </SectionCard>
 
-          {/* ── Destructive actions ──────────────────────────────────────── */}
+          {/* ── Destructive footer (edit mode only) ──────────────────────────── */}
           {editing && (
-            <View style={{ gap: spacing.sm, marginTop: spacing.lg }}>
-              <Button label="Archive task" variant="ghost" onPress={archive} />
-              <Button label="Delete task" variant="ghost" onPress={remove} />
+            <View style={styles.destructiveFooter}>
+              <Button
+                label="Archive task"
+                variant="secondary"
+                onPress={archive}
+              />
+              <Button
+                label="Delete task"
+                variant="destructive"
+                onPress={remove}
+              />
             </View>
           )}
         </ScrollView>
@@ -536,86 +620,49 @@ export function TaskDetailScreen({ board: boardProp, task: taskProp, onClose }: 
   );
 }
 
-// ── Shared sub-components ────────────────────────────────────────────────────────
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  const t = useTheme();
-  return (
-    <View style={{ marginBottom: spacing.lg }}>
-      <Text style={[styles.sectionLabel, { color: t.textMuted }]}>{label}</Text>
-      {children}
-    </View>
-  );
-}
-
-function Chip({ label, active, color, onPress }: { label: string; active: boolean; color: string; onPress: () => void }) {
-  const t = useTheme();
-  return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.chip, { backgroundColor: active ? color : t.surface, borderColor: active ? color : t.border }]}
-    >
-      <Text style={{ color: active ? '#fff' : t.text, textTransform: 'capitalize', fontWeight: font.weight.medium }}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    height: 56,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.lg,
   },
-  title: { fontSize: font.size.lg, fontWeight: font.weight.bold },
-  sectionLabel: {
-    fontSize: font.size.sm,
-    fontWeight: font.weight.medium,
+  topBarSide: {
+    width: 70,
+    justifyContent: 'center',
+  },
+  topBarTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: font.size.lg,
+    fontWeight: font.weight.bold,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.lg,
+  },
+  card: {
+    // gap between cards comes from ScrollView gap
+  },
+  cardInner: {
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  rowLabel: {
+    fontSize: font.size.xs,
+    fontWeight: font.weight.bold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-  },
-  newCatForm: {
-    marginTop: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: 1,
-  },
-  palette: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  swatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2 },
-  searchInput: {
-    height: 40,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    fontSize: font.size.md,
-    marginBottom: spacing.sm,
-  },
-  userResultsList: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-  },
-  userResultRow: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: 2,
-  },
-  assignedPill: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.xl,
-    borderWidth: 1,
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   catChipWrap: {
     flexDirection: 'row',
@@ -623,39 +670,91 @@ const styles = StyleSheet.create({
   },
   catDeleteBtn: {
     marginLeft: -4,
-    marginTop: -8,
-    width: 16,
-    height: 16,
+    marginTop: -10,
+    width: 18,
+    height: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Subtask styles
+  newCatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  newCatForm: {
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  palette: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  swatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+  },
+  assignedWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  assignedPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: font.size.md,
+    height: 44,
+  },
   subtaskRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingRight: spacing.lg,
   },
-  subtaskCheck: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
+  subtaskText: {
+    flex: 1,
+    fontSize: font.size.md,
+    lineHeight: 20,
   },
-  subtaskCheckmark: { color: '#fff', fontSize: 10, fontWeight: '700' },
-  subtaskText: { flex: 1, fontSize: font.size.md, lineHeight: 20 },
-  subtaskRemove: { fontSize: 20, lineHeight: 22 },
   subtaskAddRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  subtaskInput: {
+    flex: 1,
+    height: 40,
+    fontSize: font.size.md,
+  },
+  destructiveFooter: {
+    gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  subtaskInput: { flex: 1, height: 38, fontSize: font.size.md },
 });
