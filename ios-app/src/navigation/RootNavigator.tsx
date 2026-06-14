@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import {
   NavigationContainer, DarkTheme, DefaultTheme,
+  createNavigationContainerRef,
 } from '@react-navigation/native';
 import {
   createNativeStackNavigator,
@@ -16,11 +17,17 @@ import type {
   TodayStackParams,
   BoardStackParams,
   ProfileStackParams,
+  RootStackParamList,
 } from '@/navigation/types';
 
 // Re-export so existing code that imports from RootNavigator still works.
 export type { TodayStackParams, BoardStackParams, ProfileStackParams } from '@/navigation/types';
 export type { RootStackParamList, Nav } from '@/navigation/types';
+
+// Navigation ref — attach to <NavigationContainer ref={navigationRef}> so that
+// code outside the React tree (e.g. App-level notification listeners) can call
+// navigationRef.navigate() after the container is ready.
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
 // ── Screen imports ──────────────────────────────────────────────────────────
 import { LoginScreen } from '@/screens/LoginScreen';
@@ -115,6 +122,7 @@ export function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       theme={{
         ...navTheme,
         colors: {

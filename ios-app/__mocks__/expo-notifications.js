@@ -8,4 +8,7 @@ module.exports = {
   scheduleNotificationAsync: jest.fn(async () => 'notif-id'),
   setNotificationHandler: jest.fn(),
   SchedulableTriggerInputTypes: { DATE: 'date' },
+  // Used by NotificationDeepLink in App.tsx to handle reminder taps.
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponseAsync: jest.fn(async () => null),
 };

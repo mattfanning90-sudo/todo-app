@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from '@/auth/AuthContext';
 import { ThemeProvider } from '@/theme/ThemeProvider';
 import { api } from '@/api/client';
 import { reconcileReminders } from '@/notifications/reminders';
-import { RootNavigator } from '@/navigation/RootNavigator';
+import { RootNavigator, navigationRef } from '@/navigation/RootNavigator';
 
 // Errors-only Sentry. Inert unless a DSN is provided (EXPO_PUBLIC_SENTRY_DSN is
 // inlined by Metro at build time; `extra.sentryDsn` is the app.json fallback).
@@ -79,6 +79,41 @@ function ReminderSync() {
   return null;
 }
 
+// Navigates to the Today tab when the user taps a reminder notification.
+// The notification payload carries `data.taskId` (set in reminders.ts), but
+// there is no GET /api/tasks/:id endpoint, so the safest reliable action is to
+// bring the user to the Today screen where their upcoming tasks are listed.
+// Handles both foreground taps (addNotificationResponseReceivedListener) and
+// the cold-start case where the app was launched via the notification banner
+// (getLastNotificationResponseAsync).
+function NotificationDeepLink() {
+  useEffect(() => {
+    function handleResponse(response: Notifications.NotificationResponse) {
+      try {
+        const taskId = response.notification.request.content.data?.taskId;
+        if (!taskId) return; // not a reminder notification
+        if (!navigationRef.isReady()) return;
+        // Navigate to the Today tab. The navigator nests Today inside a tab so
+        // we reset the Today stack to its root first, then switch to it.
+        navigationRef.navigate('Today' as never);
+      } catch {
+        // Guard: never let a navigation failure break the app startup.
+      }
+    }
+
+    // Cold-start: the app was launched by tapping a notification banner.
+    Notifications.getLastNotificationResponseAsync()
+      .then((response) => { if (response) handleResponse(response); })
+      .catch(() => {});
+
+    // Foreground taps (app already running).
+    const sub = Notifications.addNotificationResponseReceivedListener(handleResponse);
+    return () => sub.remove();
+  }, []);
+
+  return null;
+}
+
 function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -87,6 +122,7 @@ function App() {
           <AuthProvider>
             <StatusBar style="auto" />
             <ReminderSync />
+            <NotificationDeepLink />
             <RootNavigator />
           </AuthProvider>
         </ThemeProvider>
