@@ -113,7 +113,7 @@ export function ArchivedScreen({ board: boardProp, onBack }: Props) {
     <Screen padded={false}>
       <ScreenHeader variant="detail" title="Archived" onBack={goBack} />
 
-      <ScreenState loading={loading} empty={!loading && tasks.length === 0} emptyTitle="Nothing archived">
+      <ScreenState loading={loading}>
         <FlatList
           data={tasks}
           keyExtractor={(item) => String(item.id)}
@@ -129,6 +129,11 @@ export function ArchivedScreen({ board: boardProp, onBack }: Props) {
           }
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: spacing.md }} />}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={[styles.emptyText, { color: t.textMuted }]}>Nothing archived</Text>
+            </View>
+          }
           renderItem={({ item }) => {
             const color = stageColor(item.stage);
             const badgeBg = color + '20';
@@ -211,5 +216,15 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: spacing.sm,
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: spacing.xxl * 2,
+  },
+  emptyText: {
+    fontSize: font.size.md,
+    textAlign: 'center',
   },
 });
