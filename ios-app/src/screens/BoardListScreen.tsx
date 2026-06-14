@@ -2,8 +2,7 @@ import React, { useCallback, useState } from 'react';
 import {
   ActionSheetIOS,
   Alert,
-  FlatList,
-  Pressable,
+  ScrollView,
   RefreshControl,
   StyleSheet,
   Text,
@@ -13,7 +12,13 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Screen } from '@/components/Screen';
 import { Button } from '@/components/Button';
 import { TextField } from '@/components/TextField';
-import { useTheme, radius, spacing, font } from '@/theme';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { ScreenState } from '@/components/ScreenState';
+import { SectionCard } from '@/components/SectionCard';
+import { ListRow } from '@/components/ListRow';
+import { Card } from '@/components/Card';
+import { Icon } from '@/components/Icon';
+import { useTheme, spacing, font } from '@/theme';
 import { api } from '@/api/client';
 import { useAuth } from '@/auth/AuthContext';
 import type { Board, MemberBoard } from '@/api/types';
@@ -41,16 +46,18 @@ export function BoardListScreen({
   const openSearch = onOpenSearch ?? (() => nav.navigate('Search'));
   const openNotifications = onOpenNotifications ?? (() => nav.navigate('Notifications'));
   const t = useTheme();
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [boards, setBoards] = useState<Board[]>([]);
   const [memberships, setMemberships] = useState<MemberBoard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
 
   const load = useCallback(async () => {
+    setError(null);
     try {
       const [owned, shared, notifs] = await Promise.all([
         api.boards(),
@@ -61,7 +68,7 @@ export function BoardListScreen({
       setMemberships(shared);
       setUnreadCount(notifs.filter((n) => !n.read).length);
     } catch (err) {
-      Alert.alert('Could not load boards', String(err));
+      setError(String(err));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -96,14 +103,13 @@ export function BoardListScreen({
       },
       (idx) => {
         if (idx === 0) {
-          // Rename
           Alert.prompt(
             'Rename board',
             'Enter a new name:',
-            async (newName: string) => {
-              if (!newName?.trim()) return;
+            async (renamed: string) => {
+              if (!renamed?.trim()) return;
               try {
-                const updated = await api.renameBoard(item.id, newName.trim());
+                const updated = await api.renameBoard(item.id, renamed.trim());
                 setBoards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
               } catch (err) {
                 Alert.alert('Could not rename board', String(err));
@@ -113,7 +119,6 @@ export function BoardListScreen({
             item.name
           );
         } else if (idx === 1) {
-          // Delete
           Alert.alert(
             `Delete "${item.name}"?`,
             'All tasks on this board will be permanently deleted.',
@@ -138,226 +143,169 @@ export function BoardListScreen({
     );
   };
 
-  const renderBoardRow = (item: Board, shared?: MemberBoard) => (
-    <Pressable
-      key={item.id}
-      testID={`board-row-${item.id}`}
-      onPress={() => openBoard(item)}
-      onLongPress={() => !shared && handleBoardLongPress(item)}
-      delayLongPress={400}
-      style={({ pressed }) => [
-        styles.boardRow,
-        {
-          backgroundColor: t.surface,
-          borderColor: t.border,
-          shadowColor: '#000',
-          shadowOpacity: pressed ? 0.08 : 0.04,
-          shadowRadius: pressed ? 6 : 2,
-          shadowOffset: { width: 0, height: 1 },
-          elevation: pressed ? 3 : 1,
-        },
-      ]}
-    >
-      <View style={[styles.boardDot, { backgroundColor: t.accent }]} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.boardName, { color: t.text }]}>{item.name}</Text>
-        {shared && (
-          <Text style={[styles.boardOwner, { color: t.textMuted }]}>
-            {shared.owner_username || shared.owner_email}
-          </Text>
-        )}
-      </View>
-      <Text style={[styles.boardChevron, { color: t.textLight }]}>›</Text>
-    </Pressable>
-  );
-
   const hasShared = memberships.length > 0;
+  const isEmpty = !loading && !error && boards.length === 0 && !hasShared;
 
   return (
     <Screen padded={false}>
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: t.surface, borderBottomColor: t.border }]}>
-        <View style={styles.logoRow}>
-          <View style={[styles.logoIcon, { backgroundColor: t.accent }]}>
-            <Text style={styles.logoCheck}>✓</Text>
-          </View>
-          <Text style={[styles.logoText, { color: t.text }]}>Todo</Text>
-        </View>
-        <View style={styles.headerRight}>
-          <Pressable onPress={openSearch} hitSlop={12} style={styles.iconBtn}>
-            <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⌕</Text>
-          </Pressable>
-          <Pressable onPress={openNotifications} hitSlop={12} style={styles.iconBtn}>
-            <View>
-              <Text style={[styles.iconBtnText, { color: t.textMuted }]}>🔔</Text>
-              {unreadCount > 0 && (
-                <View style={[styles.badge, { backgroundColor: t.danger }]}>
-                  <Text style={styles.badgeText}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </Text>
-                </View>
-              )}
-            </View>
-          </Pressable>
-          <Pressable onPress={openSettings} hitSlop={12} style={styles.iconBtn}>
-            <Text style={[styles.iconBtnText, { color: t.textMuted }]}>⚙</Text>
-          </Pressable>
-        </View>
+      <View style={styles.headerWrap}>
+        <ScreenHeader
+          variant="primary"
+          title="Boards"
+          actions={
+            <>
+              <Icon name="search" label="Search" onPress={openSearch} />
+              <View>
+                <Icon
+                  name="bell"
+                  label="Notifications"
+                  onPress={openNotifications}
+                />
+                {unreadCount > 0 && (
+                  <View
+                    style={[styles.badge, { backgroundColor: t.danger }]}
+                    pointerEvents="none"
+                  >
+                    <Text style={styles.badgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              <Icon name="settings" label="Settings" onPress={openSettings} />
+            </>
+          }
+        />
       </View>
 
-      <FlatList
-        data={[]}
-        keyExtractor={() => '__placeholder__'}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              load();
-            }}
-            tintColor={t.textMuted}
-          />
-        }
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{
-          paddingHorizontal: spacing.lg,
-          paddingBottom: spacing.xxl,
-        }}
-        ListHeaderComponent={
-          <>
-            {/* User greeting */}
-            <View style={styles.greeting}>
-              <Text style={[styles.greetingSub, { color: t.textMuted }]}>
-                Hi {user?.name ?? user?.username ?? 'there'} 👋
-              </Text>
-            </View>
+      <ScreenState
+        loading={loading}
+        error={error}
+        onRetry={() => { setLoading(true); load(); }}
+        empty={isEmpty}
+        emptyIcon="board"
+        emptyTitle="No boards yet"
+        emptyBody="Create your first board below."
+      >
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                load();
+              }}
+              tintColor={t.textMuted}
+            />
+          }
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* Dashboard entry */}
+          <Card onPress={openDashboard} style={styles.dashCard}>
+            <Text style={[styles.dashEyebrow, { color: t.accent }]}>OVERVIEW</Text>
+            <Text style={[styles.dashTitle, { color: t.accent }]}>Dashboard →</Text>
+          </Card>
 
-            {/* Dashboard card */}
-            <Pressable
-              onPress={openDashboard}
-              style={({ pressed }) => [
-                styles.dashCard,
-                {
-                  backgroundColor: t.accentMuted,
-                  borderColor: t.accent + '33',
-                  opacity: pressed ? 0.8 : 1,
-                },
-              ]}
-            >
-              <Text style={[styles.dashLabel, { color: t.accent }]}>Overview</Text>
-              <Text style={[styles.dashTitle, { color: t.accent }]}>Dashboard →</Text>
-            </Pressable>
-
-            {/* My Boards */}
-            <Text style={[styles.sectionLabel, { color: t.textMuted }]}>
-              {hasShared ? 'My Boards' : 'Boards'}
-            </Text>
-
-            {boards.length === 0 && !loading && (
-              <View style={styles.emptyWrap}>
-                <Text style={[styles.emptyText, { color: t.textMuted }]}>
-                  No boards yet. Create one below.
-                </Text>
-              </View>
-            )}
-
-            {boards.map((b) => (
-              <View key={b.id} style={{ marginBottom: spacing.sm }}>
-                {renderBoardRow(b)}
-              </View>
+          {/* My Boards */}
+          <SectionCard eyebrow={hasShared ? 'My Boards' : 'Boards'} style={styles.section}>
+            {boards.map((b, i) => (
+              <ListRow
+                key={b.id}
+                testID={`board-row-${b.id}`}
+                title={b.name}
+                leading={<View style={[styles.boardDot, { backgroundColor: t.accent }]} />}
+                accessory="chevron"
+                divider={i < boards.length - 1}
+                onPress={() => openBoard(b)}
+                onLongPress={() => handleBoardLongPress(b)}
+                accessibilityHint="Long press to rename or delete"
+              />
             ))}
-
-            {/* Create board form / button */}
-            {creating ? (
-              <View style={[styles.createBox, { backgroundColor: t.surface, borderColor: t.border }]}>
-                <TextField
-                  label="Board name"
-                  value={newName}
-                  onChangeText={setNewName}
-                  placeholder="e.g. Personal"
-                  autoFocus
-                  onSubmitEditing={createBoard}
-                />
-                <View style={styles.createButtons}>
-                  <Button
-                    label="Cancel"
-                    variant="ghost"
-                    onPress={() => { setCreating(false); setNewName(''); }}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    label="Create"
-                    onPress={createBoard}
-                    disabled={!newName.trim()}
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            ) : (
-              <Button
-                label="+ New board"
-                onPress={() => setCreating(true)}
-                style={{ marginBottom: spacing.lg }}
+            {boards.length === 0 && !creating && (
+              <ListRow
+                title="No boards yet"
+                divider={false}
               />
             )}
+          </SectionCard>
 
-            {/* Shared with me section */}
-            {hasShared && (
-              <>
-                <View style={[styles.sectionDivider, { borderTopColor: t.border }]} />
-                <Text style={[styles.sectionLabel, { color: t.textMuted }]}>Shared with me</Text>
-                {memberships.map((b) => (
-                  <View key={b.id} style={{ marginBottom: spacing.sm }}>
-                    {renderBoardRow(b, b)}
-                  </View>
-                ))}
-              </>
-            )}
-          </>
-        }
-        renderItem={() => null}
-      />
+          {/* + New board */}
+          {creating ? (
+            <Card style={styles.createCard}>
+              <TextField
+                label="Board name"
+                value={newName}
+                onChangeText={setNewName}
+                placeholder="e.g. Personal"
+                autoFocus
+                onSubmitEditing={createBoard}
+              />
+              <View style={styles.createButtons}>
+                <Button
+                  label="Cancel"
+                  variant="ghost"
+                  onPress={() => { setCreating(false); setNewName(''); }}
+                  style={{ flex: 1 }}
+                />
+                <Button
+                  label="Create"
+                  onPress={createBoard}
+                  disabled={!newName.trim()}
+                  style={{ flex: 1 }}
+                />
+              </View>
+            </Card>
+          ) : (
+            <Button
+              label="+ New board"
+              onPress={() => setCreating(true)}
+              style={styles.newBoardBtn}
+            />
+          )}
 
-      {/* Sign out */}
-      <Pressable onPress={() => logout()} style={styles.signOut}>
-        <Text style={[styles.signOutText, { color: t.textMuted }]}>Sign out</Text>
-      </Pressable>
+          {/* Shared with me */}
+          {hasShared && (
+            <SectionCard eyebrow="Shared with me" style={styles.section}>
+              {memberships.map((b, i) => (
+                <ListRow
+                  key={b.id}
+                  testID={`board-row-${b.id}`}
+                  title={b.name}
+                  subtitle={b.owner_username || b.owner_email}
+                  leading={<View style={[styles.boardDot, { backgroundColor: t.textMuted }]} />}
+                  accessory="chevron"
+                  divider={i < memberships.length - 1}
+                  onPress={() => openBoard(b)}
+                />
+              ))}
+            </SectionCard>
+          )}
+
+          {/* Sign out */}
+          <SectionCard style={styles.section}>
+            <ListRow
+              title="Sign out"
+              destructive
+              divider={false}
+              onPress={() => logout()}
+            />
+          </SectionCard>
+        </ScrollView>
+      </ScreenState>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    height: 56,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    borderBottomWidth: 1,
-    flexShrink: 0,
+  headerWrap: {
+    paddingTop: spacing.lg,
   },
-  logoRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  logoIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoCheck: { color: '#fff', fontSize: 14, fontWeight: '700' },
-  logoText: { fontSize: 16, fontWeight: '700' },
-  headerRight: { flexDirection: 'row', gap: spacing.sm },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconBtnText: { fontSize: 20 },
   badge: {
     position: 'absolute',
-    top: -4,
-    right: -6,
+    top: 6,
+    right: 6,
     minWidth: 16,
     height: 16,
     borderRadius: 8,
@@ -366,54 +314,40 @@ const styles = StyleSheet.create({
     paddingHorizontal: 3,
   },
   badgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
-  greeting: { paddingTop: spacing.lg, paddingBottom: spacing.md },
-  greetingSub: { fontSize: font.size.md },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xxl,
+  },
   dashCard: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
     marginBottom: spacing.lg,
-    borderWidth: 1,
   },
-  dashLabel: {
+  dashEyebrow: {
     fontSize: font.size.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: 0.8,
     marginBottom: spacing.xs,
-    fontWeight: font.weight.semibold,
   },
-  dashTitle: { fontSize: font.size.lg, fontWeight: font.weight.semibold },
-  sectionLabel: {
-    fontSize: font.size.xs,
-    fontWeight: font.weight.semibold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.sm,
+  dashTitle: {
+    fontSize: font.size.lg,
+    fontWeight: '600',
   },
-  sectionDivider: {
-    borderTopWidth: 1,
-    marginVertical: spacing.lg,
+  section: {
+    marginBottom: spacing.lg,
   },
-  boardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+  boardDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  newBoardBtn: {
+    marginBottom: spacing.lg,
+  },
+  createCard: {
+    marginBottom: spacing.lg,
     gap: spacing.md,
   },
-  boardDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
-  boardName: { fontSize: font.size.md, fontWeight: font.weight.semibold },
-  boardOwner: { fontSize: font.size.xs, marginTop: 2 },
-  boardChevron: { fontSize: 20 },
-  emptyWrap: { paddingTop: spacing.lg, paddingBottom: spacing.lg, alignItems: 'center' },
-  emptyText: { fontSize: font.size.md, textAlign: 'center' },
-  createBox: {
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    marginBottom: spacing.md,
+  createButtons: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
-  createButtons: { flexDirection: 'row', gap: spacing.sm },
-  signOut: { alignItems: 'center', paddingBottom: spacing.xl },
-  signOutText: { fontSize: font.size.sm },
 });

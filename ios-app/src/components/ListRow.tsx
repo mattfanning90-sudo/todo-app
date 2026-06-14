@@ -13,11 +13,15 @@ interface Props {
   destructive?: boolean;
   divider?: boolean;
   onPress?: () => void;
+  onLongPress?: () => void;
+  accessibilityHint?: string;
+  testID?: string;
 }
 
 export function ListRow({
   title, subtitle, leading, trailing, accessory = 'none',
-  selected, destructive, divider = true, onPress,
+  selected, destructive, divider = true, onPress, onLongPress,
+  accessibilityHint, testID,
 }: Props) {
   const t = useTheme();
   const acc =
@@ -27,12 +31,16 @@ export function ListRow({
   return (
     <Pressable
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      disabled={!onPress && !onLongPress}
       accessibilityState={selected ? { selected: true } : undefined}
+      accessibilityHint={accessibilityHint}
+      testID={testID}
       style={({ pressed }) => [
         styles.row,
         divider && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: t.border },
-        pressed && onPress ? { opacity: 0.7 } : null,
+        pressed && (onPress || onLongPress) ? { opacity: 0.7 } : null,
       ]}
     >
       {leading ? <View>{leading}</View> : null}
